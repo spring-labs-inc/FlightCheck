@@ -1,0 +1,31 @@
+{
+  "title": "Contact us pilot",
+  "summary": "Explain that all visible fields are required.",
+  "candidate": "11160cacecfcf0a4b7cb625265f54594bfebdde4c93171bb8db142e366de1b36",
+  "reviewedAt": "2026-11-08T23:04:28-06:00",
+  "cutoverAt": "2026-11-09T14:31:43Z",
+  "snapshot": "historical",
+  "reviews": {
+    "code": "APPROVE",
+    "evidence": "APPROVE_WITH_NITS",
+    "warningInventory": "Partial · follow-up open on #5",
+    "reviewerProfile": "Unavailable"
+  },
+  "decisions": {
+    "presentation": "Approved · interactive HTML preview 21",
+    "observationsApproval": "No observations approval requested",
+    "cutover": "Approved · rollout merged in Spring #455",
+    "next": "No owner action currently requested",
+    "delivery": "Contact us delivery remains a separate decision."
+  },
+  "gates": [
+    {"name": "Lint", "state": "passed", "detail": "Ruff"},
+    {"name": "Docs", "state": "passed", "detail": "Spring documentation checker"},
+    {"name": "Agent policy", "state": "passed", "detail": "Committed policy checks"},
+    {"name": "Workflow policy", "state": "passed", "detail": "3 host-specific clauses unavailable"},
+    {"name": "Focused offline pytest", "state": "passed", "detail": "42 tests · passed after database setup retry"},
+    {"name": "Full offline pytest", "state": "passed", "detail": "9,608 tests · 14 skips"},
+    {"name": "VisualQA", "state": "passed", "detail": "502 tests"},
+    {"name": "Findings and freshness", "state": "passed", "detail": "0 failures · 104 page-and-viewport records"}
+  ]
+}
