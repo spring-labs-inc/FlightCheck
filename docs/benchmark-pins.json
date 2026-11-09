@@ -1,0 +1,49 @@
+{
+  "schema": "springdev.benchmark-pins/1",
+  "targets": [
+    {
+      "id": "django-composite-query",
+      "language": "Python",
+      "repository": "https://github.com/django/django",
+      "version": "5.2.x development snapshot",
+      "commit": "f8fce8d4dce7cf6d272a29351faddd5fa76f1aa0",
+      "source_archive": {
+        "format": "git bundle",
+        "sha256": "35f4bef619f1a413deac3c0ad016960dd2564f6f18908ddc2af401a46bc6225e"
+      }
+    },
+    {
+      "id": "ripgrep-line-buffering",
+      "language": "Rust",
+      "repository": "https://github.com/BurntSushi/ripgrep",
+      "version": "15.0.0",
+      "commit": "3a612f88b805e14aef45bfa43e25a54abc6297fc",
+      "source_archive": {
+        "format": "git bundle",
+        "sha256": "b5a5ff6c0b6484380e0f2f4da01b0f05071322e80b5949b0909219259fe0069f"
+      }
+    },
+    {
+      "id": "fmt-wrapped-value",
+      "language": "C++",
+      "repository": "https://github.com/fmtlib/fmt",
+      "version": "11.2.0",
+      "commit": "40626af88bd7df9a5fb80be7b25ac85b122d6c21",
+      "source_archive": {
+        "format": "git archive tar",
+        "sha256": "b93b8fa1777c5876c5a35867be2ede804240f8627e7e69e147b1718f4063a235"
+      }
+    },
+    {
+      "id": "jsoup-replaced-child",
+      "language": "Java",
+      "repository": "https://github.com/jhy/jsoup",
+      "version": "1.21.2",
+      "commit": "b02837b6c77b94799c055f8fa446fb770bfb49f1",
+      "source_archive": {
+        "format": "git archive tar",
+        "sha256": "21efc3ba2646998b4cbca98c6520c569dc118ebc3ef1ce3e9319d18bba483c6e"
+      }
+    }
+  ]
+}
