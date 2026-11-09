@@ -1,0 +1,18 @@
+# Optional example for a GitHub project. Replace the repository after review.
+# This is a prefix rule. Keep the prompt and validate the actual token matching.
+
+prefix_rule(
+    pattern = [
+        "gh", "issue", "list", "--repo", "example-org/example-project",
+        "--state", "open", "--limit", "50", "--",
+    ],
+    decision = "prompt",
+    justification = "Ask before listing issues from the configured GitHub repository outside the sandbox.",
+    match = [
+        "gh issue list --repo example-org/example-project --state open --limit 50 --",
+    ],
+    not_match = [
+        "gh issue list --repo example-org/other-project --state open --limit 50 --",
+        "gh issue create --repo example-org/example-project --title Follow-up",
+    ],
+)

@@ -1,0 +1,4 @@
+{
+  "description": "Optional project hook configuration. This example declares no handlers.",
+  "hooks": {}
+}
