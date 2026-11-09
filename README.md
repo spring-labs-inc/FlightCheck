@@ -5,3 +5,5 @@ SpringDev is the private planning and implementation home for a lighter, agent-a
 The goal is to make Spring development faster while preserving meaningful tests, independent review, and clear owner decisions. Existing DevGuide work is a reference, not a prerequisite for Spring changes. VisualQA remains in Spring while we evaluate whether any part should become reusable.
 
 The [SpringDev project board](https://github.com/orgs/spring-labs-inc/projects/2) will track that assessment and the resulting work. Issues will be added after the project is established.
+
+See the [Codex workflow inventory](docs/codex-workflow-inventory.md) for the current Spring setup and recommendations on where to put workflow guidance.
