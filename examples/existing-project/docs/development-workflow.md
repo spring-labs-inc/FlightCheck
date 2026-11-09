@@ -28,6 +28,24 @@ On resume, inspect the actual checkout, original results, current approvals, act
 
 For each check, record the run and candidate identity, exact command, coverage and skips, environment identity, relevant inputs before and after, exit status, and path and digest of original output. Include dependencies, linked files, test data, and report-producing runtimes where the check uses them.
 
+### Capture native check output
+
+Use your project's existing artifact recorder or copy the optional [capture script](../scripts/capture_check.py). The example needs Python 3 on a POSIX host and uses the standard library. Run it from the project root with an existing owner-only evidence directory outside the checkout. Set `evidence_dir` to that approved location and `candidate` to the current frozen candidate identity.
+
+```sh
+python3 scripts/capture_check.py --evidence-dir "$evidence_dir" --candidate "$candidate" \
+  --scope "Full offline pytest suite" --summary pytest -- .venv/bin/python -m pytest -q
+
+python3 scripts/capture_check.py --evidence-dir "$evidence_dir" --candidate "$candidate" \
+  --scope "Clippy for all targets" -- cargo clippy --all-targets
+```
+
+Each invocation creates a fresh private run directory for evidence and runs the command without a shell. The check runs in the project checkout with noninteractive stdin and must wait for its workers. The recorder writes combined stdout and stderr to `output.log`, then replays that file after the check ends. Display truncation or a closed display pipe leaves the original file available. `run.json` records the exact command, requested scope, actual exit status, and the output's relative path and SHA-256. The project still owns test isolation, access policy, and verification of the candidate and actual coverage.
+
+The optional pytest summary mode records recognizable final totals and distinguishes a captured warning summary, a completed run with no reported warnings, an incomplete run, and an unavailable summary. Suppressed or unrecognized summaries leave the original log available. Without the optional parser, warnings are marked unclassified and can be inspected in the native output. Retain separate report files under the project's existing evidence rules. A killed recorder can leave an incomplete packet with no observed exit status.
+
+### Reuse a result
+
 Reuse a whole passing check only if the latest attempt completed successfully, the command and required coverage match, all recorded inputs and relevant runtime still match, and the original output is present with its digest intact. Record reuse against the current candidate. A newer failure, interruption, unresolved attempt, or invalidation supersedes an older pass. Re-run if any required comparison is unavailable. For link checks include target existence, and for visual checks bind the producer and findings reader to the same run and inputs.
 
 ## Independent review
