@@ -25,6 +25,24 @@
       </div>
     </section>
     <p id="notice" class="notice" role="status">Loading task status…</p>
+    <div class="task-details" id="task-details" hidden>
+      <nav class="panel" id="links-panel" aria-labelledby="links-title" hidden>
+        <h2 id="links-title">Work links</h2>
+        <ul class="work-links" id="links"></ul>
+      </nav>
+      <section class="panel" id="checks-panel" aria-labelledby="checks-title" hidden>
+        <h2 id="checks-title">Local checks</h2>
+        <ul class="gates" id="checks"></ul>
+      </section>
+      <section class="panel" id="ci-panel" aria-labelledby="ci-title" hidden>
+        <h2 id="ci-title">CI observations</h2>
+        <ul class="gates" id="ci"></ul>
+      </section>
+      <details class="panel" id="history-panel" hidden>
+        <summary>Iteration history <span class="pill" id="history-count"></span></summary>
+        <ol class="gates" id="history"></ol>
+      </details>
+    </div>
     <footer class="route" aria-label="Viewing route diagnostics">
       <div><span>Publication</span><strong id="publication">Pending</strong></div>
       <div><span>Browser route</span><strong id="forwarding">Pending</strong></div>

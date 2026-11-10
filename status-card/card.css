@@ -64,6 +64,20 @@ dd { margin: 1px 0 0; font-size: .85rem; }
 .route span { color: var(--muted); }
 .route strong { overflow-wrap: anywhere; }
 
+.task-details { display: grid; gap: 14px; }
+.task-details[hidden] { display: none; }
+.work-links { display: flex; flex-wrap: wrap; gap: 10px 20px; list-style: none; padding: 0; margin: 10px 0 0; }
+.work-links li { display: flex; align-items: baseline; gap: 8px; }
+.task-details .gates li { align-items: baseline; }
+.task-details .gates li:last-child { border-bottom: 0; padding-bottom: 0; }
+.task-details .gate-name, .task-details .gate-detail, .work-links a { overflow-wrap: anywhere; }
+.task-details .gate-state[data-state="running"],
+.task-details .gate-state[data-state="interrupted"],
+.task-details .gate-state[data-state="cancelled"],
+.task-details .gate-state[data-state="skipped"] { color: var(--warn); }
+.task-details summary { cursor: pointer; font-weight: 680; }
+.task-details summary .pill { margin-left: 8px; }
+
 @media (max-width: 680px) {
   .shell { padding: 16px 14px 24px; }
   .masthead { margin-bottom: 17px; }

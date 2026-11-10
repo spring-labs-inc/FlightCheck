@@ -8,6 +8,8 @@ import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from task_details import normalize_details, update_details
+
 TASK_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
 VERDICTS = ("APPROVE", "APPROVE_WITH_NITS", "APPROVE_WITH_OBSERVATIONS", "REVISE")
 
@@ -39,6 +41,7 @@ def normalize(data):
         "candidate": candidate,
         "verdict": verdict if current else "Pending",
         "verdict_candidate": candidate if current else None,
+        **normalize_details(data),
     }
 
 
@@ -63,12 +66,14 @@ def chat_status(data, url, phase):
     return status
 
 
-def publish(path, data):
+def publish(path, data, details):
     parent = path.parent
     if parent.stat().st_uid != os.geteuid() or parent.stat().st_mode & 0o077:
         raise ValueError("Snapshot directory must be private to the current user")
-    if path.exists() and read_task(path)["task"] != data["task"]:
+    previous = read_task(path) if path.exists() else {}
+    if previous and previous["task"] != data["task"]:
         raise ValueError("A snapshot belongs to one task")
+    data.update(update_details(previous, details, data["candidate"]))
     fd, pending = tempfile.mkstemp(prefix=".status-", dir=parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
@@ -88,13 +93,15 @@ def main():
     parser.add_argument("--candidate", default="")
     parser.add_argument("--verdict", choices=VERDICTS)
     parser.add_argument("--verdict-candidate")
+    parser.add_argument("--details", type=Path, help="Private JSON with curated links, checks, CI, or events")
     parser.add_argument("--url", help="Published loopback URL for this task")
     parser.add_argument("--chat-phase", choices=("start", "end"), help="Print chat text for a flight boundary")
     args = parser.parse_args()
     try:
         data = normalize(vars(args))
         status = chat_status(data, args.url, args.chat_phase)
-        publish(args.file, data)
+        details = json.loads(args.details.read_text(encoding="utf-8")) if args.details else {}
+        publish(args.file, data, details)
     except (ValueError, OSError) as error:
         parser.error(str(error))
     if status:

@@ -97,6 +97,57 @@ class TaskStatusTests(unittest.TestCase):
         self.assertEqual(len(snapshot["gates"]), 8)
         self.assertEqual(self.request(url + "task/test-task/")[0], 404)
 
+    def test_live_details_survive_resume_and_keep_older_evidence_stale(self):
+        details = self.snapshot.with_name("details.json")
+        observed = "2026-01-01T12:00:00Z"
+        check = {"name": "Project tests", "candidate": "first", "state": "passed",
+                 "counts": {"passed": 37}, "observed_at": observed, "private_path": "/private/log"}
+        event = {"id": "repair-1", "kind": "repair", "candidate": "second",
+                 "observed_at": observed, "summary": "Repaired failing input."}
+        links = [{"kind": kind, "label": kind, "url": f"https://example.com/{kind}/1"}
+                 for kind in ("epic", "issue", "pr")]
+        ci = {"name": "Provider checks", "kind": "pr", "candidate": "first",
+              "commit": "abcdef123", "attempt": 1, "state": "passed", "observed_at": observed,
+              "url": "https://example.com/runs/1"}
+        details.write_text(json.dumps({"links": links, "checks": [check], "ci": [ci]}))
+        self.publish("--candidate", "first", "--details", str(details))
+        url = self.start("--task-status", str(self.snapshot)) + "status.json"
+
+        def current():
+            status, body = self.request(url)
+            self.assertEqual(status, 200)
+            return json.loads(body)
+
+        self.assertEqual(current()["links"], links)
+        self.assertEqual(current()["ci"][0]["commit"], "abcdef123")
+        self.assertNotIn("private_path", current()["checks"][0])
+        details.write_text(json.dumps({"events": [event]}))
+        for _ in range(2):
+            self.publish("--candidate", "second", "--details", str(details))
+        self.assertEqual(len(current()["history"]), 1)
+        self.assertTrue(current()["checks"][0]["stale"])
+        self.assertTrue(current()["ci"][0]["stale"])
+
+        self.publish("--candidate", "first")
+        self.assertTrue(current()["checks"][0]["stale"])
+        failed = {**check, "state": "failed", "counts": {"failed": 1}}
+        details.write_text(json.dumps({"checks": [failed], "ci": []}))
+        self.publish("--candidate", "first", "--details", str(details))
+        self.assertEqual(current()["checks"][0]["state"], "failed")
+        self.assertFalse(current()["checks"][0]["stale"])
+        self.assertEqual(current()["ci"], [])
+        self.assertEqual(current()["history"][0]["id"], event["id"])
+
+        for rejected in (
+            {"links": [{"kind": "issue", "label": "Unsafe", "url": "javascript:alert(1)"}]},
+            {"events": [{**event, "summary": "Replaced original observation."}]},
+        ):
+            previous = self.snapshot.read_bytes()
+            details.write_text(json.dumps(rejected))
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.publish("--candidate", "first", "--details", str(details))
+            self.assertEqual(self.snapshot.read_bytes(), previous)
+
     def test_desktop_tab_decisions_use_the_task_route(self):
         visible = {"id": "card", "url": "http://localhost:58213/task/test-task/", "visible": True}
         hidden = {**visible, "visible": False}

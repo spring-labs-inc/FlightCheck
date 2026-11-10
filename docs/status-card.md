@@ -21,6 +21,36 @@ Use `--chat-phase start` to format the status line for the top of the opening re
 
 The [Codex skill instructions](../examples/existing-project/.agents/skills/develop-change/references/task-status.md) describe how the selected workflow uses the desktop controls on activation and resume. The optional [tab decision helper](../status-card/task_tab.py) returns the next action from observed tabs and capabilities. Codex uses the available browser controls to carry it out. The checkout-host response, desktop forwarding, and browser render are separate checks. CLI and clients without usable browser controls can continue in chat with the same task link. [Codex built-in browser](https://learn.chatgpt.com/docs/browser) · [Remote connections](https://learn.chatgpt.com/docs/remote-connections)
 
+### Publish work links and evidence
+
+Pass `--details /private/path/details.json` to the same publisher command. Use only the sections being updated. For example, a synthetic update for `--candidate candidate-2` could contain:
+
+```json
+{
+  "links": [
+    {"kind": "epic", "label": "Epic #10", "url": "https://example.com/issues/10"},
+    {"kind": "issue", "label": "Issue #12", "url": "https://example.com/issues/12"},
+    {"kind": "pr", "label": "PR #15", "url": "https://example.com/pull/15"}
+  ],
+  "checks": [
+    {"name": "Project tests", "candidate": "candidate-2", "state": "passed", "observed_at": "2026-01-01T12:10:00Z", "counts": {"passed": 37, "skipped": 2}}
+  ],
+  "ci": [
+    {"kind": "pr", "name": "CI", "candidate": "candidate-2", "commit": "0123456789abcdef", "attempt": 1, "state": "running", "observed_at": "2026-01-01T12:11:00Z", "url": "https://example.com/runs/18"}
+  ],
+  "events": [
+    {"id": "check-run-002", "kind": "rerun", "candidate": "candidate-2", "observed_at": "2026-01-01T12:10:00Z", "summary": "Reran project tests after repairing the failing case."}
+  ]
+}
+```
+
+- **Links** come from the agreed scope and recorded PR. Use HTTPS destinations without credentials or query parameters.
+- **Checks** summarize the latest observation per check group from the project's native evidence. Publish starts and outcomes as they occur. For the example capture script, use the `run.json` candidate, start or finish time, status and exit code. Add counts only when the tool reports them. A newer failure, interruption, or incomplete attempt takes the place of an earlier pass. Use `pending`, `running`, `passed`, `failed`, `interrupted`, or `unavailable`.
+- **CI** is optional. Publish an observed `pr` or `post-merge` result with the commit the provider checked and the task candidate it belongs to. Include the run URL and attempt when known. Use `pending`, `running`, `passed`, `failed`, `cancelled`, `skipped`, or `unavailable`. The card shows the recorded observation time and does not query the provider.
+- **Events** record actual `repair`, `rerun`, or `review` activity with a stable ID from the underlying run or record. An identical event can be published again without adding a row. A conflicting event with the same ID is rejected. The history stays with the private task snapshot on resume.
+
+Each supplied `links`, `checks`, or `ci` list replaces that section in full. An empty list clears it. Omitted lists carry forward. A check or CI row from another candidate shows as stale, and rows carried through a candidate change stay stale until the workflow publishes current evidence. Use `"stale": true` if the workflow invalidates a row for the same candidate. Only the active workflow writes the snapshot, including when several checks produce evidence concurrently. Keep commands, raw logs, credentials, and private paths in the underlying evidence store.
+
 ### Rehearse on desktop
 
 Use a synthetic task on both a local checkout and an SSH-connected checkout. Confirm the status link appears at the top of the opening reply and the bottom of the closing reply. Check that ordinary chat, intermediate replies, and resumes of the same flight omit it. Activate the workflow with the card absent, then resume with the card visible and again with its tab hidden. Check that the same task route stays open in one tab. Confirm that the current task and `Snapshot rendered` appear in the desktop view.
