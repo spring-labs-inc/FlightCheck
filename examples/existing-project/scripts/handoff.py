@@ -28,11 +28,22 @@ def gate_status(root, gate, candidate, final):
     result = {"id": gate_id, "scope": request["scope"]}
     try:
         run, receipt = latest_run(root, latest)
-        result.update(receipt=str(run / "run.json"), exit_code=receipt["exit_code"])
+        owner = receipt.get("owner", "controller")
+        result.update(receipt=str(run / "run.json"), exit_code=receipt["exit_code"], owner=owner)
+        if owner not in (gate.get("owner", "controller"), "controller"):
+            return dict(result, status="unverified", reason="receipt owner does not match the gate assignment")
         if receipt["status"] != "finished":
             return dict(result, status="pending", reason=receipt["status"])
         if receipt["exit_code"] != 0:
-            return dict(result, status="failed", reason="latest attempt failed")
+            output = receipt["output"]
+            current_failure = (receipt["candidate"] == candidate and receipt.get("request") == request
+                               and receipt.get("inputs_before") is not None
+                               and fingerprint(request["fingerprint_command"]) == receipt["inputs_before"]
+                               and output["path"] == "output.log" and output["status"] == "complete"
+                               and digest(run / "output.log") == output["sha256"])
+            if read_json(latest) != run.name:
+                return dict(result, status="pending", reason="latest attempt changed during validation")
+            return dict(result, status="failed", reason="latest attempt failed", current_failure=current_failure)
         current = fingerprint(request["fingerprint_command"])
         if current is None:
             return dict(result, status="unverified", reason="current fingerprint unavailable")
@@ -99,7 +110,25 @@ def configured_gates(gates):
         raise ValueError("Required gate identifiers must be unique")
     if any(gate.get("phase", "authoritative") not in ("cheap", "authoritative") for gate in gates):
         raise ValueError("Gate phase must be cheap or authoritative")
+    if any(gate.get("owner", "controller") not in ("worker", "controller") for gate in gates):
+        raise ValueError("Gate owner must be worker or controller")
     return gates
+
+
+def check_plan(task, root):
+    candidate = task["candidate"]
+    if not isinstance(candidate, str) or not candidate.strip():
+        raise ValueError("The check plan needs a candidate identity")
+    checks = []
+    for gate in configured_gates(task["gates"]):
+        check = gate_status(root, gate, candidate, final=True)
+        action = {"passed": "carry", "reused": "carry", "reusable": "reuse"}.get(check["status"], "run")
+        if check.get("current_failure"):
+            action = "repair"
+        elif check["status"] == "pending" and check["reason"] not in ("interrupted", "unavailable"):
+            action = "wait"
+        checks.append(dict(check, action=action, assigned_owner=gate.get("owner", "controller")))
+    return {"candidate": candidate, "checks": checks}
 
 
 def code_review_packet(task, root):
@@ -168,7 +197,7 @@ def build_packet(task, root, final):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("resume", "review", "code-review"))
+    parser.add_argument("mode", choices=("resume", "review", "code-review", "checks"))
     parser.add_argument("--task", type=Path, required=True)
     parser.add_argument("--evidence-dir", type=Path, required=True)
     args = parser.parse_args()
@@ -176,7 +205,12 @@ def main():
     try:
         task = read_json(args.task)
         root = args.evidence_dir.resolve(strict=True)
-        packet = code_review_packet(task, root) if args.mode == "code-review" else build_packet(task, root, final)
+        if args.mode == "checks":
+            packet = check_plan(task, root)
+        elif args.mode == "code-review":
+            packet = code_review_packet(task, root)
+        else:
+            packet = build_packet(task, root, final)
     except (OSError, KeyError, TypeError, ValueError) as error:
         parser.exit(2, f"Cannot build handoff packet: {error}\n")
     print(json.dumps(packet, indent=2))

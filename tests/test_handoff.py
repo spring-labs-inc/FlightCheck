@@ -41,12 +41,13 @@ class HandoffTests(unittest.TestCase):
             "diff": "candidate.diff", "acceptance": ["policy passes"], "delivery": "local only",
         }
 
-    def record(self, *, fail=False, refresh=False):
+    def record(self, *, fail=False, refresh=False, owner=None):
         return subprocess.run(
             [sys.executable, "-B", str(SCRIPTS / "capture_check.py"), "--gate", "policy",
              "--scope", self.request["scope"], "--candidate", self.task["candidate"],
              "--fingerprint-command", json.dumps(self.request["fingerprint_command"]),
              "--evidence-dir", str(self.evidence), *(["--refresh"] if refresh else []),
+             *(["--owner", owner] if owner else []),
              "--", *self.request["command"]],
             cwd=self.checkout, env=dict(os.environ, FAIL_CHECK=str(int(fail))),
             check=False, capture_output=True, text=True, timeout=10,
@@ -170,6 +171,41 @@ class HandoffTests(unittest.TestCase):
         self.assertEqual(check["status"], "reused")
         Path(check["output"]).write_text("corrupted")
         self.assertEqual(self.handoff("code-review", 1)["cheap_checks"][0]["status"], "unverified")
+
+    def test_check_plan_carries_only_current_receipts_from_an_allowed_owner(self):
+        self.gate["owner"] = "worker"
+        self.assertEqual(self.handoff("checks", 0)["checks"][0]["action"], "run")
+        self.assertEqual(self.record(owner="worker").returncode, 0)
+        check = self.handoff("checks", 0)["checks"][0]
+        self.assertEqual((check["action"], check["owner"], check["assigned_owner"]), ("carry", "worker", "worker"))
+        self.assertTrue(self.handoff("review", 0)["ready_for_review"])
+        self.task["candidate"] = "B"
+        self.assertEqual(self.handoff("checks", 0)["checks"][0]["action"], "reuse")
+        self.gate["owner"] = "controller"
+        self.assertEqual(self.handoff("checks", 0)["checks"][0]["action"], "run")
+        self.assertEqual(self.handoff("review", 1)["checks"][0]["status"], "unverified")
+        self.assertEqual(self.record(refresh=True, owner="controller").returncode, 0)
+        self.gate["owner"] = "worker"
+        check = self.handoff("checks", 0)["checks"][0]
+        self.assertEqual((check["action"], check["owner"]), ("carry", "controller"))
+        self.inputs.write_text("changed")
+        self.assertEqual(self.handoff("checks", 0)["checks"][0]["action"], "run")
+
+    def test_check_plan_preserves_newer_failures_and_incomplete_attempts(self):
+        self.gate["owner"] = "worker"
+        self.assertEqual(self.record(owner="worker").returncode, 0)
+        self.assertEqual(self.record(fail=True, refresh=True, owner="worker").returncode, 1)
+        self.assertEqual(self.handoff("checks", 0)["checks"][0]["action"], "repair")
+        latest = json.loads((self.evidence / "gate-policy.json").read_text())
+        (self.evidence / latest / "output.log").write_text("corrupted")
+        self.assertEqual(self.handoff("checks", 0)["checks"][0]["action"], "run")
+        self.task["candidate"] = "B"
+        self.assertEqual(self.handoff("checks", 0)["checks"][0]["action"], "run")
+        receipt = self.evidence / latest / "run.json"
+        incomplete = json.loads(receipt.read_text())
+        incomplete.update(status="incomplete", exit_code=None)
+        receipt.write_text(json.dumps(incomplete))
+        self.assertEqual(self.handoff("checks", 0)["checks"][0]["action"], "wait")
 
 
 if __name__ == "__main__":

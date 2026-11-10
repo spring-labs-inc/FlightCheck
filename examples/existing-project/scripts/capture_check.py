@@ -164,6 +164,8 @@ def capture(args, command, worktree, parent, latest, request, before):
     }
     if latest:
         packet.update(request=request, inputs_before=before, inputs_after=None, artifacts={})
+        if args.owner:
+            packet["owner"] = args.owner
     write_json(run / "run.json", packet)
     if latest:
         write_json(latest, run.name)
@@ -217,6 +219,7 @@ def main():
     parser.add_argument("--scope", required=True, help="Intended gate coverage")
     parser.add_argument("--summary", choices=("pytest",), help="Interpret tool-specific totals")
     parser.add_argument("--gate", help="Stable identifier for a reusable check")
+    parser.add_argument("--owner", choices=("worker", "controller"), help="Role responsible for this check run")
     parser.add_argument("--fingerprint-command", type=fingerprint_argv, help="JSON argv for the gate input probe")
     parser.add_argument("--artifact", action="append", default=[], help="Report file to retain, repeatable")
     parser.add_argument("--refresh", action="store_true", help="Run the gate even if a reusable pass exists")
@@ -238,8 +241,8 @@ def main():
         parser.error("--gate must contain only letters, digits, underscores or dashes")
     if bool(args.gate) != bool(args.fingerprint_command):
         parser.error("--gate and --fingerprint-command must be used together")
-    if (args.artifact or args.refresh) and not args.gate:
-        parser.error("--artifact and --refresh require --gate")
+    if (args.artifact or args.refresh or args.owner) and not args.gate:
+        parser.error("--artifact, --refresh and --owner require --gate")
 
     latest = parent / f"gate-{args.gate}.json" if args.gate else None
     lock = latest.with_suffix(".lock").open("a") if latest else nullcontext()

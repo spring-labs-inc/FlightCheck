@@ -5,7 +5,7 @@ description: Run the repository's staged development workflow when the owner exp
 
 Read the [project workflow](../../../docs/development-workflow.md) and the applicable repository instructions. Confirm the project setup, scope, acceptance, checkout, and delivery boundary before editing.
 
-Run the configured cheap checks, including fast checks for affected behavior, and resolve failures before interactive HTML approval or conditional early CODE review. Follow the guide for remaining gates, receipt matching, final code and evidence review, and verdict routing. On resume, reconcile the current candidate, original results, owner decisions, and provider state before repeating work.
+Run the configured cheap checks, including fast checks for affected behavior, and resolve failures before interactive HTML approval or conditional early CODE review. Use the trusted recorder for gates assigned to the worker. At handoff, use `handoff.py checks` to carry verified receipts and identify the checks still due. Follow the guide for final code and evidence review and verdict routing. On resume, reconcile the current candidate, original results, owner decisions, and provider state before repeating work.
 
 Use the guide's shared `handoff.py resume` summary before reopening saved evidence. Route an eligible clean resume directly to final review. For an applicable early CODE re-review, use `handoff.py code-review` to route an in-scope repair to the prior read-only reviewer. Build and validate the `handoff.py review` packet before launching the separate final reviewer. Resolve any blocked prerequisites and preserve the original outputs.
 

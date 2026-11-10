@@ -14,6 +14,8 @@ The [handoff benchmark](benchmark-handoff.md) records the clean and changed-UI S
 
 The [Django composite-key lookup result](benchmark-django-result.md) records fresh and clean-resume timings and the compatibility regression that SpringDev caught before approval.
 
+The [fmt and ripgrep benchmark results](benchmark-native-results.md) record fresh timings, defect detection, review cycles, and gate reruns with the fast checks scheduled before conditional CODE review.
+
 ## Preflight and calibration
 
 Restore the exact pin to a clean checkout. Verify that the target can accept the example project instructions, skill, and reviewer definitions without replacing native project policy. Run the frozen native check scope and retain its original output and run packet. Record any compiler, dependency, sandbox, or harness failure separately from a candidate failure.

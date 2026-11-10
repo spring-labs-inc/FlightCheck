@@ -11,6 +11,7 @@ Fill in the entries below during adoption. Record the exact commands, prerequisi
 | Cheap checks | Configure fast, reliable commands for the affected behavior, such as focused regression tests, schema validation, lint, documentation, or policy checks. Use observed runtime and setup cost to choose commands that can run on each relevant repair. `git diff --check HEAD` is a starting whitespace check for tracked changes. Cover new candidate files with the applicable project checks. |
 | Early CODE review | Project-specific risk triggers and cases where review before an expensive run could avoid substantial rework. |
 | Authoritative checks | Exact required test commands and their coverage. Classify each check by when it should run. A required check can run in the cheap stage when its full declared scope is fast. Schedule the remaining focused, broad, and visual checks after CODE review when it applies. |
+| Check ownership | Assign one owner per required gate. The worker can own configured checks it can run through the trusted recorder at the applicable stage. The controller owns private, unavailable, and fallback checks. Use one gate identifier and evidence root across the handoff. |
 | UI verification | How to serve interactive HTML using synthetic data, identify the approved surface, run any automated visual checks, and validate the producing run's report. |
 | Test isolation | Disposable data or databases, service ports, scratch, caches, reports, and teardown. Use distinct worktrees for concurrent runs and serialize any suite that still shares mutable resources. |
 | Evidence | An approved private location that survives checkout removal, with the evidence retention and access rules. Keep output free of credentials and sensitive data. |
@@ -63,6 +64,16 @@ Keep one private evidence root per task and use the same gate identifier for all
 
 Include link-target existence in docs fingerprints. For visual checks, bind the producer and findings reader to the same run and inputs.
 
+### Carry checks across the handoff
+
+Give the worker the exact configured invocation for each gate it owns, including the stable gate ID and task evidence root. Add `--owner worker` to its recorder invocation. For gates owned or taken over by the controller, use `--owner controller`. Execute the canonical command through a trusted recorder under the project's tool boundary. The task adapter owns the evidence store and establishes which recorder can write governing receipts. A manually assembled pass or an ad hoc test run does not establish governing evidence. The worker hands off the candidate identity and any unresolved failures. The recorder supplies the evidence.
+
+```sh
+python3 scripts/handoff.py checks --task "$task_json" --evidence-dir "$evidence_dir"
+```
+
+Use the resulting plan at the applicable stage. Carry a current verified receipt directly into the next stage. For `reuse`, use the recorder to bind the matching older pass to the current candidate and retain its reuse decision. For `run`, the controller takes over and records a fresh result with `--refresh`. For `repair`, return the current failure to the implementer. For `wait`, reconcile the in-progress attempt before continuing. If the process has stopped without a result, resolve the incomplete attempt and record a fresh run. Validate the final packet against the same gate definitions. Keep check commands, coverage, phase, and independent review requirements in force when the owner changes.
+
 ## Resume summary and final packet
 
 Use [`handoff.py`](../scripts/handoff.py) next to the recorder. The project adapter writes a task JSON file for the current checkout before either command. Use the same required gate definitions for recording and validation.
@@ -76,7 +87,7 @@ python3 scripts/handoff.py review --task "$task_json" --evidence-dir "$evidence_
 | --- | --- |
 | `candidate`, `saved_candidate` | Current frozen candidate identity from the checkout and the identity saved in the handoff. |
 | `preview` | `null` for non-UI work. For UI work, provide the current `surface` fingerprint, the `approved_surface` from the recorded owner decision, and its `decision_reference`. Include a `waiver` reference only when explicitly granted. |
-| `gates` | All required checks. Each entry has an `id` matching the recorder's gate identifier and a `request` with the exact `command`, `scope`, `summary`, `fingerprint_command` and `artifacts` used by the recorder. Set `phase` to `cheap` for checks that must pass before CODE review. The default is `authoritative`. Final review validates both phases. For an explicitly reused pass, include `reuse` with its receipt path relative to the evidence root. |
+| `gates` | All required checks. Each entry has an `id` matching the recorder's gate identifier and a `request` with the exact `command`, `scope`, `summary`, `fingerprint_command` and `artifacts` used by the recorder. Set `phase` to `cheap` for checks that must pass before CODE review. The default is `authoritative`. Set `owner` to `worker` for an assigned worker gate. The default is `controller`, including for older receipts without an owner. Final review validates both phases. For an explicitly reused pass, include `reuse` with its receipt path relative to the evidence root. |
 | `resume_state` | Optional verified state from the task adapter. Set `phase` to `awaiting_final_review` and `pending_work`, `pending_decisions`, and `active_processes` to `false` only after reconciling the saved task with current state. Leave uncertain state unset. |
 | `diff`, `acceptance`, `delivery` | For final review, the current diff's path inside the evidence root, the acceptance criteria and delivery boundaries. Supply `decisions` and `findings` when there are owner decisions or early review findings to carry forward. |
 
