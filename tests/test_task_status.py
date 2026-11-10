@@ -97,6 +97,112 @@ class TaskStatusTests(unittest.TestCase):
         self.assertEqual(len(snapshot["gates"]), 8)
         self.assertEqual(self.request(url + "task/test-task/")[0], 404)
 
+    def test_workflow_stage_map_follows_explicit_progress_and_candidate(self):
+        details = self.snapshot.with_name("details.json")
+        stages = {"Authoritative Gates": "current", "Plan": "completed", "Interactive UI Approval": "skipped"}
+        details.write_text(json.dumps({"stages": stages, "worktree": "review-worktree"}))
+        self.publish("--candidate", "first", "--details", str(details))
+        url = self.start("--task-status", str(self.snapshot)) + "status.json"
+
+        def current():
+            status, body = self.request(url)
+            self.assertEqual(status, 200)
+            return json.loads(body)
+
+        published = current()["stages"]
+        self.assertEqual(len(published), 9)
+        self.assertEqual(next(iter(published)), "Plan")
+        self.assertEqual(published["Interactive UI Approval"], "skipped")
+        self.assertEqual(published["Authoritative Gates"], "current")
+        self.assertEqual(published["PR & Merge"], "pending")
+        self.publish("--candidate", "first")
+        self.assertEqual(current()["stages"], published)
+
+        details.write_text(json.dumps({"stages": {**stages, "Implement": "current"}}))
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.publish("--candidate", "first", "--details", str(details))
+        self.assertEqual(current()["stages"], published)
+        self.publish("--candidate", "second")
+        self.assertNotIn("stages", current())
+        self.assertEqual(current()["worktree"], "review-worktree")
+
+    def test_live_details_survive_resume_and_keep_older_evidence_stale(self):
+        details = self.snapshot.with_name("details.json")
+        observed = "2026-01-01T12:00:00Z"
+        check = {"name": "Project tests", "candidate": "first", "state": "passed",
+                 "counts": {"passed": 37}, "observed_at": observed, "private_path": "/private/log"}
+        event = {"id": "repair-1", "kind": "repair", "candidate": "second",
+                 "observed_at": observed, "summary": "Repaired failing input."}
+        links = [{"kind": kind, "label": kind, "url": f"https://example.com/{kind}/1"}
+                 for kind in ("epic", "issue", "pr")]
+        ci = {"name": "Provider checks", "kind": "pr", "candidate": "first",
+              "commit": "abcdef123", "attempt": 1, "state": "passed", "observed_at": observed,
+              "url": "https://example.com/runs/1"}
+        details.write_text(json.dumps({"links": links, "checks": [check], "ci": [ci]}))
+        self.publish("--candidate", "first", "--details", str(details))
+        url = self.start("--task-status", str(self.snapshot)) + "status.json"
+
+        def current():
+            status, body = self.request(url)
+            self.assertEqual(status, 200)
+            return json.loads(body)
+
+        self.assertEqual(current()["links"], links)
+        self.assertEqual(current()["ci"][0]["commit"], "abcdef123")
+        self.assertNotIn("private_path", current()["checks"][0])
+        details.write_text(json.dumps({"events": [event]}))
+        for _ in range(2):
+            self.publish("--candidate", "second", "--details", str(details))
+        self.assertEqual(len(current()["history"]), 1)
+        self.assertTrue(current()["checks"][0]["stale"])
+        self.assertTrue(current()["ci"][0]["stale"])
+
+        self.publish("--candidate", "first")
+        self.assertTrue(current()["checks"][0]["stale"])
+        failed = {**check, "state": "failed", "counts": {"failed": 1}}
+        details.write_text(json.dumps({"checks": [failed], "ci": []}))
+        self.publish("--candidate", "first", "--details", str(details))
+        self.assertEqual(current()["checks"][0]["state"], "failed")
+        self.assertFalse(current()["checks"][0]["stale"])
+        self.assertEqual(current()["ci"], [])
+        self.assertEqual(current()["history"][0]["id"], event["id"])
+
+        for rejected in (
+            {"links": [{"kind": "issue", "label": "Unsafe", "url": "javascript:alert(1)"}]},
+            {"events": [{**event, "summary": "Replaced original observation."}]},
+        ):
+            previous = self.snapshot.read_bytes()
+            details.write_text(json.dumps(rejected))
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.publish("--candidate", "first", "--details", str(details))
+            self.assertEqual(self.snapshot.read_bytes(), previous)
+
+    def test_work_links_group_by_type_then_sort_newest_first(self):
+        details = self.snapshot.with_name("details.json")
+        items = [
+            ("issue", "Undated issue", None),
+            ("epic", "Older epic", "2026-01-01T10:00:00Z"),
+            ("pr", "Newest PR", "2026-01-01T09:00:00-05:00"),
+            ("issue", "Newer issue", "2026-01-01T12:00:00Z"),
+            ("epic", "Newer epic", "2026-01-01T12:00:00Z"),
+            ("pr", "Older PR", "2026-01-01T13:00:00Z"),
+            ("pr", "Undated PR", None),
+        ]
+        links = [{"kind": kind, "label": label, "url": f"https://example.com/items/{index}",
+                  "created_at": created_at} for index, (kind, label, created_at) in enumerate(items)]
+        links[1].update(title="Status card rollout", description="Coordinate the status card changes.")
+        details.write_text(json.dumps({"links": links}))
+        self.publish("--details", str(details))
+        url = self.start("--task-status", str(self.snapshot)) + "status.json"
+        status, body = self.request(url)
+        self.assertEqual(status, 200)
+        published = json.loads(body)["links"]
+        self.assertEqual([link["label"] for link in published],
+                         ["Newer epic", "Older epic", "Newer issue", "Undated issue",
+                          "Newest PR", "Older PR", "Undated PR"])
+        self.assertEqual(published[1]["title"], "Status card rollout")
+        self.assertEqual(published[1]["description"], "Coordinate the status card changes.")
+
     def test_desktop_tab_decisions_use_the_task_route(self):
         visible = {"id": "card", "url": "http://localhost:58213/task/test-task/", "visible": True}
         hidden = {**visible, "visible": False}
