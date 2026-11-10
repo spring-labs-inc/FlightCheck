@@ -83,7 +83,6 @@ function renderDetails(data) {
       return row;
     });
     fill("stages", stageEntries, stageRow);
-    byId("overview").hidden = !stageEntries.length && !checks.length && !ci.length;
     byId("evidence").hidden = !checks.length && !ci.length;
     fill("checks", checks, (check) => observationRow(check, candidate,
       Object.entries(check.counts).map(([label, count]) => `${count} ${label}`).join(" · ")));
