@@ -127,6 +127,8 @@ def stages(value):
 
 def normalize_details(data):
     result = {}
+    if "worktree" in data:
+        result["worktree"] = short_text(data["worktree"])
     if "stages" in data:
         result["stages"] = stages(data["stages"])
     if "links" in data:
@@ -141,8 +143,8 @@ def normalize_details(data):
 
 def update_details(previous, details, candidate):
     """Apply explicit section updates and append only new, recorded events."""
-    if not isinstance(details, dict) or details.keys() - {"links", "checks", "ci", "events", "stages"}:
-        raise ValueError("Expected a details object with stages, links, checks, ci, or events")
+    if not isinstance(details, dict) or details.keys() - {"worktree", "links", "checks", "ci", "events", "stages"}:
+        raise ValueError("Expected a details object with worktree, stages, links, checks, ci, or events")
     update = normalize_details(details)
     result = {**normalize_details(previous), **update}
     if previous.get("candidate") != candidate and "stages" not in update:

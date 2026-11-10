@@ -100,7 +100,7 @@ class TaskStatusTests(unittest.TestCase):
     def test_workflow_stage_map_follows_explicit_progress_and_candidate(self):
         details = self.snapshot.with_name("details.json")
         stages = {"Authoritative Gates": "current", "Plan": "completed", "Interactive UI Approval": "skipped"}
-        details.write_text(json.dumps({"stages": stages}))
+        details.write_text(json.dumps({"stages": stages, "worktree": "review-worktree"}))
         self.publish("--candidate", "first", "--details", str(details))
         url = self.start("--task-status", str(self.snapshot)) + "status.json"
 
@@ -124,6 +124,7 @@ class TaskStatusTests(unittest.TestCase):
         self.assertEqual(current()["stages"], published)
         self.publish("--candidate", "second")
         self.assertNotIn("stages", current())
+        self.assertEqual(current()["worktree"], "review-worktree")
 
     def test_live_details_survive_resume_and_keep_older_evidence_stale(self):
         details = self.snapshot.with_name("details.json")

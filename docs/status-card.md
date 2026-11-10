@@ -27,6 +27,7 @@ Pass `--details /private/path/details.json` to the same publisher command. Use o
 
 ```json
 {
+  "worktree": "setup-docs",
   "stages": {
     "Plan": "completed",
     "Implement": "completed",
@@ -51,6 +52,7 @@ Pass `--details /private/path/details.json` to the same publisher command. Use o
 }
 ```
 
+- **Worktree** is a short display name for the checkout, shown below Candidate. Keep the filesystem path in the private workflow record. The name carries forward until the workflow publishes a new one.
 - **Stages** reflect the workflow's recorded progress. Use the nine stage names from the README and the states `completed`, `current`, `skipped`, and `pending`. Supply at most one current stage. Unlisted stages default to pending. Publish the new stage map when the workflow advances or returns for repair. The card keeps the last map for the same candidate and clears it on a candidate change unless the update supplies a new map.
 - **Links** come from the agreed scope and recorded PR. Use HTTPS destinations without credentials or query parameters. Include the tracker's `created_at` timestamp with a timezone when available. Links sort newest first across all types. Ties retain their supplied order, and undated links follow in their supplied order.
 - **Checks** summarize the latest observation per check group from the project's native evidence. Publish starts and outcomes as they occur. For the example capture script, use the `run.json` candidate, start or finish time, status and exit code. Add counts only when the tool reports them. A newer failure, interruption, or incomplete attempt takes the place of an earlier pass. Use `pending`, `running`, `passed`, `failed`, `interrupted`, or `unavailable`.

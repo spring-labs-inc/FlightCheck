@@ -71,6 +71,7 @@ dd { margin: 1px 0 0; font-size: .85rem; }
 .task-card h1 { font-size: clamp(1.25rem, 4vw, 1.65rem); overflow-wrap: anywhere; }
 .task-card h2, .task-card summary { font-size: .88rem; }
 .task-card .summary, .task-card .candidate, .task-card .review p:last-child { margin-top: 3px; }
+.task-card .candidate code { overflow-wrap: anywhere; }
 .task-card .summary { font-size: .85rem; line-height: 1.35; overflow-wrap: anywhere; }
 .task-card .eyebrow { margin-bottom: 2px; }
 .task-card .review { max-width: 22ch; border: 0; border-left: 1px solid var(--frame); padding: 0 0 0 10px; }

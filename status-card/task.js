@@ -124,6 +124,8 @@ async function refresh() {
     setText("summary", data.summary);
     setText("candidate", data.candidate.slice(0, 12) || "Pending");
     byId("candidate").title = data.candidate;
+    setText("worktree", data.worktree ?? "");
+    byId("worktree-line").hidden = !data.worktree;
     setText("verdict", current ? data.verdict : "Pending");
     renderDetails(data);
     setText("publication", "Published on loopback");

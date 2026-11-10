@@ -8,6 +8,8 @@ Use the publisher's `--details` option for curated JSON updates. At activation p
 
 Include each linked item's tracker creation time as `created_at` when available so the newest work links appear first.
 
+Publish the checkout's short display name as `worktree`. Keep the filesystem path in the private workflow record. Update the name if the task moves to another checkout.
+
 Publish a `stages` map using the SpringDev stage names. Mark stages completed after their requirements are met, skipped when they do not apply, and current at the actual active stage. On a repair return, update the map to show the return and the stages whose evidence remains valid. On a candidate change, provide the newly verified map alongside the candidate or leave stages unpublished until verified.
 
 Append iteration events for actual repair returns, check reruns, and independent review outcomes. Reuse IDs from the underlying records so a resume or retry cannot duplicate history. Keep earlier events and record new attempts separately. The active workflow publishes updates from parallel checks through the same task snapshot. Keep raw evidence and secrets private. Treat all card content as informational.
