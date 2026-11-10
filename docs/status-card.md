@@ -37,9 +37,12 @@ Pass `--details /private/path/details.json` to the same publisher command. Use o
   },
   "links": [
     {"kind": "epic", "label": "#10", "title": "Setup rollout", "description": "Make the project easier to set up.", "url": "https://example.com/issues/10", "created_at": "2026-01-01T09:00:00Z"},
-    {"kind": "issue", "label": "#12", "title": "Clarify prerequisites", "description": "Document the tools needed for a clean checkout.", "url": "https://example.com/issues/12", "created_at": "2026-01-01T10:00:00Z"},
+    {"kind": "issue", "label": "#12", "title": "Clarify prerequisites", "description": "Document the tools needed for a clean checkout.", "url": "https://example.com/issues/12", "created_at": "2026-01-01T10:00:00Z", "flight": "setup-followup"},
     {"kind": "pr", "label": "#15", "title": "Document setup tools", "description": "Add the prerequisites to the setup guide.", "url": "https://example.com/pull/15", "created_at": "2026-01-01T12:08:00Z"}
   ],
+  "tracked_flights": {
+    "setup-followup": {"candidate": "followup-1", "stage_candidate": "followup-1", "stage": "Implement"}
+  },
   "checks": [
     {"name": "Project tests", "candidate": "candidate-2", "state": "passed", "observed_at": "2026-01-01T12:10:00Z", "counts": {"passed": 37, "skipped": 2}}
   ],
@@ -55,11 +58,12 @@ Pass `--details /private/path/details.json` to the same publisher command. Use o
 - **Worktree** is a short display name for the checkout, shown below Candidate. Keep the filesystem path in the private workflow record. The name carries forward until the workflow publishes a new one.
 - **Stages** reflect the workflow's recorded progress. Use the nine stage names from the README and the states `completed`, `current`, `skipped`, and `pending`. Supply at most one current stage. Unlisted stages default to pending. Publish the new stage map when the workflow advances or returns for repair. The card keeps the last map for the same candidate and clears it on a candidate change unless the update supplies a new map.
 - **Links** come from the agreed scope and recorded PR. Use a short reference such as `#12` for the label. Provide a title and a brief description when available. Selecting an item expands its details on the card. The `>` button opens the destination in a new tab or window. Use HTTPS destinations without credentials or query parameters. Include the tracker's `created_at` timestamp with a timezone when available. Epics come first, followed by issues and then PRs. Each group is ordered newest first. Ties retain their supplied order, and undated links follow the dated links in their group.
+- **Linked issue stages** require an explicit `flight` on the issue link. Use the flight's task ID. For the displayed flight, the stage comes from its current candidate and stage map. For another flight, publish its observed candidate, recorded stage, and the candidate that stage applies to in `tracked_flights`. Refresh this map from the workflow records when tracked flights advance or change candidates. If no stage applies to the new candidate, publish only its candidate or omit that flight from the replacement map. The card shows a shared label when several linked issues use the same flight. The main stages always come from the displayed task.
 - **Checks** summarize the latest observation per check group from the project's native evidence. Publish starts and outcomes as they occur. For the example capture script, use the `run.json` candidate, start or finish time, status and exit code. Add counts only when the tool reports them. A newer failure, interruption, or incomplete attempt takes the place of an earlier pass. Use `pending`, `running`, `passed`, `failed`, `interrupted`, or `unavailable`.
 - **CI** is optional. Publish an observed `pr` or `post-merge` result with the commit the provider checked and the task candidate it belongs to. Include the run URL and attempt when known. Use `pending`, `running`, `passed`, `failed`, `cancelled`, `skipped`, or `unavailable`. The card shows the recorded observation time and does not query the provider.
 - **Events** record actual `repair`, `rerun`, or `review` activity with a stable ID from the underlying run or record. An identical event can be published again without adding a row. A conflicting event with the same ID is rejected. The history stays with the private task snapshot on resume.
 
-Each supplied `links`, `checks`, or `ci` list replaces that section in full. An empty list clears it. Omitted lists carry forward. A check or CI row from another candidate shows as stale, and rows carried through a candidate change stay stale until the workflow publishes current evidence. Use `"stale": true` if the workflow invalidates a row for the same candidate. Only the active workflow writes the snapshot, including when several checks produce evidence concurrently. Keep commands, raw logs, credentials, and private paths in the underlying evidence store.
+Each supplied `links`, `checks`, or `ci` list or `tracked_flights` map replaces that section in full. An empty list or map clears it. Omitted sections carry forward. A check or CI row from another candidate shows as stale, and rows carried through a candidate change stay stale until the workflow publishes current evidence. Use `"stale": true` if the workflow invalidates a row for the same candidate. Only the active workflow writes the snapshot, including when several checks produce evidence concurrently. Keep commands, raw logs, credentials, and private paths in the underlying evidence store.
 
 ### Rehearse on desktop
 

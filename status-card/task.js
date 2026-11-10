@@ -72,9 +72,25 @@ function stageRow([name, state]) {
 
 let lastLinks;
 let selectedWorkLink;
-function renderWorkLinks(links) {
+let issueStages;
+function renderWorkLinkStage() {
+  const flight = selectedWorkLink?.item.flight;
+  const record = flight && Object.hasOwn(issueStages, flight) ? issueStages[flight] : undefined;
+  byId("work-link-stage").hidden = !record;
+  if (record) {
+    const label = record.shared ? "Shared flight stage" : "Workflow stage";
+    const value = `${label} · ${record.stage}`;
+    if (byId("work-link-stage").textContent !== value) setText("work-link-stage", value);
+  }
+}
+
+function renderWorkLinks(links, stages) {
+  issueStages = stages;
   const signature = JSON.stringify(links);
-  if (signature === lastLinks) return;
+  if (signature === lastLinks) {
+    renderWorkLinkStage();
+    return;
+  }
   const groups = [
     ["epic", "Epic"], ["issue", "Issue"], ["pr", "PR"],
   ].map(([kind, label]) => ({ kind, label, items: links.filter((item) => item.kind === kind) }))
@@ -83,8 +99,9 @@ function renderWorkLinks(links) {
   const detail = byId("work-link-detail");
 
   function showSelection() {
-    const selected = choices.find(({ key }) => key === selectedWorkLink);
-    selectedWorkLink = selected?.key;
+    const selected = choices.find(({ key }) => key === selectedWorkLink?.key);
+    selectedWorkLink = selected;
+    renderWorkLinkStage();
     for (const choice of choices) choice.button.setAttribute("aria-expanded", String(choice === selected));
     detail.hidden = !selected;
     if (!selected) {
@@ -121,11 +138,12 @@ function renderWorkLinks(links) {
       button.type = "button";
       button.setAttribute("aria-label", `${label} ${text}`);
       button.setAttribute("aria-controls", "work-link-detail");
+      const choice = { key, item, button };
       button.addEventListener("click", () => {
-        selectedWorkLink = selectedWorkLink === key ? undefined : key;
+        selectedWorkLink = selectedWorkLink?.key === key ? undefined : choice;
         showSelection();
       });
-      choices.push({ key, item, button });
+      choices.push(choice);
       entry.append(button);
       if (index + 1 < items.length) entry.append(",");
       group.append(entry, " ");
@@ -140,7 +158,7 @@ let lastDetails;
 function renderDetails(data) {
   const { candidate, stages = {}, links = [], checks = [], ci = [], history = [] } = data;
   const stageEntries = Object.entries(stages);
-  renderWorkLinks(links);
+  renderWorkLinks(links, data.issue_stages ?? {});
   const fingerprint = JSON.stringify([candidate, stageEntries, checks, ci, history]);
   if (fingerprint !== lastDetails) {
     fill("stages", stageEntries, stageRow);
