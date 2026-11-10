@@ -1,4 +1,4 @@
-"""Publish a curated SpringDev task snapshot and render its chat footer."""
+"""Publish a curated SpringDev task snapshot and format flight boundary text."""
 
 import argparse
 import json
@@ -46,16 +46,21 @@ def read_task(path):
     return normalize(json.loads(path.read_text(encoding="utf-8")))
 
 
-def footer(data, url=None):
-    status = "SpringDev </> status"
+def chat_status(data, url, phase):
+    label = "&lt; status /&gt;"
     if url:
         route = urlsplit(url)
         if (route.scheme != "http" or route.hostname != "127.0.0.1" or not route.port
                 or route.path != task_path(data["task"]) or route.netloc != f"127.0.0.1:{route.port}"
                 or route.query or route.fragment):
             raise ValueError("Use the published loopback URL for this task")
-        status = f"[{status}]({url})"
-    return f"**{status} · Verdict: {data['verdict']}**"
+        label = f"[{label}]({url})"
+    if phase is None:
+        return ""
+    status = f"SpringDev: {label}"
+    if phase == "end" and data["verdict"] in VERDICTS:
+        status += f"\n\nVerdict: {data['verdict']}"
+    return status
 
 
 def publish(path, data):
@@ -84,14 +89,16 @@ def main():
     parser.add_argument("--verdict", choices=VERDICTS)
     parser.add_argument("--verdict-candidate")
     parser.add_argument("--url", help="Published loopback URL for this task")
+    parser.add_argument("--chat-phase", choices=("start", "end"), help="Print chat text for a flight boundary")
     args = parser.parse_args()
     try:
         data = normalize(vars(args))
-        line = footer(data, args.url)
+        status = chat_status(data, args.url, args.chat_phase)
         publish(args.file, data)
     except (ValueError, OSError) as error:
         parser.error(str(error))
-    print(line)
+    if status:
+        print(status)
 
 
 if __name__ == "__main__":

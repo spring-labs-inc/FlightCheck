@@ -2,7 +2,7 @@
 
 ## Current task
 
-For a selected Codex workflow, the optional task card publishes a short summary and the verdict for the current candidate. Each task has one stable loopback route. The card and chat footer show `Pending` until a verdict is recorded for that exact candidate. The historical pilot is available separately below.
+For a selected Codex workflow, the optional task card publishes a short summary and the verdict for the current candidate. Each task has one stable loopback route. The card shows `Pending` until a verdict is recorded for that exact candidate. The historical pilot is available separately below.
 
 For adoption in another project, keep this `status-card/` directory available to the workflow and record its path in the project setup. Keep the snapshot in a private directory outside the checkout. Assign a unique task ID and an available port per task. Record the directory, task ID, and port with the selected workflow so a resume uses the same route. Only the active workflow writes that task's curated snapshot. Keep raw output and secrets out of its title and summary.
 
@@ -17,13 +17,15 @@ python3 -B status-card/serve.py --port 8767 --task-status "$task_dir/status.json
 
 In a durable setup, use an owner-only directory that survives the chat session and keep the loopback listener running while the card is needed. Re-run the publisher with the same file and task ID when the candidate or review changes. Supply `--candidate` with the current identity. Supply `--verdict` and `--verdict-candidate` together only after the verdict is recorded. The publisher replaces the snapshot atomically. The task page polls the read-only endpoint and suppresses the verdict when the task, candidate binding, or connection cannot be verified.
 
+Use `--chat-phase start` to format the status line for the top of the opening reply. Use `--chat-phase end` to format the status block for the bottom of the closing reply. Only the `< status />` label links to the task card. The closing block puts any recorded verdict for the current candidate on a separate line below the link. Publish intermediate snapshot updates without a chat phase.
+
 The [Codex skill instructions](../examples/existing-project/.agents/skills/develop-change/references/task-status.md) describe how the selected workflow uses the desktop controls on activation and resume. The optional [tab decision helper](../status-card/task_tab.py) returns the next action from observed tabs and capabilities. Codex uses the available browser controls to carry it out. The checkout-host response, desktop forwarding, and browser render are separate checks. CLI and clients without usable browser controls can continue in chat with the same task link. [Codex built-in browser](https://learn.chatgpt.com/docs/browser) · [Remote connections](https://learn.chatgpt.com/docs/remote-connections)
 
 ### Rehearse on desktop
 
-Use a synthetic task on both a local checkout and an SSH-connected checkout. Start with ordinary chat and confirm it has no footer. Activate the workflow with the card absent, then resume with the card visible and again with its tab hidden. Check that the same task route stays open in one tab. Confirm that the current task and `Snapshot rendered` appear in the desktop view.
+Use a synthetic task on both a local checkout and an SSH-connected checkout. Confirm the status link appears at the top of the opening reply and the bottom of the closing reply. Check that ordinary chat, intermediate replies, and resumes of the same flight omit it. Activate the workflow with the card absent, then resume with the card visible and again with its tab hidden. Check that the same task route stays open in one tab. Confirm that the current task and `Snapshot rendered` appear in the desktop view.
 
-Record a verdict for the synthetic candidate, then change the candidate while retaining the old verdict binding in the test input. Confirm both chat and the page show `Pending`. Stop the listener and check the chat fallback, then restore the original port and reload the same tab. Record host HTTP, the desktop route, and the rendered task as separate observations.
+Record a verdict for the synthetic candidate, then change the candidate while retaining the old verdict binding in the test input. Confirm the card shows `Pending` and the closing block omits the stale verdict. Stop the listener and check the chat fallback, then restore the original port and reload the same tab. Record host HTTP, the desktop route, and the rendered task as separate observations.
 
 ## Historical pilot
 
