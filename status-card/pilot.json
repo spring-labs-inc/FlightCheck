@@ -18,6 +18,7 @@
     "next": "No owner action currently requested",
     "delivery": "Contact us delivery remains a separate decision."
   },
+
   "gates": [
     {"name": "Lint", "state": "passed", "detail": "Ruff"},
     {"name": "Docs", "state": "passed", "detail": "Spring documentation checker"},

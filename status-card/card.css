@@ -63,6 +63,7 @@ dd { margin: 1px 0 0; font-size: .85rem; }
 .route span, .route strong { display: block; }
 .route span { color: var(--muted); }
 .route strong { overflow-wrap: anywhere; }
+
 @media (max-width: 680px) {
   .shell { padding: 16px 14px 24px; }
   .masthead { margin-bottom: 17px; }
