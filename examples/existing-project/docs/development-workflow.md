@@ -13,6 +13,7 @@ Fill in the entries below during adoption. Record the exact commands, prerequisi
 | UI verification | How to serve interactive HTML using synthetic data, identify the approved surface, run any automated visual checks, and validate the producing run's report. |
 | Test isolation | Disposable data or databases, service ports, scratch, caches, reports, and teardown. Use distinct worktrees for concurrent runs and serialize any suite that still shares mutable resources. |
 | Evidence | An approved private location that survives checkout removal, with the evidence retention and access rules. Keep output free of credentials and sensitive data. |
+| Interactive task status | Optional path to the task publisher and loopback server, private snapshot location, and port allocation. Record the task's stable route on activation and reuse it on resume. |
 | Delivery | Target repository and branch, permitted provider writes, the tracker for nits, required checks, and the owner's grant and holds. Recheck current provider policy before delivery. |
 
 ## Run and resume
