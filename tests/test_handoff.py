@@ -1,5 +1,6 @@
 """Exercise the public handoff commands with real check receipts."""
 
+import hashlib
 import json
 import os
 import subprocess
@@ -48,6 +49,7 @@ class HandoffTests(unittest.TestCase):
              "--fingerprint-command", json.dumps(self.request["fingerprint_command"]),
              "--evidence-dir", str(self.evidence), *(["--refresh"] if refresh else []),
              *(["--owner", owner] if owner else []),
+             *(item for path in self.request["artifacts"] for item in ("--artifact", path)),
              "--", *self.request["command"]],
             cwd=self.checkout, env=dict(os.environ, FAIL_CHECK=str(int(fail))),
             check=False, capture_output=True, text=True, timeout=10,
@@ -206,6 +208,46 @@ class HandoffTests(unittest.TestCase):
         incomplete.update(status="incomplete", exit_code=None)
         receipt.write_text(json.dumps(incomplete))
         self.assertEqual(self.handoff("checks", 0)["checks"][0]["action"], "wait")
+
+    def test_final_packet_verifies_test_identities_and_outcomes(self):
+        baseline = {"passed": ["required"], "skipped": ["skip"], "expected_failures": ["xfail"], "failed": []}
+        raw = json.dumps(baseline).encode()
+        (self.evidence / "baseline.json").write_bytes(raw)
+        report = self.checkout / "coverage.json"
+        self.request["artifacts"] = [report.name]
+        self.gate["coverage"] = {"artifact": report.name, "baseline": "baseline.json",
+                                 "baseline_sha256": hashlib.sha256(raw).hexdigest()}
+        report.write_text(json.dumps(dict(baseline, passed=["required", "added"])))
+        self.assertEqual(self.record().returncode, 0)
+        packet = self.handoff("review", 0)
+        coverage = packet["checks"][0]["coverage"]["verified"]
+        self.assertEqual((coverage["tests"], coverage["passed"], coverage["skipped"],
+                          coverage["expected_failures"], coverage["baseline"]["matched"]), (4, 2, 1, 1, 3))
+        Path(coverage["report"]).write_text("changed after capture")
+        self.assertEqual(self.handoff("review", 1)["blockers"], ["policy"])
+
+        report.write_text(json.dumps(dict(baseline, passed=["unrelated", "added"],
+                                          skipped=["xfail"], expected_failures=["skip"])))
+        self.assertEqual(self.record(refresh=True).returncode, 0)
+        coverage = self.handoff("review", 1)["checks"][0]["coverage"]["verified"]
+        self.assertEqual(coverage["baseline"]["missing"], ["required"])
+        self.assertEqual(coverage["baseline"]["outcome_changed"], ["skip", "xfail"])
+
+    def test_implementation_brief_excludes_review_state_and_private_commands(self):
+        self.task.update(scope=["src/"], findings=["review detail"])
+        self.gate.update(owner="worker", phase="cheap", invocation=["trusted-check", "policy"])
+        self.task["gates"].append({"id": "private", "request": dict(self.request, command=["private-evaluator"]),
+                                   "invocation": ["private-evaluator"]})
+        brief = self.handoff("brief", 0)
+        self.assertEqual(brief["checks"][0]["invocation"], ["trusted-check", "policy"])
+        self.assertNotIn("invocation", brief["checks"][1])
+        self.assertNotIn("preview", brief)
+        self.assertNotIn("findings", brief)
+        self.assertNotIn("private-evaluator", json.dumps(brief))
+        self.assertIn("shared contract", brief["early_code"])
+        self.assertIn("bounded invariant", brief["early_code"])
+        self.task["early_code"] = "Review shared interfaces"
+        self.assertEqual(self.handoff("brief", 0)["early_code"], self.task["early_code"])
 
 
 if __name__ == "__main__":

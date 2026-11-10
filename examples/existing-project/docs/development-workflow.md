@@ -9,7 +9,7 @@ Fill in the entries below during adoption. Record the exact commands, prerequisi
 | Setting | What to record |
 | --- | --- |
 | Cheap checks | Configure fast, reliable commands for the affected behavior, such as focused regression tests, schema validation, lint, documentation, or policy checks. Use observed runtime and setup cost to choose commands that can run on each relevant repair. `git diff --check HEAD` is a starting whitespace check for tracked changes. Cover new candidate files with the applicable project checks. |
-| Early CODE review | Project-specific risk triggers and cases where review before an expensive run could avoid substantial rework. |
+| Early CODE review | Use the [standard criteria](#decide-on-early-code-review) and record any project-specific risk triggers. |
 | Authoritative checks | Exact required test commands and their coverage. Classify each check by when it should run. A required check can run in the cheap stage when its full declared scope is fast. Schedule the remaining focused, broad, and visual checks after CODE review when it applies. |
 | Check ownership | Assign one owner per required gate. The worker can own configured checks it can run through the trusted recorder at the applicable stage. The controller owns private, unavailable, and fallback checks. Use one gate identifier and evidence root across the handoff. |
 | UI verification | How to serve interactive HTML using synthetic data, identify the approved surface, run any automated visual checks, and validate the producing run's report. |
@@ -22,10 +22,22 @@ Fill in the entries below during adoption. Record the exact commands, prerequisi
 
 1. Record task scope, acceptance, checkout, base, current diff, and intended delivery. Give each deterministic criterion a reproducible assertion. Present a bounded implementation plan before editing.
 2. Implement and run applicable cheap checks on the candidate. Record failures from independent checks together when they can run safely. Repair failures and refresh affected checks before moving on. For owner-facing UI, then provide the exact interactive HTML URLs and synthetic fixture identities, bind the preview to the candidate surface, and pause for the owner's answer. Get new approval after a surface edit unless the owner explicitly waives the preview pause. Show rendered images only on request.
-3. Record whether early CODE review is warranted. Use it for risks such as migrations, permission or trading changes, or an uncertain approach or acceptance check that could waste a long gate run. If triggered, ask the reviewer to inspect the candidate and scripted acceptance after the cheap checks pass. Repair blocking findings and refresh affected cheap checks before any CODE re-review. Run the remaining required gates and retain any earlier receipts that cover the required command, scope, and current inputs. Bind any visual findings and freshness check to the report from that run. Execute deterministic checks within the project tool boundary and record live-only checks separately.
+3. [Decide whether to run early CODE review](#decide-on-early-code-review). If triggered, ask the reviewer to inspect the candidate and scripted acceptance after the cheap checks pass. Repair blocking findings and refresh affected cheap checks before any CODE re-review. Run the remaining required gates and retain any earlier receipts that cover the required command, scope, and current inputs. Bind any visual findings and freshness check to the report from that run. Execute deterministic checks within the project tool boundary and record live-only checks separately.
 4. Validate the final packet with the shared handoff command, then ask one independent final reviewer to inspect the current diff and evidence. Give them a compact packet with the candidate, acceptance criteria, required gates and pass or reuse receipts, original outputs, applicable owner decisions and delivery limits, and any early findings and repairs. Route the verdict after the reviewer returns.
 
 On resume, reconcile any open work with the current checkout, active processes and applicable provider state. Use the shared resume summary to route the task. When it reports `final_review`, establish any required reuse receipts, validate the final packet, and send it directly to the independent final reviewer. If the candidate or evidence changes during preparation, or the final packet is blocked, return to the normal resume path. Keep failures and interrupted results. Repair in scope and run the cheapest affected check first. Reassess the need for early CODE review after material changes to scope, behavior, risk, or acceptance assertions. Renew final review when its candidate or evidence changes. Record elapsed time, reruns, and review returns. Continue repair within actual limits and explicit holds, without fixed time or iteration quotas.
+
+### Decide on early CODE review
+
+Run early CODE review for material risk, such as a migration, permission or trading change, a change to a shared contract or across a boundary, or uncertainty about the approach or acceptance where early review could avoid substantial rework. A small diff can change behavior for many callers.
+
+Skip early review when the change establishes or restores one bounded invariant, the affected paths are understood, and focused checks cover the change and relevant compatibility controls. A shared implementation is a reason to trace affected callers. Run early review if their impact or coverage remains materially uncertain. Record the decision and its reason for the current candidate after the cheap checks. Reassess it after material changes to scope, behavior, or evidence.
+
+### Prepare each session
+
+Use the project instructions and the relevant stage input. For a fresh implementer, the adapter can run `python3 scripts/handoff.py brief --task "$task_json"` with the task scope, acceptance, delivery boundary, and required gates. The brief supplies the standard early CODE criteria. Set `early_code` to the full applicable criteria when the project adds its own risk triggers. Include `preview` for UI work. Set `invocation` on worker-owned gates to the worker-facing command or command arguments. The brief lists gate ownership and scope and includes only worker-facing invocations. Give a resumed worker its current blockers and affected checks.
+
+Give the CODE reviewer the validated CODE packet, including the task scope and acceptance criteria, with original evidence available when needed. Give the final reviewer the validated final packet. Open the applicable guide section when a stage input leaves a decision or requirement unresolved. Load status-card instructions for interactive tasks with a configured card.
 
 ## Evidence and reuse
 
@@ -64,6 +76,12 @@ Keep one private evidence root per task and use the same gate identifier for all
 
 Include link-target existence in docs fingerprints. For visual checks, bind the producer and findings reader to the same run and inputs.
 
+### Verify native test coverage
+
+A project can produce a fresh JSON coverage report from each governing native run and retain it using `--artifact`. Use the trusted check runner to translate native reports into four arrays of unique test identities named `passed`, `skipped`, `expected_failures`, and `failed`. Regenerate the report from that run and clear old reports before execution. Keep required baseline identities and their outcomes in a separate file with the same schema. Freeze its digest independently of the worker.
+
+Set the gate's optional `coverage` object with `artifact` equal to the report path in `request.artifacts`, `baseline` equal to the baseline file path under the evidence root, and `baseline_sha256` equal to its frozen digest. The handoff verifies both digests, compares identities and outcomes, and includes verified totals and the baseline comparison. A reported failure, missing required identity, changed baseline outcome, or damaged evidence blocks the gate.
+
 ### Carry checks across the handoff
 
 Give the worker the exact configured invocation for each gate it owns, including the stable gate ID and task evidence root. Add `--owner worker` to its recorder invocation. For gates owned or taken over by the controller, use `--owner controller`. Execute the canonical command through a trusted recorder under the project's tool boundary. The task adapter owns the evidence store and establishes which recorder can write governing receipts. A manually assembled pass or an ad hoc test run does not establish governing evidence. The worker hands off the candidate identity and any unresolved failures. The recorder supplies the evidence.
@@ -93,7 +111,7 @@ python3 scripts/handoff.py review --task "$task_json" --evidence-dir "$evidence_
 
 The resume summary reports the current and saved candidate, preview applicability, and which gates are reusable, stale, failed, missing or unverified. It runs the configured fingerprint probes and validates retained evidence. The `final_review` route requires explicit clean resume state, an unchanged candidate, reusable required checks, and a current referenced UI approval if applicable. All other cases return `resume_work`. Run the applicable recorder invocations to establish current pass or reuse receipts.
 
-The final command binds the diff digest and verifies the latest required attempts, current fingerprints, original output and artifact digests, reuse decisions, and preview applicability. Exit status 1 means there are unresolved prerequisites. Repair them before starting final review. Exit status 0 means the packet is ready for a reviewer to judge correctness and coverage. Refresh the packet when the candidate, gate results or decisions change. Reviewers can follow the evidence paths for exceptions and ambiguous results.
+The final command binds the diff digest and verifies the latest required attempts, current fingerprints, original output and artifact digests, configured test coverage, reuse decisions, and preview applicability. Exit status 1 means there are unresolved prerequisites. Repair them before starting final review. Exit status 0 means the packet is ready for a reviewer to judge correctness and coverage. Refresh the packet when the candidate, gate results or decisions change. Reviewers can follow the evidence paths for exceptions and ambiguous results.
 
 ## Independent review
 

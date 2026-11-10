@@ -1,11 +1,24 @@
 """Route a saved SpringDev task or build a review packet."""
 
 import argparse
+from collections import Counter
+import hashlib
 import json
 import re
 from pathlib import Path
 
 from capture_check import digest, fingerprint, latest_run, matches_pass
+
+COVERAGE_OUTCOMES = ("passed", "skipped", "expected_failures", "failed")
+EARLY_CODE_CRITERIA = (
+    "Run early CODE review for material risk, such as a migration, permission or trading change, "
+    "a change to a shared contract or across a boundary, or an uncertain approach where early review "
+    "could avoid substantial rework. Skip when the change establishes or restores one bounded invariant, "
+    "the affected paths are understood, and focused checks cover the change and relevant compatibility "
+    "controls. Sharing an implementation is a reason to check affected "
+    "callers. If their impact or coverage is materially uncertain, run early review. Record the "
+    "reason and reassess after material changes to scope, behavior, or evidence."
+)
 
 
 def read_json(path):
@@ -17,6 +30,43 @@ def evidence_path(root, name):
     if root not in path.parents:
         raise ValueError(f"Evidence path escapes the task evidence root: {name}")
     return path
+
+
+def coverage_report(path, expected_digest):
+    raw = path.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != expected_digest:
+        raise ValueError("Coverage report digest does not match")
+    report = json.loads(raw)
+    if not isinstance(report, dict) or set(report) != set(COVERAGE_OUTCOMES):
+        raise ValueError("Coverage report needs all four outcome lists")
+    identities = {}
+    for outcome, tests in report.items():
+        if not isinstance(tests, list):
+            raise ValueError("Coverage outcomes must contain lists of test identities")
+        for test in tests:
+            if not isinstance(test, str) or not test.strip() or test in identities:
+                raise ValueError("Coverage test identities must be unique and nonempty")
+            identities[test] = outcome
+    return identities
+
+
+def verified_coverage(root, run, receipt, request, contract):
+    artifact = contract["artifact"]
+    report = run / f"artifact-{request['artifacts'].index(artifact)}"
+    current = coverage_report(report, receipt["artifacts"][artifact])
+    baseline = evidence_path(root, contract["baseline"])
+    required = coverage_report(baseline, contract["baseline_sha256"])
+    missing = sorted(required.keys() - current.keys())
+    changed = sorted(test for test in required.keys() & current.keys() if current[test] != required[test])
+    counts = Counter(current.values())
+    totals = {outcome: counts[outcome] for outcome in COVERAGE_OUTCOMES}
+    return {
+        "complete": bool(current) and not (missing or changed or totals["failed"]),
+        "tests": len(current), **totals,
+        "baseline": {"required": len(required), "matched": len(required) - len(missing) - len(changed),
+                     "missing": missing, "outcome_changed": changed},
+        "report": str(report),
+    }
 
 
 def gate_status(root, gate, candidate, final):
@@ -55,6 +105,11 @@ def gate_status(root, gate, candidate, final):
         result.update(output=str(run / "output.log"), coverage=receipt["coverage"],
                       artifacts={name: str(run / f"artifact-{index}")
                                  for index, name in enumerate(request["artifacts"])})
+        if "coverage" in gate:
+            verified = verified_coverage(root, run, receipt, request, gate["coverage"])
+            result["coverage"]["verified"] = verified
+            if not verified["complete"]:
+                return dict(result, status="unverified", reason="required test coverage did not pass")
         status = "reusable"
         if final:
             if gate.get("reuse"):
@@ -131,12 +186,30 @@ def check_plan(task, root):
     return {"candidate": candidate, "checks": checks}
 
 
+def implementation_brief(task):
+    brief = {"scope": task["scope"], "acceptance": task["acceptance"], "delivery": task["delivery"]}
+    checks = []
+    for gate in configured_gates(task["gates"]):
+        owner = gate.get("owner", "controller")
+        check = {"id": gate["id"], "phase": gate.get("phase", "authoritative"),
+                 "owner": owner, "scope": gate["request"]["scope"]}
+        if owner == "worker" and "invocation" in gate:
+            check["invocation"] = gate["invocation"]
+        checks.append(check)
+    brief["checks"] = checks
+    brief["early_code"] = EARLY_CODE_CRITERIA if task.get("early_code") is None else task["early_code"]
+    if task.get("preview") is not None:
+        brief["preview"] = task["preview"]
+    return brief
+
+
 def code_review_packet(task, root):
     candidate = task["candidate"]
     if not isinstance(candidate, str) or not candidate.strip():
         raise ValueError("The CODE review needs a candidate identity")
     diff = evidence_path(root, task["diff"])
     packet = {"action": "start", "candidate": candidate, "diff": {"path": str(diff), "sha256": digest(diff)}}
+    packet.update({key: task[key] for key in ("scope", "acceptance") if key in task})
     cheap = [gate_status(root, gate, candidate, final=True)
              for gate in configured_gates(task.get("gates", [])) if gate.get("phase") == "cheap"]
     if cheap:
@@ -190,6 +263,8 @@ def build_packet(task, root, final):
                       acceptance=task["acceptance"], decisions=task.get("decisions", []),
                       findings=task.get("findings", []), delivery=task["delivery"],
                       ready_for_review=not blockers)
+        if "scope" in task:
+            packet["scope"] = task["scope"]
     else:
         packet["route"] = resume_route(task, packet)
     return packet
@@ -197,20 +272,25 @@ def build_packet(task, root, final):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("resume", "review", "code-review", "checks"))
+    parser.add_argument("mode", choices=("resume", "review", "code-review", "checks", "brief"))
     parser.add_argument("--task", type=Path, required=True)
-    parser.add_argument("--evidence-dir", type=Path, required=True)
+    parser.add_argument("--evidence-dir", type=Path)
     args = parser.parse_args()
+    if args.mode != "brief" and args.evidence_dir is None:
+        parser.error("--evidence-dir is required for receipt and review commands")
     final = args.mode == "review"
     try:
         task = read_json(args.task)
-        root = args.evidence_dir.resolve(strict=True)
-        if args.mode == "checks":
-            packet = check_plan(task, root)
-        elif args.mode == "code-review":
-            packet = code_review_packet(task, root)
+        if args.mode == "brief":
+            packet = implementation_brief(task)
         else:
-            packet = build_packet(task, root, final)
+            root = args.evidence_dir.resolve(strict=True)
+            if args.mode == "checks":
+                packet = check_plan(task, root)
+            elif args.mode == "code-review":
+                packet = code_review_packet(task, root)
+            else:
+                packet = build_packet(task, root, final)
     except (OSError, KeyError, TypeError, ValueError) as error:
         parser.exit(2, f"Cannot build handoff packet: {error}\n")
     print(json.dumps(packet, indent=2))
