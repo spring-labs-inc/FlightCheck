@@ -57,3 +57,13 @@ The shared endpoint is a named candidate that passes the frozen native checks an
 Measure elapsed time from task start to the shared endpoint. Keep setup separate and record review, repair, reruns, and waiting intervals. Record active time and native usage when observable, with the sources and missing intervals. Keep controller and reviewer usage separate. Report each arm's endpoint status and actual candidate, check and review outcomes, and deviations. Include blocked, interrupted, and incomplete arms with their reasons. Compare elapsed time only for arms that reached the common endpoint.
 
 One pair is a case study. Use repeated pairs with alternating order and equivalent cache preparation before drawing a general performance conclusion. See the [paired pilot plan](benchmark-pilot.md).
+
+## Rehearse a handoff with synthetic data
+
+Run the handoff integration tests from the FlightCheck checkout on a POSIX host with Python 3.
+
+```sh
+python3 -B -m unittest discover -s tests -p 'test_handoff.py'
+```
+
+The tests create temporary checkouts and private evidence directories. They exercise fresh receipts, reuse, blocked review packets, and frozen coverage baselines using the standard library. For your own project, follow the [task JSON and evidence setup](../examples/existing-project/docs/development-workflow.md#resume-summary-and-final-packet).

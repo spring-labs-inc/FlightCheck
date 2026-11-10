@@ -28,11 +28,15 @@ FlightCheck is a set of repository instructions and Codex configuration examples
 
 ### Get started
 
-Open your **existing project** in Codex. Review the [example project layout](examples/existing-project/README.md), then merge the relevant files into your repository at the paths shown. Keep your project's instructions, test tools, and permissions. FlightCheck runs through those tools and requires no module installation.
+Use Git and a Codex client that discovers repository skills and supports separate [read-only reviewer sessions](examples/existing-project/docs/development-workflow.md#independent-review). Open your **existing project** in Codex, review the [example project layout](examples/existing-project/README.md), and merge the relevant files at the paths shown. Keep your project's instructions and permissions. Your project supplies the commands and runtimes for its checks, previews, CI, and delivery as applicable.
 
 1. Merge the workflow entry into your `AGENTS.md`. Add the skill, workflow guide, and two reviewer role files.
 2. Set the exact local checks, test isolation, preview method, evidence location, and delivery policy in the workflow guide. Use commands from your own stack and require the checks your repository actually uses.
 3. Start a fresh Codex session in the target checkout. Verify the instructions, skill, and read-only reviewer setup on a small task. Ask Codex to use `$develop-change` for that task.
+
+For receipt-backed checks and handoffs, use Python 3 on a POSIX host and copy [`scripts/capture_check.py`](examples/existing-project/scripts/capture_check.py) and [`scripts/handoff.py`](examples/existing-project/scripts/handoff.py) into your project at those paths. Both scripts use the Python standard library. The recorder uses POSIX process controls and `fcntl` locking.
+
+Set up the [task JSON](examples/existing-project/docs/development-workflow.md#resume-summary-and-final-packet), a [private evidence directory outside the checkout](examples/existing-project/docs/development-workflow.md#capture-native-check-output), and a [project-owned fingerprint command for each recorded gate](examples/existing-project/docs/development-workflow.md#reuse-a-result). If you enable coverage verification, use the documented [coverage report and frozen baseline format](examples/existing-project/docs/development-workflow.md#verify-native-test-coverage).
 
 To have Codex adapt the configuration, give it access to the example files and use this prompt in your existing repository:
 
@@ -62,6 +66,20 @@ Repair failures with the cheapest affected check first. Reuse a pass only when t
 | --- | --- |
 | [Example project layout](examples/existing-project/README.md) | Review the exact paths for instructions, skill, reviewer TOML, hooks JSON, rules, and optional Python test dependencies. |
 | [Workflow guide](examples/existing-project/docs/development-workflow.md) | Adapt gate commands, evidence, review, and landing to your project. |
-| [Status card guide](docs/status-card.md) | View an optional read-only example of check outcomes, review verdicts, and owner decisions. |
+| [Status card guide](docs/status-card.md#view-the-example-card) | The optional card needs Python 3, permission to bind an available IPv4 loopback port, and a browser that can reach the listener. See [task card setup](docs/status-card.md#current-task) to publish your own task. |
+| [GitHub CLI rule](examples/existing-project/README.md#verify-the-adoption) | For the optional issue-read rule, use an authenticated `gh`, adapt the repository in the rule, and check its exact command match. |
+| [Claude Code pointer](examples/existing-project/README.md#adopt-flightcheck-in-an-existing-repository) | The optional [`CLAUDE.md`](examples/existing-project/CLAUDE.md) imports the shared project instructions into Claude Code. |
 | [Benchmark guide](docs/benchmark.md) | Reproduce the pinned benchmark suite and find its results. |
+| [Handoff reproduction](docs/benchmark.md#rehearse-a-handoff-with-synthetic-data) | Exercise the receipt and handoff workflow locally with synthetic data. |
 | [Project board](https://github.com/orgs/spring-labs-inc/projects/2) | Track changes to FlightCheck. |
+
+#### Run the FlightCheck tests
+
+From the FlightCheck checkout, activate a Python 3 virtual environment on a POSIX host. Install pytest in that environment and run the suite.
+
+```sh
+python3 -m pip install pytest
+python3 -B -m unittest discover -s tests
+```
+
+The recorder integration tests invoke pytest. The HTTP status-card tests need permission to bind an ephemeral port on `127.0.0.1`.
