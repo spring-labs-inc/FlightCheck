@@ -49,7 +49,7 @@ class CaptureCheckTests(unittest.TestCase):
         (self.project / "test_example.py").write_text(source)
         command = [sys.executable, "-m", "pytest", "-q", *flags]
         result = subprocess.run(
-            self.invocation(command, pytest_summary=True), cwd=self.project, env=self.env,
+            self.invocation(command, pytest_summary=True), check=False, cwd=self.project, env=self.env,
             capture_output=True, timeout=20,
         )
         packet, log = self.read_run(result.stdout)
@@ -111,7 +111,7 @@ class CaptureCheckTests(unittest.TestCase):
             self.invocation(commands[0]), cwd=self.project, stdout=subprocess.PIPE,
         ) as first:
             second = subprocess.run(
-                self.invocation(commands[1]), cwd=self.project, capture_output=True, timeout=20,
+                self.invocation(commands[1]), check=False, cwd=self.project, capture_output=True, timeout=20,
             )
             first_output, _ = first.communicate(timeout=20)
         a, log_a = self.read_run(first_output)
@@ -146,6 +146,63 @@ class CaptureCheckTests(unittest.TestCase):
         self.assertEqual(packet["status"], "interrupted")
         self.assertEqual(packet["output"]["status"], "incomplete")
         self.assertEqual(original, b"started\n")
+
+    def run_reusable(self, *, refresh=False, fail=False):
+        probe = [sys.executable, "-c", "from pathlib import Path; print(Path('inputs').read_text())"]
+        script = (
+            "import os, sys; from pathlib import Path; "
+            "Path('report').write_text('original report'); "
+            "print('native check ran'); sys.exit(int(os.environ['CHECK_FAIL']))"
+        )
+        command = [sys.executable, "-c", script]
+        invocation = self.invocation(command)
+        invocation[-len(command) - 1:-len(command) - 1] = [
+            "--gate", "fixture", "--fingerprint-command", json.dumps(probe),
+            "--artifact", "report", *(["--refresh"] if refresh else []),
+        ]
+        return subprocess.run(
+            invocation, check=False, cwd=self.project, env=dict(self.env, CHECK_FAIL=str(int(fail))),
+            capture_output=True, timeout=20,
+        )
+
+    def test_matching_receipt_reuses_output_but_changed_inputs_run_again(self):
+        inputs = self.project / "inputs"
+        inputs.write_text("source A, runtime A")
+        first = self.run_reusable()
+        packet, _ = self.read_run(first.stdout)
+        self.assertEqual(first.returncode, 0)
+        self.assertEqual(packet["inputs_before"], packet["inputs_after"])
+        second = self.run_reusable()
+        self.assertEqual(second.returncode, 0)
+        self.assertIn(b"Check reused:", second.stdout)
+        self.assertNotIn(b"native check ran", second.stdout)
+        reuse_path, = self.evidence.glob("reuse-*/reuse.json")
+        reuse = json.loads(reuse_path.read_text())
+        self.assertEqual(reuse["source_run_id"], packet["run_id"])
+        self.assertEqual(reuse["inputs"], packet["inputs_after"])
+
+        inputs.write_text("source A, runtime B")
+        third = self.run_reusable()
+        self.assertIn(b"native check ran", third.stdout)
+        self.assertNotIn(b"Check reused:", third.stdout)
+
+    def test_newer_failure_and_damaged_artifact_each_force_a_run(self):
+        (self.project / "inputs").write_text("stable inputs")
+        first, _ = self.read_run(self.run_reusable().stdout)
+        artifact = self.evidence / first["run_id"] / "artifact-0"
+        artifact.write_text("changed report")
+        self.assertIn(b"native check ran", self.run_reusable().stdout)
+
+        failure = self.run_reusable(refresh=True, fail=True)
+        self.assertEqual(failure.returncode, 1)
+        self.assertIn(b"native check ran", self.run_reusable().stdout)
+
+    def test_unavailable_fingerprint_cannot_validate_a_passing_run(self):
+        result = self.run_reusable()
+        packet, _ = self.read_run(result.stdout)
+        self.assertEqual(result.returncode, 0)
+        self.assertIsNone(packet["inputs_before"])
+        self.assertIn(b"native check ran", self.run_reusable().stdout)
 
 
 if __name__ == "__main__":

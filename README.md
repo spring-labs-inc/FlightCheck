@@ -12,9 +12,9 @@
       03 CHEAP CHECKS
       04 INTERACTIVE HTML APPROVAL  (UI only)
 
-    05 INDEPENDENT CODE REVIEW
+    05 EARLY CODE REVIEW  (when warranted)
       06 AUTHORITATIVE GATES
-      07 SKEPTICAL EVIDENCE REVIEW
+      07 FINAL CODE AND EVIDENCE REVIEW
       08 FINAL VERDICT
       09 LAND UNDER THE RECORDED GRANT
 ```
@@ -27,7 +27,7 @@ SpringDev is a set of repository instructions and Codex configuration examples f
 
 Open your **existing project** in Codex. Review the [example project layout](examples/existing-project/README.md), then merge the relevant files into your repository at the paths shown. Keep your project's instructions, test tools, and permissions. SpringDev runs through those tools and requires no module installation.
 
-1. Merge the workflow entry into your `AGENTS.md`. Add the skill, workflow guide, and two reviewer role files.
+1. Merge the workflow entry into your `AGENTS.md`. Add the skill, workflow guide, and final reviewer role. Add the early CODE role for tasks that meet the project's early review criteria.
 2. Set the exact local checks, test isolation, preview method, evidence location, and delivery policy in the workflow guide. Use commands from your own stack and require the checks your repository actually uses.
 3. Start a fresh Codex session in the target checkout. Verify the instructions, skill, and read-only reviewer setup on a small task. Ask Codex to use `$develop-change` for that task.
 
@@ -39,8 +39,8 @@ To have Codex adapt the configuration, give it access to the example files and u
 
 1. Select a bounded task and agree on acceptance criteria. Work in a dedicated checkout and give each deterministic criterion a reproducible check.
 2. Implement the change and run the cheap checks. For owner-facing UI, then show interactive HTML with synthetic data and pause for approval of that surface. Show renders only on request.
-3. Run independent CODE review, then applicable focused and broad tests and expensive visual checks. Run tests automatically where the project's permissions and fixtures allow.
-4. Run independent EVIDENCE review against the candidate and original check output. Route the final verdict below.
+3. Use early independent CODE review for high-risk changes or when checking the proposed approach before expensive gates could avoid substantial rework. Run applicable tests and visual checks within the project's permissions.
+4. Give one independent final reviewer the current diff, acceptance criteria, gate results and receipts, and open findings or owner decisions. Use their verdict to route the work.
 
 | Verdict | Action |
 | --- | --- |
@@ -49,7 +49,7 @@ To have Codex adapt the configuration, give it access to the example files and u
 | `APPROVE_WITH_OBSERVATIONS` | Ask the owner to approve the specific observations before landing. |
 | `REVISE` | Return to the plan or implementation and renew affected checks and reviews. |
 
-Repair failures with the cheapest affected check first. Reuse a pass only when the command, coverage, inputs, environment, and original output still match. Run tests concurrently across worktrees when they have independently verified databases, ports, scratch space, and reports as applicable.
+Repair failures with the cheapest affected check first. Use automated receipts to reuse expensive checks when their command, coverage, inputs, runtime, and original output still match. Run tests concurrently across worktrees when they have independently verified databases, ports, scratch space, and reports as applicable.
 
 ### Configuration and references
 

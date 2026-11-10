@@ -9,6 +9,7 @@ Fill in the entries below during adoption. Record the exact commands, prerequisi
 | Setting | What to record |
 | --- | --- |
 | Cheap checks | Use project commands for lint, documentation, and policy as applicable. `git diff --check HEAD` is a starting whitespace check for tracked changes. Cover new candidate files with the applicable project checks. |
+| Early CODE review | Project-specific risk triggers and cases where review before an expensive run could avoid substantial rework. |
 | Authoritative checks | Exact focused and broad test commands and their coverage. A pytest project might use `python -m pytest -q` from its configured development environment. Record the equivalent for your stack. |
 | UI verification | How to serve interactive HTML using synthetic data, identify the approved surface, run any automated visual checks, and validate the producing run's report. |
 | Test isolation | Disposable data or databases, service ports, scratch, caches, reports, and teardown. Use distinct worktrees for concurrent runs and serialize any suite that still shares mutable resources. |
@@ -19,11 +20,11 @@ Fill in the entries below during adoption. Record the exact commands, prerequisi
 ## Run and resume
 
 1. Record task scope, acceptance, checkout, base, current diff, and intended delivery. Give each deterministic criterion a reproducible assertion. Present a bounded implementation plan before editing.
-2. Implement and run applicable cheap checks. For owner-facing UI, provide the exact interactive HTML URLs and synthetic fixture identities, bind the preview to the candidate surface, and pause for the owner's answer. Get new approval after a surface edit. Show rendered images only on request. Nonvisual work goes straight to CODE review.
-3. Ask the independent CODE reviewer to inspect the candidate and scripted acceptance. Repair blocking findings before expensive gates. Then run applicable focused, broad, and visual checks. Bind any visual findings and freshness check to the report from that run. Execute deterministic checks within the project tool boundary and record live-only checks separately.
-4. Ask the independent EVIDENCE reviewer to inspect the current candidate, CODE findings and repairs, gate outputs and scope, and owner decisions. Route the verdict only after required checks and reviews are complete.
+2. Implement and run applicable cheap checks. For owner-facing UI, provide the exact interactive HTML URLs and synthetic fixture identities, bind the preview to the candidate surface, and pause for the owner's answer. Get new approval after a surface edit unless the owner explicitly waives the preview pause. Show rendered images only on request.
+3. Record whether early CODE review is warranted. Use it for risks such as migrations, permission or trading changes, or an uncertain approach or acceptance check that could waste a long gate run. If triggered, ask the reviewer to inspect the candidate and scripted acceptance and repair blocking findings. Run applicable focused, broad, and visual checks. Bind any visual findings and freshness check to the report from that run. Execute deterministic checks within the project tool boundary and record live-only checks separately.
+4. Validate the final packet with the shared handoff command, then ask one independent final reviewer to inspect the current diff and evidence. Give them a compact packet with the candidate, acceptance criteria, required gates and pass or reuse receipts, original outputs, applicable owner decisions and delivery limits, and any early findings and repairs. Route the verdict after the reviewer returns.
 
-On resume, inspect the actual checkout, original results, current approvals, active processes, and provider state before repeating work. Keep failures and interrupted results. Repair in scope and run the cheapest affected check first. Renew CODE review after material changes to scope, behavior, risk, or acceptance assertions. Renew EVIDENCE review when its candidate or evidence changes. Record elapsed time, reruns, and review returns. Continue repair within actual limits and explicit holds, without fixed time or iteration quotas.
+On resume, start with the shared resume summary and reconcile any open work with the current checkout, active processes and provider state before repeating work. Keep failures and interrupted results. Repair in scope and run the cheapest affected check first. Reassess the need for early CODE review after material changes to scope, behavior, risk, or acceptance assertions. Renew final review when its candidate or evidence changes. Record elapsed time, reruns, and review returns. Continue repair within actual limits and explicit holds, without fixed time or iteration quotas.
 
 ## Evidence and reuse
 
@@ -47,11 +48,44 @@ The optional pytest summary mode records recognizable final totals and distingui
 
 ### Reuse a result
 
-Reuse a whole passing check only if the latest attempt completed successfully, the command and required coverage match, all recorded inputs and relevant runtime still match, and the original output is present with its digest intact. Record reuse against the current candidate. A newer failure, interruption, unresolved attempt, or invalidation supersedes an older pass. Re-run if any required comparison is unavailable. For link checks include target existence, and for visual checks bind the producer and findings reader to the same run and inputs.
+Use the recorder with a stable `--gate` and a project-owned `--fingerprint-command` (a JSON argument array) for each expensive check that can be reused. Run this same invocation for a fresh attempt or on resume. Cheap checks can run directly.
+
+```sh
+python3 scripts/capture_check.py --evidence-dir "$evidence_dir" --candidate "$candidate" \
+  --gate offline-pytest --scope "Full offline pytest suite" --summary pytest \
+  --fingerprint-command '["python3", "scripts/fingerprint_check.py", "offline-pytest"]' \
+  -- .venv/bin/python -m pytest -q
+```
+
+The project implements the fingerprint command. Its stable, nonsecret output must cover every gate input and the relevant runtime, including dependencies, fixtures and configuration. Exit unsuccessfully if any required input is unavailable. For a visual gate, use a command that validates a freshly produced, current report. Supply each report to retain with `--artifact` using stable checkout-relative paths.
+
+Keep one private evidence root per task and use the same gate identifier for all attempts of a given check. The recorder serializes those attempts, marks the newest one before executing, and compares the current fingerprint to both fingerprints from that run. It checks the saved command, scope and original output and report digests before recording reuse. A failed, interrupted or incomplete newer attempt prevents reuse of an older pass. Use `--refresh` to force a new attempt under that gate identifier, including after an explicit invalidation. Send every governing attempt through the recorder when reuse is enabled. The recorder retains the native exit status if a check ran, and missing artifacts or fingerprints make the receipt ineligible for reuse.
+
+Include link-target existence in docs fingerprints. For visual checks, bind the producer and findings reader to the same run and inputs.
+
+## Resume summary and final packet
+
+Use [`handoff.py`](../scripts/handoff.py) next to the recorder. The project adapter writes a task JSON file for the current checkout before either command. Use the same required gate definitions for recording and validation.
+
+```sh
+python3 scripts/handoff.py resume --task "$task_json" --evidence-dir "$evidence_dir"
+python3 scripts/handoff.py review --task "$task_json" --evidence-dir "$evidence_dir"
+```
+
+| Task field | Value |
+| --- | --- |
+| `candidate`, `saved_candidate` | Current frozen candidate identity from the checkout and the identity saved in the handoff. |
+| `preview` | `null` for non-UI work. For UI work, provide the current `surface` fingerprint, the `approved_surface` from the recorded owner decision, and its `decision_reference`. Include a `waiver` reference only when explicitly granted. |
+| `gates` | All required checks. Each entry has an `id` matching the recorder's gate identifier and a `request` with the exact `command`, `scope`, `summary`, `fingerprint_command` and `artifacts` used by the recorder. For an explicitly reused pass, include `reuse` with its receipt path relative to the evidence root. |
+| `diff`, `acceptance`, `delivery` | For final review, the current diff's path inside the evidence root, the acceptance criteria and delivery boundaries. Supply `decisions` and `findings` when there are owner decisions or early review findings to carry forward. |
+
+The resume summary reports the current and saved candidate, preview applicability, and which gates are reusable, stale, failed, missing or unverified. It runs the configured fingerprint probes and validates retained evidence. Run the applicable recorder invocations to establish current pass or reuse receipts.
+
+The final command binds the diff digest and verifies the latest required attempts, current fingerprints, original output and artifact digests, reuse decisions, and preview applicability. Exit status 1 means there are unresolved prerequisites. Repair them before starting final review. Exit status 0 means the packet is ready for a reviewer to judge correctness and coverage. Refresh the packet when the candidate, gate results or decisions change. Reviewers can follow the evidence paths for exceptions and ambiguous results.
 
 ## Independent review
 
-Launch the roles `workflow-code-reviewer` and `workflow-evidence-reviewer` in a separate read-only Codex review session, with only the tools and evidence needed for review. Check the effective sandbox and available tools before using the role. A role's instructions do not set its sandbox. Reviewers must have no provider write tools or access to secrets, and no executable hooks should run in the review session. If the client cannot provide that boundary or the reviewer cannot inspect required evidence, keep the review pending. [Codex custom agents](https://learn.chatgpt.com/docs/agent-configuration/subagents)
+Launch `workflow-evidence-reviewer` for the final code and evidence verdict. Launch `workflow-code-reviewer` only when the early review criteria apply. Give each applicable reviewer a separate read-only Codex session with the tools and evidence needed for their review. Check the effective sandbox and available tools before using the role. A role's instructions do not set its sandbox. Reviewers must have no provider write tools or access to secrets, and no executable hooks should run in the review session. If the client cannot provide that boundary or the reviewer cannot inspect required evidence, keep the review pending. [Codex custom agents](https://learn.chatgpt.com/docs/agent-configuration/subagents)
 
 Retain each review's actual role, candidate, coverage, findings, and disposition. A complete review explicitly reports zero findings when clear. The implementer routes the verdict using those findings and does not submit a review on the reviewer's behalf.
 
