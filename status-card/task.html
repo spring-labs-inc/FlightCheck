@@ -27,10 +27,17 @@
     </section>
     <p id="notice" class="notice" role="status">Loading task status…</p>
     <div class="task-details" id="task-details" hidden>
-      <nav class="panel" id="links-panel" aria-labelledby="links-title" hidden>
+      <section class="panel" id="links-panel" aria-labelledby="links-title" hidden>
         <h2 id="links-title">Work links</h2>
-        <ul class="work-links" id="links"></ul>
-      </nav>
+        <ul class="work-links" id="links" role="list"></ul>
+        <div class="work-link-detail" id="work-link-detail" role="region" aria-labelledby="work-link-title" hidden>
+          <div>
+            <h3 id="work-link-title"></h3>
+            <p id="work-link-description"></p>
+          </div>
+          <span id="work-link-destination"></span>
+        </div>
+      </section>
       <section class="panel" id="stages-panel" aria-labelledby="stages-title" hidden>
         <h2 id="stages-title">Workflow stages</h2>
         <ol class="task-stages" id="stages" role="list"></ol>

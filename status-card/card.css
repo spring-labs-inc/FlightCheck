@@ -92,13 +92,30 @@ dd { margin: 1px 0 0; font-size: .85rem; }
 .task-stages [data-state="completed"] { color: var(--good); }
 .task-stages [data-state="current"] { color: var(--warn); font-weight: 730; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.work-links { display: flex; flex-wrap: wrap; gap: 3px 12px; list-style: none; padding: 0; margin: 3px 0 0; font-size: .82rem; }
-.work-links li { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
+.work-links { list-style: none; padding: 0; margin: 3px 0 0; font-size: .82rem; line-height: 1.7; }
+.work-links li { display: inline; }
+.work-link-item { display: inline-block; max-width: 100%; }
+.work-link-separator { margin: 0 5px 0 2px; color: var(--muted); }
+.work-link-select {
+  max-width: 100%; padding: 0; border: 0; background: none; color: var(--cyan); font: inherit; cursor: pointer;
+  text-decoration: underline; text-underline-offset: .2em; text-align: left; overflow-wrap: anywhere;
+}
+.work-link-select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.work-link-select[aria-expanded="true"] { color: var(--warn); }
+.work-link-detail {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;
+  margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--line); overflow-wrap: anywhere;
+}
+.work-link-detail p { margin: 2px 0 0; color: var(--muted); font-size: .78rem; }
+.work-link-open {
+  display: block; min-width: 26px; padding: 1px 6px; border: 1px solid var(--frame);
+  border-radius: 4px; background: var(--raised); text-align: center; text-decoration: none;
+}
 .task-details .pill { padding: 1px 4px; }
 .task-details .gates { margin-top: 3px; }
 .task-details .gates li { align-items: baseline; padding: 3px 0; gap: 6px; }
 .task-details .gates li:last-child { border-bottom: 0; padding-bottom: 0; }
-.task-details .gate-name, .task-details .gate-detail, .work-links a { overflow-wrap: anywhere; }
+.task-details .gate-name, .task-details .gate-detail { overflow-wrap: anywhere; }
 .task-details .gate-name { font-size: .82rem; }
 .task-details .gate-detail { font-size: .75rem; line-height: 1.35; }
 .task-details .gate-state[data-state="running"],

@@ -190,14 +190,18 @@ class TaskStatusTests(unittest.TestCase):
         ]
         links = [{"kind": kind, "label": label, "url": f"https://example.com/items/{index}",
                   "created_at": created_at} for index, (kind, label, created_at) in enumerate(items)]
+        links[1].update(title="Status card rollout", description="Coordinate the status card changes.")
         details.write_text(json.dumps({"links": links}))
         self.publish("--details", str(details))
         url = self.start("--task-status", str(self.snapshot)) + "status.json"
         status, body = self.request(url)
         self.assertEqual(status, 200)
-        self.assertEqual([link["label"] for link in json.loads(body)["links"]],
+        published = json.loads(body)["links"]
+        self.assertEqual([link["label"] for link in published],
                          ["Newer epic", "Older epic", "Newer issue", "Undated issue",
                           "Newest PR", "Older PR", "Undated PR"])
+        self.assertEqual(published[1]["title"], "Status card rollout")
+        self.assertEqual(published[1]["description"], "Coordinate the status card changes.")
 
     def test_desktop_tab_decisions_use_the_task_route(self):
         visible = {"id": "card", "url": "http://localhost:58213/task/test-task/", "visible": True}

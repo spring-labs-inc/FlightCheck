@@ -70,18 +70,79 @@ function stageRow([name, state]) {
   return row;
 }
 
+let lastLinks;
+let selectedWorkLink;
+function renderWorkLinks(links) {
+  const signature = JSON.stringify(links);
+  if (signature === lastLinks) return;
+  const groups = [
+    ["epic", "Epic"], ["issue", "Issue"], ["pr", "PR"],
+  ].map(([kind, label]) => ({ kind, label, items: links.filter((item) => item.kind === kind) }))
+    .filter(({ items }) => items.length);
+  const choices = [];
+  const detail = byId("work-link-detail");
+
+  function showSelection() {
+    const selected = choices.find(({ key }) => key === selectedWorkLink);
+    selectedWorkLink = selected?.key;
+    for (const choice of choices) choice.button.setAttribute("aria-expanded", String(choice === selected));
+    detail.hidden = !selected;
+    if (!selected) {
+      byId("work-link-destination").replaceChildren();
+      return;
+    }
+    const { item } = selected;
+    const title = item.title || item.label;
+    setText("work-link-title", title);
+    setText("work-link-description", item.description || "No description published.");
+    const destination = link(">", item.url);
+    destination.className = "work-link-open";
+    destination.target = "_blank";
+    destination.setAttribute("aria-label", `Open ${title} in a new tab or window`);
+    byId("work-link-destination").replaceChildren(destination);
+  }
+
+  fill("links", groups, ({ kind, label, items }, groupIndex) => {
+    const group = element("li", "");
+    items.forEach((item, index) => {
+      const entry = element("span", "", "work-link-item");
+      if (index === 0) {
+        if (groupIndex > 0) {
+          const separator = element("span", "|", "work-link-separator");
+          separator.setAttribute("aria-hidden", "true");
+          entry.append(separator);
+        }
+        entry.append(element("span", label, "pill"), " ");
+      }
+      const reference = item.label.replace(/^(?:epic|issue|pr)\s+(?=#)/i, "");
+      const text = kind === "epic" && item.title ? `${reference} ${item.title}` : reference;
+      const key = `${kind}:${item.url}`;
+      const button = element("button", text, "work-link-select");
+      button.type = "button";
+      button.setAttribute("aria-label", `${label} ${text}`);
+      button.setAttribute("aria-controls", "work-link-detail");
+      button.addEventListener("click", () => {
+        selectedWorkLink = selectedWorkLink === key ? undefined : key;
+        showSelection();
+      });
+      choices.push({ key, item, button });
+      entry.append(button);
+      if (index + 1 < items.length) entry.append(",");
+      group.append(entry, " ");
+    });
+    return group;
+  });
+  showSelection();
+  lastLinks = signature;
+}
+
 let lastDetails;
 function renderDetails(data) {
   const { candidate, stages = {}, links = [], checks = [], ci = [], history = [] } = data;
   const stageEntries = Object.entries(stages);
-  const fingerprint = JSON.stringify([candidate, stageEntries, links, checks, ci, history]);
+  renderWorkLinks(links);
+  const fingerprint = JSON.stringify([candidate, stageEntries, checks, ci, history]);
   if (fingerprint !== lastDetails) {
-    const kinds = { issue: "Issue", epic: "Epic", pr: "PR" };
-    fill("links", links, ({ kind, label, url }) => {
-      const row = element("li", "");
-      row.append(element("span", kinds[kind], "pill"), link(label, url));
-      return row;
-    });
     fill("stages", stageEntries, stageRow);
     byId("evidence").hidden = !checks.length && !ci.length;
     fill("checks", checks, (check) => observationRow(check, candidate,

@@ -36,9 +36,9 @@ Pass `--details /private/path/details.json` to the same publisher command. Use o
     "Independent Code Review": "current"
   },
   "links": [
-    {"kind": "epic", "label": "Epic #10", "url": "https://example.com/issues/10", "created_at": "2026-01-01T09:00:00Z"},
-    {"kind": "issue", "label": "Issue #12", "url": "https://example.com/issues/12", "created_at": "2026-01-01T10:00:00Z"},
-    {"kind": "pr", "label": "PR #15", "url": "https://example.com/pull/15", "created_at": "2026-01-01T12:08:00Z"}
+    {"kind": "epic", "label": "#10", "title": "Setup rollout", "description": "Make the project easier to set up.", "url": "https://example.com/issues/10", "created_at": "2026-01-01T09:00:00Z"},
+    {"kind": "issue", "label": "#12", "title": "Clarify prerequisites", "description": "Document the tools needed for a clean checkout.", "url": "https://example.com/issues/12", "created_at": "2026-01-01T10:00:00Z"},
+    {"kind": "pr", "label": "#15", "title": "Document setup tools", "description": "Add the prerequisites to the setup guide.", "url": "https://example.com/pull/15", "created_at": "2026-01-01T12:08:00Z"}
   ],
   "checks": [
     {"name": "Project tests", "candidate": "candidate-2", "state": "passed", "observed_at": "2026-01-01T12:10:00Z", "counts": {"passed": 37, "skipped": 2}}
@@ -54,7 +54,7 @@ Pass `--details /private/path/details.json` to the same publisher command. Use o
 
 - **Worktree** is a short display name for the checkout, shown below Candidate. Keep the filesystem path in the private workflow record. The name carries forward until the workflow publishes a new one.
 - **Stages** reflect the workflow's recorded progress. Use the nine stage names from the README and the states `completed`, `current`, `skipped`, and `pending`. Supply at most one current stage. Unlisted stages default to pending. Publish the new stage map when the workflow advances or returns for repair. The card keeps the last map for the same candidate and clears it on a candidate change unless the update supplies a new map.
-- **Links** come from the agreed scope and recorded PR. Use HTTPS destinations without credentials or query parameters. Include the tracker's `created_at` timestamp with a timezone when available. Epics come first, followed by issues and then PRs. Each group is ordered newest first. Ties retain their supplied order, and undated links follow the dated links in their group.
+- **Links** come from the agreed scope and recorded PR. Use a short reference such as `#12` for the label. Provide a title and a brief description when available. Selecting an item expands its details on the card. The `>` button opens the destination in a new tab or window. Use HTTPS destinations without credentials or query parameters. Include the tracker's `created_at` timestamp with a timezone when available. Epics come first, followed by issues and then PRs. Each group is ordered newest first. Ties retain their supplied order, and undated links follow the dated links in their group.
 - **Checks** summarize the latest observation per check group from the project's native evidence. Publish starts and outcomes as they occur. For the example capture script, use the `run.json` candidate, start or finish time, status and exit code. Add counts only when the tool reports them. A newer failure, interruption, or incomplete attempt takes the place of an earlier pass. Use `pending`, `running`, `passed`, `failed`, `interrupted`, or `unavailable`.
 - **CI** is optional. Publish an observed `pr` or `post-merge` result with the commit the provider checked and the task candidate it belongs to. Include the run URL and attempt when known. Use `pending`, `running`, `passed`, `failed`, `cancelled`, `skipped`, or `unavailable`. The card shows the recorded observation time and does not query the provider.
 - **Events** record actual `repair`, `rerun`, or `review` activity with a stable ID from the underlying run or record. An identical event can be published again without adding a row. A conflicting event with the same ID is rejected. The history stays with the private task snapshot on resume.

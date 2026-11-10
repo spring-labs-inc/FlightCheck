@@ -59,6 +59,9 @@ def link(row):
     }
     if row.get("created_at") is not None:
         result["created_at"] = timestamp(row["created_at"])
+    for field in ("title", "description"):
+        if row.get(field) not in (None, ""):
+            result[field] = short_text(row[field])
     return result
 
 
