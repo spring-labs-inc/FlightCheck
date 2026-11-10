@@ -12,6 +12,8 @@ Keep the source archives, private evaluator, reference implementation, native ou
 
 The [handoff benchmark](benchmark-handoff.md) records the clean and changed-UI Spring pairs and the failed non-UI replay, with pinned fixture and reproduction steps.
 
+The [Django composite-key lookup result](benchmark-django-result.md) records fresh and clean-resume timings and the compatibility regression that SpringDev caught before approval.
+
 ## Preflight and calibration
 
 Restore the exact pin to a clean checkout. Verify that the target can accept the example project instructions, skill, and reviewer definitions without replacing native project policy. Run the frozen native check scope and retain its original output and run packet. Record any compiler, dependency, sandbox, or harness failure separately from a candidate failure.
