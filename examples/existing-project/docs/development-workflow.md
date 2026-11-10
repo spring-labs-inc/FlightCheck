@@ -8,9 +8,9 @@ Fill in the entries below during adoption. Record the exact commands, prerequisi
 
 | Setting | What to record |
 | --- | --- |
-| Cheap checks | Use project commands for lint, documentation, and policy as applicable. `git diff --check HEAD` is a starting whitespace check for tracked changes. Cover new candidate files with the applicable project checks. |
+| Cheap checks | Configure fast, reliable commands for the affected behavior, such as focused regression tests, schema validation, lint, documentation, or policy checks. Use observed runtime and setup cost to choose commands that can run on each relevant repair. `git diff --check HEAD` is a starting whitespace check for tracked changes. Cover new candidate files with the applicable project checks. |
 | Early CODE review | Project-specific risk triggers and cases where review before an expensive run could avoid substantial rework. |
-| Authoritative checks | Exact focused and broad test commands and their coverage. A pytest project might use `python -m pytest -q` from its configured development environment. Record the equivalent for your stack. |
+| Authoritative checks | Exact required test commands and their coverage. Classify each check by when it should run. A required check can run in the cheap stage when its full declared scope is fast. Schedule the remaining focused, broad, and visual checks after CODE review when it applies. |
 | UI verification | How to serve interactive HTML using synthetic data, identify the approved surface, run any automated visual checks, and validate the producing run's report. |
 | Test isolation | Disposable data or databases, service ports, scratch, caches, reports, and teardown. Use distinct worktrees for concurrent runs and serialize any suite that still shares mutable resources. |
 | Evidence | An approved private location that survives checkout removal, with the evidence retention and access rules. Keep output free of credentials and sensitive data. |
@@ -20,11 +20,11 @@ Fill in the entries below during adoption. Record the exact commands, prerequisi
 ## Run and resume
 
 1. Record task scope, acceptance, checkout, base, current diff, and intended delivery. Give each deterministic criterion a reproducible assertion. Present a bounded implementation plan before editing.
-2. Implement and run applicable cheap checks. For owner-facing UI, provide the exact interactive HTML URLs and synthetic fixture identities, bind the preview to the candidate surface, and pause for the owner's answer. Get new approval after a surface edit unless the owner explicitly waives the preview pause. Show rendered images only on request.
-3. Record whether early CODE review is warranted. Use it for risks such as migrations, permission or trading changes, or an uncertain approach or acceptance check that could waste a long gate run. If triggered, ask the reviewer to inspect the candidate and scripted acceptance and repair blocking findings. Run applicable focused, broad, and visual checks. Bind any visual findings and freshness check to the report from that run. Execute deterministic checks within the project tool boundary and record live-only checks separately.
+2. Implement and run applicable cheap checks on the candidate. Record failures from independent checks together when they can run safely. Repair failures and refresh affected checks before moving on. For owner-facing UI, then provide the exact interactive HTML URLs and synthetic fixture identities, bind the preview to the candidate surface, and pause for the owner's answer. Get new approval after a surface edit unless the owner explicitly waives the preview pause. Show rendered images only on request.
+3. Record whether early CODE review is warranted. Use it for risks such as migrations, permission or trading changes, or an uncertain approach or acceptance check that could waste a long gate run. If triggered, ask the reviewer to inspect the candidate and scripted acceptance after the cheap checks pass. Repair blocking findings and refresh affected cheap checks before any CODE re-review. Run the remaining required gates and retain any earlier receipts that cover the required command, scope, and current inputs. Bind any visual findings and freshness check to the report from that run. Execute deterministic checks within the project tool boundary and record live-only checks separately.
 4. Validate the final packet with the shared handoff command, then ask one independent final reviewer to inspect the current diff and evidence. Give them a compact packet with the candidate, acceptance criteria, required gates and pass or reuse receipts, original outputs, applicable owner decisions and delivery limits, and any early findings and repairs. Route the verdict after the reviewer returns.
 
-On resume, start with the shared resume summary and reconcile any open work with the current checkout, active processes and provider state before repeating work. Keep failures and interrupted results. Repair in scope and run the cheapest affected check first. Reassess the need for early CODE review after material changes to scope, behavior, risk, or acceptance assertions. Renew final review when its candidate or evidence changes. Record elapsed time, reruns, and review returns. Continue repair within actual limits and explicit holds, without fixed time or iteration quotas.
+On resume, reconcile any open work with the current checkout, active processes and applicable provider state. Use the shared resume summary to route the task. When it reports `final_review`, establish any required reuse receipts, validate the final packet, and send it directly to the independent final reviewer. If the candidate or evidence changes during preparation, or the final packet is blocked, return to the normal resume path. Keep failures and interrupted results. Repair in scope and run the cheapest affected check first. Reassess the need for early CODE review after material changes to scope, behavior, risk, or acceptance assertions. Renew final review when its candidate or evidence changes. Record elapsed time, reruns, and review returns. Continue repair within actual limits and explicit holds, without fixed time or iteration quotas.
 
 ## Evidence and reuse
 
@@ -48,7 +48,7 @@ The optional pytest summary mode records recognizable final totals and distingui
 
 ### Reuse a result
 
-Use the recorder with a stable `--gate` and a project-owned `--fingerprint-command` (a JSON argument array) for each expensive check that can be reused. Run this same invocation for a fresh attempt or on resume. Cheap checks can run directly.
+Use the recorder with a stable `--gate` and a project-owned `--fingerprint-command` (a JSON argument array) for checks whose receipts are verified or reused. Run this same invocation for a fresh attempt or on resume. Cheap checks outside the receipt-based handoff can run directly.
 
 ```sh
 python3 scripts/capture_check.py --evidence-dir "$evidence_dir" --candidate "$candidate" \
@@ -76,16 +76,25 @@ python3 scripts/handoff.py review --task "$task_json" --evidence-dir "$evidence_
 | --- | --- |
 | `candidate`, `saved_candidate` | Current frozen candidate identity from the checkout and the identity saved in the handoff. |
 | `preview` | `null` for non-UI work. For UI work, provide the current `surface` fingerprint, the `approved_surface` from the recorded owner decision, and its `decision_reference`. Include a `waiver` reference only when explicitly granted. |
-| `gates` | All required checks. Each entry has an `id` matching the recorder's gate identifier and a `request` with the exact `command`, `scope`, `summary`, `fingerprint_command` and `artifacts` used by the recorder. For an explicitly reused pass, include `reuse` with its receipt path relative to the evidence root. |
+| `gates` | All required checks. Each entry has an `id` matching the recorder's gate identifier and a `request` with the exact `command`, `scope`, `summary`, `fingerprint_command` and `artifacts` used by the recorder. Set `phase` to `cheap` for checks that must pass before CODE review. The default is `authoritative`. Final review validates both phases. For an explicitly reused pass, include `reuse` with its receipt path relative to the evidence root. |
+| `resume_state` | Optional verified state from the task adapter. Set `phase` to `awaiting_final_review` and `pending_work`, `pending_decisions`, and `active_processes` to `false` only after reconciling the saved task with current state. Leave uncertain state unset. |
 | `diff`, `acceptance`, `delivery` | For final review, the current diff's path inside the evidence root, the acceptance criteria and delivery boundaries. Supply `decisions` and `findings` when there are owner decisions or early review findings to carry forward. |
 
-The resume summary reports the current and saved candidate, preview applicability, and which gates are reusable, stale, failed, missing or unverified. It runs the configured fingerprint probes and validates retained evidence. Run the applicable recorder invocations to establish current pass or reuse receipts.
+The resume summary reports the current and saved candidate, preview applicability, and which gates are reusable, stale, failed, missing or unverified. It runs the configured fingerprint probes and validates retained evidence. The `final_review` route requires explicit clean resume state, an unchanged candidate, reusable required checks, and a current referenced UI approval if applicable. All other cases return `resume_work`. Run the applicable recorder invocations to establish current pass or reuse receipts.
 
 The final command binds the diff digest and verifies the latest required attempts, current fingerprints, original output and artifact digests, reuse decisions, and preview applicability. Exit status 1 means there are unresolved prerequisites. Repair them before starting final review. Exit status 0 means the packet is ready for a reviewer to judge correctness and coverage. Refresh the packet when the candidate, gate results or decisions change. Reviewers can follow the evidence paths for exceptions and ambiguous results.
 
 ## Independent review
 
 Launch `workflow-evidence-reviewer` for the final code and evidence verdict. Launch `workflow-code-reviewer` only when the early review criteria apply. Give each applicable reviewer a separate read-only Codex session with the tools and evidence needed for their review. Check the effective sandbox and available tools before using the role. A role's instructions do not set its sandbox. Reviewers must have no provider write tools or access to secrets, and no executable hooks should run in the review session. If the client cannot provide that boundary or the reviewer cannot inspect required evidence, keep the review pending. [Codex custom agents](https://learn.chatgpt.com/docs/agent-configuration/subagents)
+
+Retain the early review session handle and its candidate, verdict and findings when the harness supports secure continuation. After an in-scope repair, write the current full `diff` and the diff from the reviewed candidate to the repair into the task evidence root. Include an `early_review` object with the prior `session`, `candidate`, `verdict`, relative `findings` and `repair_diff` paths, and `scope_unchanged: true` only after confirming that the repair stays within the reviewed scope and risk boundaries.
+
+```sh
+python3 scripts/handoff.py code-review --task "$task_json" --evidence-dir "$evidence_dir"
+```
+
+Exit status 1 with `action: blocked` means a required cheap check has no verified pass for the current candidate. Resolve the listed blockers before launching or resuming CODE review. For `action: resume`, continue the named early reviewer under the same read-only boundary. Give them the current candidate, cheap-check results, repair diff, prior findings and affected call paths, with the full diff available. Ask for a new verdict on the current candidate. Expand review if the repair exposes new risks or changes affected behavior. For `action: start`, an unavailable session, or a changed boundary, start a fresh read-only CODE review if early review still applies. Always use a separate final reviewer with the full candidate and current evidence.
 
 Retain each review's actual role, candidate, coverage, findings, and disposition. A complete review explicitly reports zero findings when clear. The implementer routes the verdict using those findings and does not submit a review on the reviewer's behalf.
 

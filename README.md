@@ -28,7 +28,7 @@ SpringDev is a set of repository instructions and Codex configuration examples f
 Open your **existing project** in Codex. Review the [example project layout](examples/existing-project/README.md), then merge the relevant files into your repository at the paths shown. Keep your project's instructions, test tools, and permissions. SpringDev runs through those tools and requires no module installation.
 
 1. Merge the workflow entry into your `AGENTS.md`. Add the skill, workflow guide, and final reviewer role. Add the early CODE role for tasks that meet the project's early review criteria.
-2. Set the exact local checks, test isolation, preview method, evidence location, and delivery policy in the workflow guide. Use commands from your own stack and require the checks your repository actually uses.
+2. Configure the fast checks, remaining required gates, test isolation, preview method, evidence location, and delivery policy in the workflow guide. Use commands from your own stack and require the checks your repository actually uses.
 3. Start a fresh Codex session in the target checkout. Verify the instructions, skill, and read-only reviewer setup on a small task. Ask Codex to use `$develop-change` for that task.
 
 To have Codex adapt the configuration, give it access to the example files and use this prompt in your existing repository:
@@ -38,8 +38,8 @@ To have Codex adapt the configuration, give it access to the example files and u
 ### The workflow
 
 1. Select a bounded task and agree on acceptance criteria. Work in a dedicated checkout and give each deterministic criterion a reproducible check.
-2. Implement the change and run the cheap checks. For owner-facing UI, then show interactive HTML with synthetic data and pause for approval of that surface. Show renders only on request.
-3. Use early independent CODE review for high-risk changes or when checking the proposed approach before expensive gates could avoid substantial rework. Run applicable tests and visual checks within the project's permissions.
+2. Implement the change and run the configured cheap checks, including fast tests for affected behavior. Repair failures and confirm the affected checks pass before moving on. For owner-facing UI, then show interactive HTML with synthetic data and pause for approval of that surface. Show renders only on request.
+3. Use early independent CODE review for high-risk changes or when checking the proposed approach before expensive gates could avoid substantial rework. Run the remaining required tests and visual checks within the project's permissions. Carry forward matching receipts for required checks already completed.
 4. Give one independent final reviewer the current diff, acceptance criteria, gate results and receipts, and open findings or owner decisions. Use their verdict to route the work.
 
 | Verdict | Action |

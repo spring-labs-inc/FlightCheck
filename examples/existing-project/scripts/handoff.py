@@ -1,4 +1,4 @@
-"""Summarize a saved SpringDev task or build its final review packet."""
+"""Route a saved SpringDev task or build a review packet."""
 
 import argparse
 import json
@@ -80,15 +80,72 @@ def preview_status(preview):
             "waiver": preview.get("waiver"), "decision_reference": preview.get("decision_reference")}
 
 
+def resume_route(task, packet):
+    state = task.get("resume_state")
+    preview = packet["preview"]
+    preview_current = (preview["status"] == "not-applicable" or
+                       (preview["status"] == "current" and preview["decision_reference"]))
+    if (isinstance(state, dict) and state.get("phase") == "awaiting_final_review"
+            and all(state.get(key) is False for key in ("pending_work", "pending_decisions", "active_processes"))
+            and not packet["candidate_changed"] and not packet["blockers"] and preview_current):
+        return "final_review"
+    return "resume_work"
+
+
+def configured_gates(gates):
+    if not isinstance(gates, list):
+        raise ValueError("The handoff needs a required gate list")
+    if len({gate["id"] for gate in gates}) != len(gates):
+        raise ValueError("Required gate identifiers must be unique")
+    if any(gate.get("phase", "authoritative") not in ("cheap", "authoritative") for gate in gates):
+        raise ValueError("Gate phase must be cheap or authoritative")
+    return gates
+
+
+def code_review_packet(task, root):
+    candidate = task["candidate"]
+    if not isinstance(candidate, str) or not candidate.strip():
+        raise ValueError("The CODE review needs a candidate identity")
+    diff = evidence_path(root, task["diff"])
+    packet = {"action": "start", "candidate": candidate, "diff": {"path": str(diff), "sha256": digest(diff)}}
+    cheap = [gate_status(root, gate, candidate, final=True)
+             for gate in configured_gates(task.get("gates", [])) if gate.get("phase") == "cheap"]
+    if cheap:
+        packet["cheap_checks"] = cheap
+        blockers = [check["id"] for check in cheap if check["status"] not in ("passed", "reused")]
+        if blockers:
+            return dict(packet, action="blocked", blockers=blockers)
+    prior = task.get("early_review")
+    if (not isinstance(prior, dict) or prior.get("scope_unchanged") is not True
+            or prior.get("verdict") != "REVISE"):
+        return packet
+    session = prior.get("session")
+    reviewed = prior.get("candidate")
+    if (not all(isinstance(value, str) and value.strip() for value in (session, reviewed))
+            or reviewed == candidate):
+        return packet
+    try:
+        findings = evidence_path(root, prior["findings"])
+        repair = evidence_path(root, prior["repair_diff"])
+        if not findings.stat().st_size or not repair.stat().st_size:
+            return packet
+        repair_sha = digest(repair)
+        findings_sha = digest(findings)
+    except (OSError, KeyError, TypeError, ValueError):
+        return packet
+    packet.update(action="resume", session=session, reviewed_candidate=reviewed,
+                  findings={"path": str(findings), "sha256": findings_sha},
+                  repair_diff={"path": str(repair), "sha256": repair_sha})
+    return packet
+
+
 def build_packet(task, root, final):
     candidate = task["candidate"]
     saved = task.get("saved_candidate")
     preview = preview_status(task["preview"])
-    gates = task["gates"]
-    if not isinstance(candidate, str) or not candidate.strip() or not isinstance(gates, list):
-        raise ValueError("The handoff needs a candidate identity and a required gate list")
-    if len({gate["id"] for gate in gates}) != len(gates):
-        raise ValueError("Required gate identifiers must be unique")
+    gates = configured_gates(task["gates"])
+    if not isinstance(candidate, str) or not candidate.strip():
+        raise ValueError("The handoff needs a candidate identity")
     checks = [gate_status(root, gate, candidate, final) for gate in gates]
     accepted = {"passed", "reused"} if final else {"reusable"}
     blockers = [check["id"] for check in checks if check["status"] not in accepted]
@@ -104,22 +161,26 @@ def build_packet(task, root, final):
                       acceptance=task["acceptance"], decisions=task.get("decisions", []),
                       findings=task.get("findings", []), delivery=task["delivery"],
                       ready_for_review=not blockers)
+    else:
+        packet["route"] = resume_route(task, packet)
     return packet
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("resume", "review"))
+    parser.add_argument("mode", choices=("resume", "review", "code-review"))
     parser.add_argument("--task", type=Path, required=True)
     parser.add_argument("--evidence-dir", type=Path, required=True)
     args = parser.parse_args()
     final = args.mode == "review"
     try:
-        packet = build_packet(read_json(args.task), args.evidence_dir.resolve(strict=True), final)
+        task = read_json(args.task)
+        root = args.evidence_dir.resolve(strict=True)
+        packet = code_review_packet(task, root) if args.mode == "code-review" else build_packet(task, root, final)
     except (OSError, KeyError, TypeError, ValueError) as error:
         parser.exit(2, f"Cannot build handoff packet: {error}\n")
     print(json.dumps(packet, indent=2))
-    return int(final and not packet["ready_for_review"])
+    return int(packet.get("action") == "blocked" or (final and not packet["ready_for_review"]))
 
 
 if __name__ == "__main__":

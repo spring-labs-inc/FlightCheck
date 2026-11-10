@@ -68,6 +68,7 @@ class HandoffTests(unittest.TestCase):
         summary = self.handoff("resume", 0)
         self.assertEqual(summary["checks"][0]["status"], "reusable")
         self.assertEqual(summary["blockers"], [])
+        self.assertEqual(summary["route"], "resume_work")
         self.assertEqual(self.handoff("review", 1)["blockers"], ["policy"])
 
         self.assertIn("Check reused:", self.record().stdout)
@@ -110,6 +111,65 @@ class HandoffTests(unittest.TestCase):
         self.assertEqual(self.handoff("review", 1)["blockers"], ["policy"])
         self.assertEqual(self.record().returncode, 0)
         self.assertTrue(self.handoff("review", 0)["ready_for_review"])
+
+    def test_direct_final_review_requires_an_explicit_clean_resume(self):
+        self.assertEqual(self.record().returncode, 0)
+        self.assertEqual(self.handoff("resume", 0)["route"], "resume_work")
+        state = {"phase": "awaiting_final_review", "pending_work": False,
+                 "pending_decisions": False, "active_processes": False}
+        self.task["resume_state"] = state
+        self.assertEqual(self.handoff("resume", 0)["route"], "final_review")
+        for key in ("pending_work", "pending_decisions", "active_processes"):
+            with self.subTest(key=key):
+                state[key] = True
+                self.assertEqual(self.handoff("resume", 0)["route"], "resume_work")
+                state[key] = False
+        self.task["preview"] = {"surface": "new", "approved_surface": "old", "waiver": "test waiver"}
+        self.assertEqual(self.handoff("resume", 0)["route"], "resume_work")
+        self.task["preview"].update(approved_surface="new", decision_reference="owner decision")
+        self.assertEqual(self.handoff("resume", 0)["route"], "final_review")
+        self.task["candidate"] = "B"
+        self.assertEqual(self.handoff("resume", 0)["route"], "resume_work")
+        self.task["candidate"] = "A"
+        self.assertEqual(self.record(fail=True, refresh=True).returncode, 1)
+        self.assertEqual(self.handoff("resume", 0)["route"], "resume_work")
+
+    def test_code_review_reuses_a_session_only_for_an_in_scope_repair(self):
+        self.assertEqual(self.handoff("code-review", 0)["action"], "start")
+        (self.evidence / "findings.md").write_text("Unresolved boundary regression")
+        (self.evidence / "repair.diff").write_text("Repair to the boundary")
+        prior = {"candidate": "A", "session": "early-session", "verdict": "REVISE",
+                 "findings": "findings.md", "repair_diff": "repair.diff", "scope_unchanged": True}
+        self.task.update(candidate="B", early_review=prior)
+        packet = self.handoff("code-review", 0)
+        self.assertEqual((packet["action"], packet["session"], packet["reviewed_candidate"]),
+                         ("resume", "early-session", "A"))
+        self.assertEqual(Path(packet["repair_diff"]["path"]).name, "repair.diff")
+        prior["scope_unchanged"] = False
+        self.assertEqual(self.handoff("code-review", 0)["action"], "start")
+        prior.update(scope_unchanged=True, repair_diff="../outside.diff")
+        self.assertEqual(self.handoff("code-review", 0)["action"], "start")
+
+    def test_code_review_waits_for_current_cheap_checks_and_leaves_later_gates_pending(self):
+        self.gate["phase"] = "cheap"
+        self.task["gates"].append({"id": "full-suite", "request": self.request})
+        blocked = self.handoff("code-review", 1)
+        self.assertEqual((blocked["action"], blocked["blockers"]), ("blocked", ["policy"]))
+        self.assertEqual(self.record().returncode, 0)
+        self.assertEqual(self.record(fail=True, refresh=True).returncode, 1)
+        self.assertEqual(self.handoff("code-review", 1)["cheap_checks"][0]["status"], "failed")
+        self.assertEqual(self.record().returncode, 0)
+        self.assertEqual(self.handoff("code-review", 0)["action"], "start")
+        self.assertEqual(self.handoff("review", 1)["blockers"], ["full-suite"])
+        self.task["candidate"] = "B"
+        self.assertEqual(self.handoff("code-review", 1)["blockers"], ["policy"])
+        self.assertIn("Check reused:", self.record().stdout)
+        reuse, = self.evidence.glob("reuse-*/reuse.json")
+        self.gate["reuse"] = str(reuse.relative_to(self.evidence))
+        check = self.handoff("code-review", 0)["cheap_checks"][0]
+        self.assertEqual(check["status"], "reused")
+        Path(check["output"]).write_text("corrupted")
+        self.assertEqual(self.handoff("code-review", 1)["cheap_checks"][0]["status"], "unverified")
 
 
 if __name__ == "__main__":
