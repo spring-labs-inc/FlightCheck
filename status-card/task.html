@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SpringDev · Task status</title>
+  <link rel="stylesheet" href="/card.css">
+  <script src="/task.js" defer></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead">
+      <div class="identity"><span class="mark" aria-hidden="true">S</span><span>SpringDev <span class="muted">/ Status</span></span></div>
+    </header>
+    <section class="hero" aria-labelledby="title">
+      <div>
+        <p class="eyebrow">Selected workflow · task status</p>
+        <h1 id="title">Current task</h1>
+        <p class="summary" id="summary">Waiting for the published snapshot.</p>
+        <p class="candidate">Candidate <code id="candidate">Pending</code></p>
+      </div>
+      <div class="review">
+        <p class="eyebrow">Recorded verdict</p>
+        <p class="verdict" id="verdict">Pending</p>
+      </div>
+    </section>
+    <p id="notice" class="notice" role="status">Loading task status…</p>
+    <footer class="route" aria-label="Viewing route diagnostics">
+      <div><span>Publication</span><strong id="publication">Pending</strong></div>
+      <div><span>Browser route</span><strong id="forwarding">Pending</strong></div>
+      <div><span>Rendering</span><strong id="rendering">Shell loaded</strong></div>
+    </footer>
+    <noscript><p class="notice">JavaScript is unavailable. Refer to the current status in chat.</p></noscript>
+  </main>
+</body>
+</html>

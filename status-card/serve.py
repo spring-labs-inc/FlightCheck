@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from task_status import read_task, task_path
+
 ROOT = Path(__file__).resolve().parent
 ASSETS = {
     "/": ("index.html", "text/html; charset=utf-8"),
@@ -21,16 +23,42 @@ CSP = (
 class StatusHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlsplit(self.path).path
-        if path == "/status.json":
-            body = json.dumps(self.server.snapshot).encode()
-            self.reply(200, body, "application/json; charset=utf-8")
-        elif path in ASSETS:
-            filename, content_type = ASSETS[path]
+        if self.server.task_route:
+            route = self.server.task_route
+            if path == f"{route}status.json":
+                self.task_status()
+                return
+            assets = {
+                route: ("task.html", "text/html; charset=utf-8"),
+                "/task.js": ("task.js", "text/javascript; charset=utf-8"),
+                "/card.css": ASSETS["/card.css"],
+            }
+        else:
+            if path == "/status.json":
+                self.json_status(self.server.snapshot)
+                return
+            assets = ASSETS
+        if path in assets:
+            filename, content_type = assets[path]
             self.reply(200, (ROOT / filename).read_bytes(), content_type)
         else:
             self.reply(404, b"Not found.\n", "text/plain; charset=utf-8")
 
     do_HEAD = do_GET
+
+    def task_status(self):
+        try:
+            snapshot = read_task(self.server.task_file)
+            if task_path(snapshot["task"]) != self.server.task_route:
+                raise ValueError("Snapshot belongs to a different task")
+        except (OSError, ValueError):
+            self.reply(503, b"Task snapshot unavailable.\n", "text/plain; charset=utf-8")
+            return
+        self.json_status(snapshot)
+
+    def json_status(self, snapshot):
+        body = json.dumps({**snapshot, "publicationPort": self.server.server_port}).encode()
+        self.reply(200, body, "application/json; charset=utf-8")
 
     def do_POST(self):
         self.reply(405, b"Read-only endpoint.\n", "text/plain; charset=utf-8")
@@ -56,12 +84,22 @@ class StatusHandler(BaseHTTPRequestHandler):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8766)
+    parser.add_argument("--task-status", type=Path, help="Private curated snapshot for one task")
     args = parser.parse_args()
-    snapshot = json.loads((ROOT / "pilot.json").read_text(encoding="utf-8"))
+    try:
+        if args.task_status:
+            snapshot = read_task(args.task_status)
+            route = task_path(snapshot["task"])
+        else:
+            snapshot = json.loads((ROOT / "pilot.json").read_text(encoding="utf-8"))
+            route = ""
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
     with ThreadingHTTPServer(("127.0.0.1", args.port), StatusHandler) as server:
-        snapshot["publicationPort"] = server.server_port
         server.snapshot = snapshot
-        print(f"SpringDev status card at http://127.0.0.1:{server.server_port}/", flush=True)
+        server.task_file = args.task_status
+        server.task_route = route
+        print(f"SpringDev status card at http://127.0.0.1:{server.server_port}{route or '/'}", flush=True)
         server.serve_forever()
 
 
