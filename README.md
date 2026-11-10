@@ -22,7 +22,7 @@
 
 # SpringDev
 
-<img align="right" width="380" src="docs/status-card-preview.png" alt="SpringDev example status card with an expanded issue, workflow stages, local checks, and CI observations">
+<img align="right" width="380" src="docs/status-card-preview.png" alt="Synthetic task status card with an expanded issue, workflow stages, local checks, and CI observations">
 
 SpringDev is a set of repository instructions and Codex configuration examples for taking a change from request to verified merge. It gives maintainers a repeatable way to run their own checks, review interactive HTML for UI changes, and see the evidence behind a landing decision.
 

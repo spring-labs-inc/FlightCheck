@@ -2,7 +2,7 @@
 
 ## Current task
 
-For a selected Codex workflow, the optional task card publishes a short summary and the verdict for the current candidate. Each task has one stable loopback route. The card shows `Pending` until a verdict is recorded for that exact candidate. The historical pilot is available separately below.
+For a selected Codex workflow, the optional task card publishes a short summary and the verdict for the current candidate. Each task has one stable loopback route. The card shows `Pending` until a verdict is recorded for that exact candidate. The README screenshot shows this view with synthetic task data.
 
 For adoption in another project, keep this `status-card/` directory available to the workflow and record its path in the project setup. Keep the snapshot in a private directory outside the checkout. Assign a unique task ID and an available port per task. Record the directory, task ID, and port with the selected workflow so a resume uses the same route. Only the active workflow writes that task's curated snapshot. Keep raw output and secrets out of its title and summary.
 
@@ -71,11 +71,11 @@ Use a synthetic task on both a local checkout and an SSH-connected checkout. Con
 
 Record a verdict for the synthetic candidate, then change the candidate while retaining the old verdict binding in the test input. Confirm the card shows `Pending` and the closing block omits the stale verdict. Stop the listener and check the chat fallback, then restore the original port and reload the same tab. Record host HTTP, the desktop route, and the rendered task as separate observations.
 
-## Historical pilot
+## Synthetic snapshot
 
-The read-only card shows the Contact us pilot's reviewed candidate, eight observed checks, independent verdict, and separate presentation and landing decisions. [Pilot closeout and rollout record](https://github.com/spring-labs-inc/SpringDev/issues/5)
+The default read-only card shows a completed example with eight sample checks, an independent verdict, and separate presentation and landing decisions.
 
-### View the pilot card
+### View the example card
 
 From the SpringDev checkout, start the loopback-only server and keep its terminal open.
 
@@ -91,16 +91,8 @@ If the forwarded tab reports `ERR_CONNECTION_RESET`, check the listener on the c
 | --- | --- | --- |
 | Publication | The server prints its loopback URL. On the checkout host, a GET of `/status.json` returns the curated snapshot. | Check the server output and port. |
 | Browser route | The card reports **Forwarded endpoint reached** when the browser-facing port differs from the publication port, or **Endpoint reached** when they match. | If publication works but the page will not open, reopen the server URL in the Codex desktop browser and check its forwarded route. |
-| Rendering | The card reports **Snapshot rendered** and shows eight gate results and `APPROVE_WITH_NITS`. | If the shell opens but the snapshot is unavailable, check `/status.json` on the checkout host. If it reports **Shell only**, use issue #5 while diagnosing the card. |
+| Rendering | The card reports **Snapshot rendered** and shows eight sample gate results and `APPROVE_WITH_NITS`. | If the shell opens but the snapshot is unavailable, check `/status.json` on the checkout host. |
 
-A connection loss retains the last rendered snapshot and labels the route disconnected. A reachable endpoint with unusable data is labeled unavailable. Pending gates have their own section. A historical result is labeled stale for live use even while the route is connected.
+A connection loss retains the last rendered snapshot and labels the route disconnected. A reachable endpoint with unusable data is labeled unavailable. Pending gates have their own section.
 
-### Observed airJoker verification
-
-On November 9, 2026, the forwarded tab reported `ERR_CONNECTION_RESET` after the mac-mini preview listener stopped. After restarting the loopback server in a detached process, both `/` and `/status.json` returned HTTP 200 on mac-mini. The owner then confirmed that the Codex desktop browser on airJoker displayed **Snapshot rendered**. Codex browser control was unavailable, so the owner directly verified the browser route and render.
-
-### Historical snapshot boundary
-
-The card serves only the HTML, CSS, JavaScript, and the curated `status-card/pilot.json` snapshot. It exposes no raw evidence files and accepts only reads. It has no owner-response, issue mutation, delivery, or deployment controls.
-
-The server reads the curated JSON at startup. Its review time is the observed pilot verdict time, and its cutover time is the verified merge time. Update the snapshot from verified evidence when a new observation is recorded, then restart the loopback server. Owner decisions and the warning-capture follow-up stay on the tracker. [SpringDev #5](https://github.com/spring-labs-inc/SpringDev/issues/5) · [SpringDev #6](https://github.com/spring-labs-inc/SpringDev/issues/6)
+The server reads the example data from `status-card/pilot.json` at startup and exposes it through the read-only status endpoint. Use the [current task](#current-task) route to publish evidence for your own workflow.

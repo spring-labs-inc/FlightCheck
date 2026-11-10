@@ -1,32 +1,32 @@
 {
-  "title": "Contact us pilot",
-  "summary": "Explain that all visible fields are required.",
-  "candidate": "11160cacecfcf0a4b7cb625265f54594bfebdde4c93171bb8db142e366de1b36",
-  "reviewedAt": "2026-11-08T23:04:28-06:00",
-  "cutoverAt": "2026-11-09T14:31:43Z",
+  "title": "Add an empty-state hint",
+  "summary": "Explain how to create the first saved filter.",
+  "candidate": "example-02",
+  "reviewedAt": "2026-01-12T15:15:00Z",
+  "cutoverAt": "2026-01-12T15:25:00Z",
   "snapshot": "historical",
   "reviews": {
     "code": "APPROVE",
     "evidence": "APPROVE_WITH_NITS",
-    "warningInventory": "Partial · follow-up open on #5",
-    "reviewerProfile": "Unavailable"
+    "warningInventory": "Complete · no test warnings",
+    "reviewerProfile": "Example read-only reviewer"
   },
   "decisions": {
-    "presentation": "Approved · interactive HTML preview 21",
+    "presentation": "Approved · interactive HTML preview",
     "observationsApproval": "No observations approval requested",
-    "cutover": "Approved · rollout merged in Spring #455",
-    "next": "No owner action currently requested",
-    "delivery": "Contact us delivery remains a separate decision."
+    "cutover": "Approved · example change merged",
+    "next": "No owner action requested",
+    "delivery": "The wording nit is tracked separately."
   },
 
   "gates": [
-    {"name": "Lint", "state": "passed", "detail": "Ruff"},
-    {"name": "Docs", "state": "passed", "detail": "Spring documentation checker"},
-    {"name": "Agent policy", "state": "passed", "detail": "Committed policy checks"},
-    {"name": "Workflow policy", "state": "passed", "detail": "3 host-specific clauses unavailable"},
-    {"name": "Focused offline pytest", "state": "passed", "detail": "42 tests · passed after database setup retry"},
-    {"name": "Full offline pytest", "state": "passed", "detail": "9,608 tests · 14 skips"},
-    {"name": "VisualQA", "state": "passed", "detail": "502 tests"},
-    {"name": "Findings and freshness", "state": "passed", "detail": "0 failures · 104 page-and-viewport records"}
+    {"name": "Formatting and lint", "state": "passed", "detail": "Source and tests"},
+    {"name": "Documentation", "state": "passed", "detail": "Internal links resolved"},
+    {"name": "Configuration checks", "state": "passed", "detail": "Example settings validated"},
+    {"name": "Focused tests", "state": "passed", "detail": "8 tests"},
+    {"name": "Full test suite", "state": "passed", "detail": "36 tests · 1 skip"},
+    {"name": "Accessibility", "state": "passed", "detail": "Keyboard flow and accessible labels"},
+    {"name": "Browser checks", "state": "passed", "detail": "Desktop and mobile layouts"},
+    {"name": "Evidence freshness", "state": "passed", "detail": "Results bound to the reviewed candidate"}
   ]
 }

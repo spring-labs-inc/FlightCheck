@@ -16,8 +16,6 @@ Restore Django and ripgrep from their verified Git bundles. Restore fmt and jsou
 
 Keep the source archives, private evaluator, reference implementation, native outputs, and review records in approved private storage outside the worker checkouts and tracked source. Workers receive a symptom-only task brief, allowed edit scope, required native checks, and the published evaluation criteria. The controller keeps the evaluator implementation and reference separate. A public historical task can still be familiar to a model. Record this limitation alongside the results.
 
-The [Contact handoff benchmark](benchmark-handoff.md) describes the saved-task fixtures and reproduction steps.
-
 ## Preflight and calibration
 
 Restore the exact pin to a clean checkout. Verify that the target can accept the example project instructions, skill, and reviewer definitions without replacing native project policy. Run the frozen native check scope and retain its original output and run packet. Record any compiler, dependency, sandbox, or harness failure separately from a candidate failure.

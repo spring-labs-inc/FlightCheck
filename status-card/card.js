@@ -44,7 +44,7 @@ function renderGates(gates) {
   byId("gates").replaceChildren(...rows);
   setText("gate-count", `${gates.filter(({ state }) => state === "passed").length}/${gates.length} passed`);
   const pending = gates.filter(({ state }) => state === "pending").map(({ name }) => name);
-  setText("pending", pending.length ? pending.join(" · ") : "None in the recorded pilot.");
+  setText("pending", pending.length ? pending.join(" · ") : "None in this example.");
 }
 
 function render(data) {
@@ -81,7 +81,7 @@ async function refresh() {
     setText("publication", "Published on loopback");
     setText("forwarding", String(data.publicationPort) !== location.port ? "Forwarded endpoint reached" : "Endpoint reached");
     setText("rendering", "Snapshot rendered");
-    setText("notice", "Historical snapshot · stale for live use. Gate outcomes describe the reviewed pilot.");
+    setText("notice", "Synthetic snapshot · illustrates a completed workflow.");
   } catch {
     setText("publication", reachedServer ? "Snapshot unavailable" : "Publication unconfirmed");
     setText("forwarding", reachedServer ? "Endpoint reached" : "Disconnected");
@@ -90,13 +90,13 @@ async function refresh() {
       for (const field of ["candidate", "verdict", "gate-count", "presentation", "observations", "cutover", "code-review"]) {
         setText(field, "Unavailable");
       }
-      setText("summary", "The pilot snapshot could not be loaded.");
+      setText("summary", "The example snapshot could not be loaded.");
       setText("reviewed", "Review time unavailable");
       setText("pending", "Unavailable until the snapshot loads.");
     }
     setText("notice", reachedServer
-      ? "Snapshot unavailable · the browser reached the endpoint. Check publication on mac-mini or open issue #5."
-      : "Disconnected · check the mac-mini server, then reopen its URL in Codex. Use issue #5 for the pilot record.");
+      ? "Snapshot unavailable · check the status endpoint on the checkout host."
+      : "Disconnected · check the loopback server, then reopen its URL in Codex.");
   } finally {
     clearTimeout(timeout);
     setTimeout(refresh, 15000);

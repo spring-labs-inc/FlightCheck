@@ -1,4 +1,4 @@
-"""Verify the publisher, task-specific HTTP routes, and pilot isolation."""
+"""Verify the publisher, task-specific HTTP routes, and example isolation."""
 
 import json
 import subprocess
@@ -87,12 +87,13 @@ class TaskStatusTests(unittest.TestCase):
         self.snapshot.unlink()
         self.assertEqual(self.request(status_url)[0], 503)
 
-    def test_default_listener_serves_only_the_historical_pilot(self):
+    def test_default_listener_serves_only_the_synthetic_example(self):
         url = self.start()
         status, body = self.request(url + "status.json")
         self.assertEqual(status, 200)
         snapshot = json.loads(body)
         self.assertEqual(snapshot["snapshot"], "historical")
+        self.assertEqual(snapshot["candidate"], "example-02")
         self.assertEqual(snapshot["reviews"]["evidence"], "APPROVE_WITH_NITS")
         self.assertEqual(len(snapshot["gates"]), 8)
         self.assertEqual(self.request(url + "task/test-task/")[0], 404)

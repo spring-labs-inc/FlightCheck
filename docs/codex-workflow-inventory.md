@@ -1,6 +1,6 @@
 # Codex workflow inventory
 
-This guide maps Codex configuration, instructions, verification, and permission boundaries to the [SpringDev adoption example][adoption]. The original inspection is recorded in [SpringDev #1][issue]. Historical migration and recovery evidence is indexed in [Spring #454][migration] and the [SpringDev retention decision][retention].
+This guide maps Codex configuration, instructions, verification, and permission boundaries to the [SpringDev adoption example][adoption]. The original inspection is recorded in [SpringDev #1][issue].
 
 ## Codex configuration layers
 
@@ -52,8 +52,6 @@ Codex loads one nonempty instruction file from its home, then walks the project 
 4. Verify the project's native checks, evidence locations, and independent review boundaries on a small task. Use the [workflow guide][workflow] for check scope, evidence reuse, and landing decisions.
 
 [issue]: https://github.com/spring-labs-inc/SpringDev/issues/1
-[migration]: https://github.com/spring-labs-inc/Spring/issues/454
-[retention]: https://github.com/spring-labs-inc/SpringDev/issues/11
 [adoption]: ../examples/existing-project/README.md
 [claude-example]: ../examples/existing-project/CLAUDE.md
 [workflow]: ../examples/existing-project/docs/development-workflow.md
