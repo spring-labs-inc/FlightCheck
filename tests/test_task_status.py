@@ -72,7 +72,7 @@ class TaskStatusTests(unittest.TestCase):
         self.assertEqual(current()["verdict"], "APPROVE_WITH_NITS")
         self.assertEqual(
             self.publish(*candidate, "--chat-phase", "end"),
-            f"{status_line}\n\nVerdit: APPROVE_WITH_NITS",
+            f"{status_line}\n\nVerdict: APPROVE_WITH_NITS",
         )
         self.assertEqual(
             self.publish("--candidate", "second", "--verdict", "APPROVE_WITH_NITS",

@@ -59,7 +59,7 @@ def chat_status(data, url, phase):
         return ""
     status = f"SpringDev: {label}"
     if phase == "end" and data["verdict"] in VERDICTS:
-        status += f"\n\nVerdit: {data['verdict']}"
+        status += f"\n\nVerdict: {data['verdict']}"
     return status
 
 
