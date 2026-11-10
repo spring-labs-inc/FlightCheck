@@ -1,8 +1,10 @@
 """Validate and project optional details for the live task card."""
 
+import re
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
+TASK_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
 LINK_KINDS = ("epic", "issue", "pr")
 CHECK_STATES = ("pending", "running", "passed", "failed", "interrupted", "unavailable")
 CI_STATES = ("pending", "running", "passed", "failed", "cancelled", "skipped", "unavailable")
@@ -14,6 +16,12 @@ STAGE_NAMES = (
     "Final Verdict", "PR & Merge",
 )
 STAGE_STATES = ("completed", "current", "skipped", "pending")
+
+
+def task_id(value):
+    if not isinstance(value, str) or not TASK_ID.fullmatch(value):
+        raise ValueError("Invalid task ID")
+    return value
 
 
 def short_text(value):
@@ -62,7 +70,35 @@ def link(row):
     for field in ("title", "description"):
         if row.get(field) not in (None, ""):
             result[field] = short_text(row[field])
+    if result["kind"] == "issue" and row.get("flight") is not None:
+        result["flight"] = task_id(row["flight"])
     return result
+
+
+def tracked_flight(value):
+    if not isinstance(value, dict):
+        raise ValueError("Expected a tracked flight observation")
+    candidate = short_text(value.get("candidate"))
+    result = {"candidate": candidate}
+    if value.get("stage") is not None:
+        stage = choice(value["stage"], STAGE_NAMES)
+        if value.get("stage_candidate") == candidate:
+            result.update(stage=stage, stage_candidate=candidate)
+    return result
+
+
+def issue_stages(snapshot):
+    """Project current stages for flights explicitly linked to issues."""
+    current = {flight: record.get("stage") for flight, record in snapshot.get("tracked_flights", {}).items()}
+    main_stages = snapshot.get("stages", {}) if snapshot["candidate"] else {}
+    current[snapshot["task"]] = next((name for name, state in main_stages.items() if state == "current"), None)
+
+    issues = {}
+    for row in snapshot.get("links", []):
+        flight = row.get("flight")
+        if current.get(flight):
+            issues.setdefault(flight, set()).add(row["url"])
+    return {flight: {"stage": current[flight], "shared": len(urls) > 1} for flight, urls in issues.items()}
 
 
 def observation(row, states):
@@ -134,6 +170,11 @@ def normalize_details(data):
         result["worktree"] = short_text(data["worktree"])
     if "stages" in data:
         result["stages"] = stages(data["stages"])
+    if "tracked_flights" in data:
+        flights = data["tracked_flights"]
+        if not isinstance(flights, dict):
+            raise ValueError("Expected a map of tracked flight observations")
+        result["tracked_flights"] = {task_id(flight): tracked_flight(record) for flight, record in flights.items()}
     if "links" in data:
         by_recency = sorted(
             rows(data["links"], link), key=lambda row: row.get("created_at", ""), reverse=True,
@@ -147,8 +188,10 @@ def normalize_details(data):
 
 def update_details(previous, details, candidate):
     """Apply explicit section updates and append only new, recorded events."""
-    if not isinstance(details, dict) or details.keys() - {"worktree", "links", "checks", "ci", "events", "stages"}:
-        raise ValueError("Expected a details object with worktree, stages, links, checks, ci, or events")
+    if not isinstance(details, dict) or details.keys() - {
+        "worktree", "links", "checks", "ci", "events", "stages", "tracked_flights",
+    }:
+        raise ValueError("Expected a details object with supported task status fields")
     update = normalize_details(details)
     result = {**normalize_details(previous), **update}
     if previous.get("candidate") != candidate and "stages" not in update:

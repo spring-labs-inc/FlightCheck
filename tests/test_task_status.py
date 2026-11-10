@@ -203,6 +203,46 @@ class TaskStatusTests(unittest.TestCase):
         self.assertEqual(published[1]["title"], "Status card rollout")
         self.assertEqual(published[1]["description"], "Coordinate the status card changes.")
 
+    def test_issue_stages_are_bound_to_the_associated_flights_current_candidate(self):
+        details = self.snapshot.with_name("details.json")
+        links = [
+            {"kind": "issue", "label": "#1", "url": "https://example.com/issues/1", "flight": "test-task"},
+            {"kind": "issue", "label": "#2", "url": "https://example.com/issues/2", "flight": "test-task"},
+            {"kind": "issue", "label": "#3", "url": "https://example.com/issues/3", "flight": "other"},
+            {"kind": "issue", "label": "#4", "url": "https://example.com/issues/4"},
+        ]
+        flights = {
+            "other": {"candidate": "other-1", "stage_candidate": "other-1", "stage": "Implement"},
+            "test-task": {"candidate": "first", "stage_candidate": "first", "stage": "Plan"},
+        }
+        stages = {"Authoritative Gates": "current"}
+        details.write_text(json.dumps({"links": links, "tracked_flights": flights, "stages": stages}))
+        self.publish("--candidate", "first", "--details", str(details))
+        url = self.start("--task-status", str(self.snapshot)) + "status.json"
+
+        def current():
+            status, body = self.request(url)
+            self.assertEqual(status, 200)
+            return json.loads(body)
+
+        initial = current()
+        self.assertEqual(initial["links"], links)
+        self.assertNotIn("tracked_flights", initial)
+        self.assertEqual(initial["issue_stages"], {
+            "test-task": {"stage": "Authoritative Gates", "shared": True},
+            "other": {"stage": "Implement", "shared": False},
+        })
+
+        flights["other"]["candidate"] = "other-2"
+        details.write_text(json.dumps({"tracked_flights": flights}))
+        self.publish("--candidate", "first", "--details", str(details))
+        self.assertEqual(current()["stages"], initial["stages"])
+        self.assertEqual(current()["issue_stages"], {"test-task": initial["issue_stages"]["test-task"]})
+
+        self.publish("--candidate", "second")
+        self.assertNotIn("stages", current())
+        self.assertEqual(current()["issue_stages"], {})
+
     def test_desktop_tab_decisions_use_the_task_route(self):
         visible = {"id": "card", "url": "http://localhost:58213/task/test-task/", "visible": True}
         hidden = {**visible, "visible": False}

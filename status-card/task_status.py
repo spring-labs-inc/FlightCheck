@@ -3,21 +3,17 @@
 import argparse
 import json
 import os
-import re
 import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from task_details import normalize_details, update_details
+from task_details import normalize_details, task_id, update_details
 
-TASK_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
 VERDICTS = ("APPROVE", "APPROVE_WITH_NITS", "APPROVE_WITH_OBSERVATIONS", "REVISE")
 
 
 def task_path(task):
-    if not isinstance(task, str) or not TASK_ID.fullmatch(task):
-        raise ValueError("Invalid task ID")
-    return f"/task/{task}/"
+    return f"/task/{task_id(task)}/"
 
 
 def normalize(data):
@@ -93,7 +89,7 @@ def main():
     parser.add_argument("--candidate", default="")
     parser.add_argument("--verdict", choices=VERDICTS)
     parser.add_argument("--verdict-candidate")
-    parser.add_argument("--details", type=Path, help="Private JSON with curated worktree, stages, links, checks, CI, or events")
+    parser.add_argument("--details", type=Path, help="Private JSON with curated task status details")
     parser.add_argument("--url", help="Published loopback URL for this task")
     parser.add_argument("--chat-phase", choices=("start", "end"), help="Print chat text for a flight boundary")
     args = parser.parse_args()
