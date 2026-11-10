@@ -52,7 +52,7 @@ class TaskStatusTests(unittest.TestCase):
             connection.close()
 
     def test_stable_task_route_publishes_only_current_verdict(self):
-        self.assertEqual(self.publish(), "**SpringDev </> status · Verdict: Pending**")
+        self.assertEqual(self.publish(), "")
         url = self.start("--task-status", str(self.snapshot))
         self.assertTrue(url.endswith("/task/test-task/"))
         self.assertEqual(self.request(url)[0], 200)
@@ -63,17 +63,21 @@ class TaskStatusTests(unittest.TestCase):
             self.assertEqual(status, 200)
             return json.loads(body)
 
+        status_line = f"SpringDev: [&lt; status /&gt;]({url})"
+        self.assertEqual(self.publish("--url", url, "--chat-phase", "start"), status_line)
         self.assertEqual(current()["verdict"], "Pending")
+        candidate = ("--candidate", "first", "--verdict", "APPROVE_WITH_NITS",
+                     "--verdict-candidate", "first", "--url", url)
+        self.assertEqual(self.publish(*candidate), "")
+        self.assertEqual(current()["verdict"], "APPROVE_WITH_NITS")
         self.assertEqual(
-            self.publish("--candidate", "first", "--verdict", "APPROVE",
-                         "--verdict-candidate", "first", "--url", url),
-            f"**[SpringDev </> status]({url}) · Verdict: APPROVE**",
+            self.publish(*candidate, "--chat-phase", "end"),
+            f"{status_line}\n\nVerdit: APPROVE_WITH_NITS",
         )
-        self.assertEqual(current()["verdict"], "APPROVE")
         self.assertEqual(
-            self.publish("--candidate", "second", "--verdict", "APPROVE",
-                         "--verdict-candidate", "first", "--url", url),
-            f"**[SpringDev </> status]({url}) · Verdict: Pending**",
+            self.publish("--candidate", "second", "--verdict", "APPROVE_WITH_NITS",
+                         "--verdict-candidate", "first", "--url", url, "--chat-phase", "end"),
+            status_line,
         )
         self.assertEqual(current()["candidate"], "second")
         self.assertIsNone(current()["verdict_candidate"])

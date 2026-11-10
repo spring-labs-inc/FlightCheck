@@ -7,4 +7,4 @@ Read the [project workflow](../../../docs/development-workflow.md) and the appli
 
 Follow the staged checks, interactive HTML approval when applicable, independent CODE and EVIDENCE reviews, and current verdict route in the guide. On resume, reconcile the current candidate, original results, owner decisions, and provider state before repeating work.
 
-On activation or resume in interactive Codex, use the project's configured status card and [chat status instructions](references/task-status.md). End selected workflow replies with the current task's status footer. Ordinary chat stays outside this workflow.
+On activation or resume in interactive Codex, use the project's configured status card and [chat status instructions](references/task-status.md). Put the status link first in the opening reply and last in the closing reply, with any recorded verdict directly below the closing link.

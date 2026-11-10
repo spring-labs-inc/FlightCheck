@@ -13,12 +13,14 @@ When the desktop browser controls are available, inspect the current chat's buil
 | The matching card is visible | Leave it in place. Reload that tab only if its route needs recovery. |
 | A matching tab exists and is hidden or inactive | Reveal or select the existing tab using the desktop controls. |
 | Tab inventory is available and the card is absent | Open the recorded loopback URL visibly in the built-in browser. |
-| Inventory or required controls are unavailable | Give the usable task link in chat and let the owner reveal or open it. |
+| Inventory or required controls are unavailable | Refer the owner to the status link in the opening reply. |
 
 An existing matching tab with unknown visibility also uses the fallback. Ask the owner to select it. Recheck the inventory before opening a new tab when navigation is still settling.
 
-Check the displayed task, route diagnostic, and `Snapshot rendered` separately. On a forwarded connection reset, restore the checkout-host listener first, then reload the existing tab. If the client needs a fresh forward, use its supported navigation or ask the owner to reopen the recorded URL. Avoid creating duplicate tabs when the original tab still exists. Report browser verification only from the desktop view or an owner's observation.
+Check the displayed task, route diagnostic, and `Snapshot rendered` separately. On a forwarded connection reset, restore the checkout-host listener first, then reload the existing tab. If the client needs a fresh forward, use its supported navigation or direct the owner to the opening link. Avoid creating duplicate tabs when the original tab still exists. Report browser verification only from the desktop view or an owner's observation.
 
-## End the reply
+## Opening and closing replies
 
-Use the publisher's footer, or format it as `**[SpringDev </> status](TASK_URL) · Verdict: Pending**`. Use the current candidate's recorded verdict when available. When no task URL is usable, use the same footer without a link. Put it on the last line of each interactive workflow reply, including pauses and fallback messages. Keep progress and next steps in chat when publication or browser access is unavailable.
+Put the status line at the top of the opening workflow reply when the owner first invokes SpringDev for a flight. Put the closing status block at the bottom of the reply that ends that flight. Use the same task URL at both boundaries. Leave the status block out of intermediate updates, approval pauses, repairs, resumes of the same flight, and ordinary chat.
+
+Use the publisher's `--chat-phase start` or `--chat-phase end` output, or format the line as `SpringDev: [&lt; status /&gt;](TASK_URL)`. When no task URL is usable, leave the label as plain text. At the end, put `Verdit: <actual verdict>` on its own line below the status line if the current candidate has a recorded verdict. Leave that line out when the verdict is pending. Keep publishing snapshot updates without `--chat-phase` between the two replies.
