@@ -8,7 +8,7 @@
   <script src="/task.js" defer></script>
 </head>
 <body>
-  <main class="shell">
+  <main class="shell task-card">
     <header class="masthead">
       <div class="identity"><span class="mark" aria-hidden="true">S</span><span>SpringDev <span class="muted">/ Status</span></span></div>
     </header>
@@ -18,6 +18,7 @@
         <h1 id="title">Current task</h1>
         <p class="summary" id="summary">Waiting for the published snapshot.</p>
         <p class="candidate">Candidate <code id="candidate">Pending</code></p>
+        <p class="candidate" id="worktree-line" hidden>Worktree <code id="worktree"></code></p>
       </div>
       <div class="review">
         <p class="eyebrow">Recorded verdict</p>
@@ -25,6 +26,38 @@
       </div>
     </section>
     <p id="notice" class="notice" role="status">Loading task status…</p>
+    <div class="task-details" id="task-details" hidden>
+      <section class="panel" id="links-panel" aria-labelledby="links-title" hidden>
+        <h2 id="links-title">Work links</h2>
+        <ul class="work-links" id="links" role="list"></ul>
+        <div class="work-link-detail" id="work-link-detail" role="region" aria-labelledby="work-link-title" hidden>
+          <div>
+            <h3 id="work-link-title"></h3>
+            <p id="work-link-description"></p>
+            <p id="work-link-stage" class="work-link-stage" hidden></p>
+          </div>
+          <span id="work-link-destination"></span>
+        </div>
+      </section>
+      <section class="panel" id="stages-panel" aria-labelledby="stages-title" hidden>
+        <h2 id="stages-title">Workflow stages (displayed candidate)</h2>
+        <ol class="task-stages" id="stages" role="list"></ol>
+      </section>
+      <div class="task-evidence" id="evidence" hidden>
+        <section class="panel" id="checks-panel" aria-labelledby="checks-title" hidden>
+          <h2 id="checks-title">Local checks</h2>
+          <ul class="gates" id="checks"></ul>
+        </section>
+        <section class="panel" id="ci-panel" aria-labelledby="ci-title" hidden>
+          <h2 id="ci-title">CI observations</h2>
+          <ul class="gates" id="ci"></ul>
+        </section>
+      </div>
+      <details class="panel" id="history-panel" hidden>
+        <summary>Iteration history <span class="pill" id="history-count"></span></summary>
+        <ol class="gates" id="history"></ol>
+      </details>
+    </div>
     <footer class="route" aria-label="Viewing route diagnostics">
       <div><span>Publication</span><strong id="publication">Pending</strong></div>
       <div><span>Browser route</span><strong id="forwarding">Pending</strong></div>

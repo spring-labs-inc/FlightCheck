@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from task_details import issue_stages
 from task_status import read_task, task_path
 
 ROOT = Path(__file__).resolve().parent
@@ -54,6 +55,8 @@ class StatusHandler(BaseHTTPRequestHandler):
         except (OSError, ValueError):
             self.reply(503, b"Task snapshot unavailable.\n", "text/plain; charset=utf-8")
             return
+        snapshot["issue_stages"] = issue_stages(snapshot)
+        snapshot.pop("tracked_flights", None)
         self.json_status(snapshot)
 
     def json_status(self, snapshot):

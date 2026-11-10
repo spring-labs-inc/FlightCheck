@@ -6,6 +6,8 @@ Use this workflow for an explicitly selected task or its resume. The project own
 
 Fill in the entries below during adoption. Record the exact commands, prerequisites, applicable paths, and inputs for each gate. Unconfigured required checks remain pending. Record a reason for each gate that is genuinely inapplicable.
 
+Use the optional [project resource index](project-resources.md) only when the task needs a resource whose location is unknown. Search its headings and read only the matching entry, then open the smallest useful section, issue, or log excerpt. Use a pointer supplied with the task directly.
+
 | Setting | What to record |
 | --- | --- |
 | Cheap checks | Configure fast, reliable commands for the affected behavior, such as focused regression tests, schema validation, lint, documentation, or policy checks. Use observed runtime and setup cost to choose commands that can run on each relevant repair. `git diff --check HEAD` is a starting whitespace check for tracked changes. Cover new candidate files with the applicable project checks. |

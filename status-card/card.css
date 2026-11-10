@@ -63,6 +63,76 @@ dd { margin: 1px 0 0; font-size: .85rem; }
 .route span, .route strong { display: block; }
 .route span { color: var(--muted); }
 .route strong { overflow-wrap: anywhere; }
+
+.shell.task-card { max-width: 880px; padding: 12px 14px 18px; }
+.task-card .masthead { margin-bottom: 8px; }
+.task-card .mark { width: 26px; height: 26px; }
+.task-card .hero { padding: 10px 12px; gap: 10px; grid-template-columns: minmax(0, 1fr) minmax(0, max-content); }
+.task-card h1 { font-size: clamp(1.25rem, 4vw, 1.65rem); overflow-wrap: anywhere; }
+.task-card h2, .task-card summary { font-size: .88rem; }
+.task-card .summary, .task-card .candidate, .task-card .review p:last-child { margin-top: 3px; }
+.task-card .candidate code { overflow-wrap: anywhere; }
+.task-card .summary { font-size: .85rem; line-height: 1.35; overflow-wrap: anywhere; }
+.task-card .eyebrow { margin-bottom: 2px; }
+.task-card .review { max-width: 22ch; border: 0; border-left: 1px solid var(--frame); padding: 0 0 0 10px; }
+.task-card .notice { margin: 5px 0; padding: 3px 7px; font-size: .75rem; }
+.task-card .panel { padding: 7px 9px; min-width: 0; }
+.task-details { display: grid; gap: 6px; }
+.task-evidence { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; }
+.task-evidence > .panel { flex: 1 1 16rem; }
+.task-card [hidden] { display: none; }
+.task-stages {
+  list-style: none; margin: 3px 0 0; padding: 0 0 0 7px; border-left: 1px solid var(--line);
+  columns: 2; column-gap: 12px; font: .77rem/1.4 var(--mono); color: var(--muted);
+}
+.task-stages li {
+  display: grid; grid-template-columns: 2ch minmax(0, 1fr); padding: 1px 0;
+  break-inside: avoid;
+}
+.task-stages [data-state="completed"] { color: var(--good); }
+.task-stages [data-state="current"] { color: var(--warn); font-weight: 730; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.work-links { list-style: none; padding: 0; margin: 3px 0 0; font-size: .82rem; line-height: 1.7; }
+.work-links li { display: inline; }
+.work-link-item { display: inline-block; max-width: 100%; }
+.work-link-separator { margin: 0 5px 0 2px; color: var(--muted); }
+.work-link-select {
+  max-width: 100%; padding: 0; border: 0; background: none; color: var(--cyan); font: inherit; cursor: pointer;
+  text-decoration: underline; text-underline-offset: .2em; text-align: left; overflow-wrap: anywhere;
+}
+.work-link-select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.work-link-select[aria-expanded="true"] { color: var(--warn); }
+.work-link-detail {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;
+  margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--line); overflow-wrap: anywhere;
+}
+.work-link-detail p { margin: 2px 0 0; color: var(--muted); font-size: .78rem; }
+.work-link-detail .work-link-stage { color: var(--warn); }
+.work-link-open {
+  display: block; min-width: 26px; padding: 1px 6px; border: 1px solid var(--frame);
+  border-radius: 4px; background: var(--raised); text-align: center; text-decoration: none;
+}
+.task-details .pill { padding: 1px 4px; }
+.task-details .gates { margin-top: 3px; }
+.task-details .gates li { align-items: baseline; padding: 3px 0; gap: 6px; }
+.task-details .gates li:last-child { border-bottom: 0; padding-bottom: 0; }
+.task-details .gate-name, .task-details .gate-detail { overflow-wrap: anywhere; }
+.task-details .gate-name { font-size: .82rem; }
+.task-details .gate-detail { font-size: .75rem; line-height: 1.35; }
+.task-details .gate-state[data-state="running"],
+.task-details .gate-state[data-state="interrupted"],
+.task-details .gate-state[data-state="cancelled"],
+.task-details .gate-state[data-state="skipped"] { color: var(--warn); }
+.task-details summary { cursor: pointer; font-weight: 680; }
+.task-details summary .pill { margin-left: 4px; }
+.task-card .route { margin-top: 6px; padding: 5px 8px; gap: 5px; }
+
+@media (max-width: 450px) {
+  .task-card .hero { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .task-card .review { display: flex; align-items: baseline; gap: 5px; max-width: none; border: 0; padding: 0; }
+  .task-card .review p:last-child { margin: 0; }
+}
+
 @media (max-width: 680px) {
   .shell { padding: 16px 14px 24px; }
   .masthead { margin-bottom: 17px; }
