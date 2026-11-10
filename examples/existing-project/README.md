@@ -1,4 +1,4 @@
-# Adopt SpringDev in an existing repository
+# Adopt FlightCheck in an existing repository
 
 This directory mirrors the files you can add to your own repository. Open your project in Codex and review the examples before merging them into the corresponding paths. Keep existing instructions, nested overrides, rules, hooks, and dependency files. Resolve overlaps by editing the relevant entries in your project.
 

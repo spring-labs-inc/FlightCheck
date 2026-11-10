@@ -1,4 +1,4 @@
-# SpringDev status cards
+# FlightCheck status cards
 
 ## Current task
 
@@ -77,7 +77,7 @@ The default read-only card shows a completed example with eight sample checks, a
 
 ### View the example card
 
-From the SpringDev checkout, start the loopback-only server and keep its terminal open.
+From the FlightCheck checkout, start the loopback-only server and keep its terminal open.
 
 ```sh
 python3 -B status-card/serve.py --port 8766

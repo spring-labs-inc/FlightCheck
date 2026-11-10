@@ -1,4 +1,4 @@
-"""Route a saved SpringDev task or build a review packet."""
+"""Route a saved FlightCheck task or build a review packet."""
 
 import argparse
 from collections import Counter

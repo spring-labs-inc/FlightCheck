@@ -1,11 +1,11 @@
 ```text
- ██████  ██████   ██████   ██████  ██    ██   ██████  █████    ███████  ██    ██
-██       ██   ██  ██   ██    ██    ███   ██  ██       ██  ██   ██       ██    ██
-██       ██   ██  ██   ██    ██    ████  ██  ██       ██   ██  ██       ██    ██
- █████   ██████   ██████     ██    ██ ██ ██  ██ ████  ██   ██  ██████    ██  ██
-     ██  ██       ██ ██      ██    ██  ████  ██   ██  ██   ██  ██        ██  ██
-     ██  ██       ██  ██     ██    ██   ███  ██   ██  ██  ██   ██         ████
-██████   ██       ██   ██  ██████  ██    ██   █████   █████    ███████     ██
+█████  ██     █████   ████  ██ ██  █████   ████  ██ ██  █████   ████  ██  █
+██     ██       █    ██     ██ ██    █    ██     ██ ██  ██     ██     ██ ██
+██     ██       █    ██     ██ ██    █    ██     ██ ██  ██     ██     ████
+████   ██       █    ██ ██  █████    █    ██     █████  ████   ██     ███
+██     ██       █    ██  █  ██ ██    █    ██     ██ ██  ██     ██     ████
+██     ██       █    ██  █  ██ ██    █    ██     ██ ██  ██     ██     ██ ██
+██     █████  █████   ████  ██ ██    █     ████  ██ ██  █████   ████  ██  █
 
 
     01 PLAN
@@ -20,15 +20,15 @@
       09 PR & MERGE
 ```
 
-# SpringDev
+# FlightCheck
 
-<img align="right" width="380" src="docs/status-card-preview.png" alt="Synthetic task status card with an expanded issue, workflow stages, local checks, and CI observations">
+<img align="right" width="380" src="docs/status-card-preview.png" alt="Synthetic FlightCheck task status card with an expanded issue, workflow stages, local checks, and CI observations">
 
-SpringDev is a set of repository instructions and Codex configuration examples for taking a change from request to verified merge. It gives maintainers a repeatable way to run their own checks, review interactive HTML for UI changes, and see the evidence behind a landing decision.
+FlightCheck is a set of repository instructions and Codex configuration examples for taking a change from request to verified merge. It gives maintainers a repeatable way to run their own checks, review interactive HTML for UI changes, and see the evidence behind a landing decision.
 
 ### Get started
 
-Open your **existing project** in Codex. Review the [example project layout](examples/existing-project/README.md), then merge the relevant files into your repository at the paths shown. Keep your project's instructions, test tools, and permissions. SpringDev runs through those tools and requires no module installation.
+Open your **existing project** in Codex. Review the [example project layout](examples/existing-project/README.md), then merge the relevant files into your repository at the paths shown. Keep your project's instructions, test tools, and permissions. FlightCheck runs through those tools and requires no module installation.
 
 1. Merge the workflow entry into your `AGENTS.md`. Add the skill, workflow guide, and two reviewer role files.
 2. Set the exact local checks, test isolation, preview method, evidence location, and delivery policy in the workflow guide. Use commands from your own stack and require the checks your repository actually uses.
@@ -36,7 +36,7 @@ Open your **existing project** in Codex. Review the [example project layout](exa
 
 To have Codex adapt the configuration, give it access to the example files and use this prompt in your existing repository:
 
-> Review the SpringDev example project and my repository's current instructions, test commands, permissions, and delivery rules. Propose the smallest project-local diff. Adapt the workflow and reviewer files to my tools, preserve my existing policy, and verify the setup. Ask me to resolve any permission or delivery decisions that are missing.
+> Review the FlightCheck example project and my repository's current instructions, test commands, permissions, and delivery rules. Propose the smallest project-local diff. Adapt the workflow and reviewer files to my tools, preserve my existing policy, and verify the setup. Ask me to resolve any permission or delivery decisions that are missing.
 
 <br clear="right">
 
@@ -64,4 +64,4 @@ Repair failures with the cheapest affected check first. Reuse a pass only when t
 | [Workflow guide](examples/existing-project/docs/development-workflow.md) | Adapt gate commands, evidence, review, and landing to your project. |
 | [Status card guide](docs/status-card.md) | View an optional read-only example of check outcomes, review verdicts, and owner decisions. |
 | [Benchmark guide](docs/benchmark.md) | Reproduce the pinned benchmark suite and find its results. |
-| [Project board](https://github.com/orgs/spring-labs-inc/projects/2) | Track changes to SpringDev. |
+| [Project board](https://github.com/orgs/spring-labs-inc/projects/2) | Track changes to FlightCheck. |

@@ -1,4 +1,4 @@
-"""Serve the SpringDev status card on IPv4 loopback with no write routes."""
+"""Serve the FlightCheck status card on IPv4 loopback with no write routes."""
 
 import argparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -102,7 +102,7 @@ def main():
         server.snapshot = snapshot
         server.task_file = args.task_status
         server.task_route = route
-        print(f"SpringDev status card at http://127.0.0.1:{server.server_port}{route or '/'}", flush=True)
+        print(f"FlightCheck status card at http://127.0.0.1:{server.server_port}{route or '/'}", flush=True)
         server.serve_forever()
 
 

@@ -1,4 +1,4 @@
-"""Publish a curated SpringDev task snapshot and format flight boundary text."""
+"""Publish a curated FlightCheck task snapshot and format flight boundary text."""
 
 import argparse
 import json
@@ -56,7 +56,7 @@ def chat_status(data, url, phase):
         label = f"[{label}]({url})"
     if phase is None:
         return ""
-    status = f"SpringDev: {label}"
+    status = f"FlightCheck: {label}"
     if phase == "end" and data["verdict"] in VERDICTS:
         status += f"\n\nVerdict: {data['verdict']}"
     return status
