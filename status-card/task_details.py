@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
-LINK_KINDS = ("issue", "epic", "pr")
+LINK_KINDS = ("epic", "issue", "pr")
 CHECK_STATES = ("pending", "running", "passed", "failed", "interrupted", "unavailable")
 CI_STATES = ("pending", "running", "passed", "failed", "cancelled", "skipped", "unavailable")
 COUNT_NAMES = ("passed", "failed", "errors", "skipped", "warnings")
@@ -132,9 +132,10 @@ def normalize_details(data):
     if "stages" in data:
         result["stages"] = stages(data["stages"])
     if "links" in data:
-        result["links"] = sorted(
+        by_recency = sorted(
             rows(data["links"], link), key=lambda row: row.get("created_at", ""), reverse=True,
         )
+        result["links"] = sorted(by_recency, key=lambda row: LINK_KINDS.index(row["kind"]))
     for key, convert in (("checks", check), ("ci", ci_run), ("history", event)):
         if key in data:
             result[key] = rows(data[key], convert)

@@ -177,7 +177,7 @@ class TaskStatusTests(unittest.TestCase):
                 self.publish("--candidate", "first", "--details", str(details))
             self.assertEqual(self.snapshot.read_bytes(), previous)
 
-    def test_work_links_order_by_creation_time_across_types(self):
+    def test_work_links_group_by_type_then_sort_newest_first(self):
         details = self.snapshot.with_name("details.json")
         items = [
             ("issue", "Undated issue", None),
@@ -185,6 +185,7 @@ class TaskStatusTests(unittest.TestCase):
             ("pr", "Newest PR", "2026-01-01T09:00:00-05:00"),
             ("issue", "Newer issue", "2026-01-01T12:00:00Z"),
             ("epic", "Newer epic", "2026-01-01T12:00:00Z"),
+            ("pr", "Older PR", "2026-01-01T13:00:00Z"),
             ("pr", "Undated PR", None),
         ]
         links = [{"kind": kind, "label": label, "url": f"https://example.com/items/{index}",
@@ -195,7 +196,8 @@ class TaskStatusTests(unittest.TestCase):
         status, body = self.request(url)
         self.assertEqual(status, 200)
         self.assertEqual([link["label"] for link in json.loads(body)["links"]],
-                         ["Newest PR", "Newer issue", "Newer epic", "Older epic", "Undated issue", "Undated PR"])
+                         ["Newer epic", "Older epic", "Newer issue", "Undated issue",
+                          "Newest PR", "Older PR", "Undated PR"])
 
     def test_desktop_tab_decisions_use_the_task_route(self):
         visible = {"id": "card", "url": "http://localhost:58213/task/test-task/", "visible": True}
