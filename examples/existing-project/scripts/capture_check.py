@@ -1,6 +1,7 @@
 """Run a project-native check and retain its output in a private run directory."""
 
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -11,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import nullcontext
 from pathlib import Path
 
 ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
@@ -48,10 +50,62 @@ def pytest_summary(log):
     return totals, {"status": status, "count": count}
 
 
-def write_packet(run, packet):
-    pending = run / "run.json.tmp"
-    pending.write_text(json.dumps(packet, indent=2) + "\n", encoding="utf-8")
-    pending.replace(run / "run.json")
+def write_json(path, value):
+    pending = path.with_suffix(".tmp")
+    pending.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+    pending.replace(path)
+
+
+def fingerprint_argv(raw):
+    try:
+        argv = json.loads(raw)
+        if isinstance(argv, list) and argv and all(isinstance(arg, str) and arg for arg in argv):
+            return argv
+    except ValueError:
+        pass
+    raise argparse.ArgumentTypeError("expected a JSON array of command arguments")
+
+
+def fingerprint(command):
+    if command is None:
+        return None
+    try:
+        result = subprocess.run(command, check=False, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE)
+    except OSError:
+        return None
+    return hashlib.sha256(result.stdout).hexdigest() if result.returncode == 0 and result.stdout.strip() else None
+
+
+def latest_run(parent, latest):
+    run_id = json.loads(latest.read_text(encoding="utf-8"))
+    if not isinstance(run_id, str) or not re.fullmatch(r"check-[a-zA-Z0-9_]+", run_id):
+        raise ValueError("Invalid check run identifier")
+    run = parent / run_id
+    packet = json.loads((run / "run.json").read_text(encoding="utf-8"))
+    if packet["run_id"] != run_id:
+        raise ValueError("Check receipt does not match the latest run")
+    return run, packet
+
+
+def matches_pass(run, packet, request, current):
+    if (current is None or packet["request"] != request or packet["status"] != "finished"
+            or packet["exit_code"] != 0 or packet["inputs_before"] != current
+            or packet["inputs_after"] != current):
+        return False
+    output = packet["output"]
+    if (output["path"] != "output.log" or output["status"] != "complete"
+            or digest(run / "output.log") != output["sha256"]):
+        return False
+    return all(digest(run / f"artifact-{index}") == packet["artifacts"][artifact]
+               for index, artifact in enumerate(request["artifacts"]))
+
+
+def previous_pass(parent, latest, request, current):
+    try:
+        run, packet = latest_run(parent, latest)
+        return run if matches_pass(run, packet, request, current) else None
+    except (OSError, ValueError, TypeError, KeyError):
+        return None
 
 
 def run_command(command, output):
@@ -93,26 +147,7 @@ def replay(log):
             os.dup2(sink.fileno(), sys.stdout.fileno())
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--evidence-dir", required=True, type=Path)
-    parser.add_argument("--candidate", required=True, help="Frozen candidate identity")
-    parser.add_argument("--scope", required=True, help="Intended gate coverage")
-    parser.add_argument("--summary", choices=("pytest",), help="Interpret tool-specific totals")
-    parser.add_argument("command", nargs=argparse.REMAINDER)
-    args = parser.parse_args()
-    if len(args.command) < 2 or args.command[0] != "--":
-        parser.error("pass the exact check command after --")
-    if not args.candidate.strip() or not args.scope.strip():
-        parser.error("candidate and scope must be nonempty")
-    command = args.command[1:]
-
-    parent = args.evidence_dir.resolve()
-    worktree = Path.cwd()
-    if parent == worktree or worktree in parent.parents:
-        parser.error("evidence directory must be outside the project checkout")
-    if not parent.is_dir() or parent.stat().st_uid != os.geteuid() or parent.stat().st_mode & 0o077:
-        parser.error("evidence directory must exist and be private to the current user")
+def capture(args, command, worktree, parent, latest, request, before):
     run = Path(tempfile.mkdtemp(prefix="check-", dir=parent))
     log = run / "output.log"
     packet = {
@@ -127,7 +162,13 @@ def main():
         "output": {"path": log.name, "status": "incomplete", "sha256": None},
         "warnings": {"status": "incomplete", "count": None},
     }
-    write_packet(run, packet)
+    if latest:
+        packet.update(request=request, inputs_before=before, inputs_after=None, artifacts={})
+        if args.owner:
+            packet["owner"] = args.owner
+    write_json(run / "run.json", packet)
+    if latest:
+        write_json(latest, run.name)
     print(f"Check evidence: {run}", flush=True)
 
     with log.open("xb") as output:
@@ -137,7 +178,7 @@ def main():
             packet.update(status="unavailable", finished_at=time.time(), error=str(error))
             packet["output"]["status"] = "unavailable"
             packet["warnings"]["status"] = "unavailable"
-            write_packet(run, packet)
+            write_json(run / "run.json", packet)
             print(f"Could not start check: {error}", file=sys.stderr)
             return 127
 
@@ -157,9 +198,77 @@ def main():
         packet["warnings"] = warnings
     elif not interrupted:
         packet["warnings"]["status"] = "unclassified"
-    write_packet(run, packet)
+    if latest and code == 0:
+        for index, artifact in enumerate(args.artifact):
+            retained = run / f"artifact-{index}"
+            try:
+                shutil.copyfile(artifact, retained)
+                packet["artifacts"][artifact] = digest(retained)
+            except OSError as error:
+                print(f"Cannot retain {artifact}: {error}", file=sys.stderr)
+        packet["inputs_after"] = fingerprint(args.fingerprint_command)
+    write_json(run / "run.json", packet)
     replay(log)
     return 128 - code if code < 0 else code
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--evidence-dir", required=True, type=Path)
+    parser.add_argument("--candidate", required=True, help="Frozen candidate identity")
+    parser.add_argument("--scope", required=True, help="Intended gate coverage")
+    parser.add_argument("--summary", choices=("pytest",), help="Interpret tool-specific totals")
+    parser.add_argument("--gate", help="Stable identifier for a reusable check")
+    parser.add_argument("--owner", choices=("worker", "controller"), help="Role responsible for this check run")
+    parser.add_argument("--fingerprint-command", type=fingerprint_argv, help="JSON argv for the gate input probe")
+    parser.add_argument("--artifact", action="append", default=[], help="Report file to retain, repeatable")
+    parser.add_argument("--refresh", action="store_true", help="Run the gate even if a reusable pass exists")
+    parser.add_argument("command", nargs=argparse.REMAINDER)
+    args = parser.parse_args()
+    if len(args.command) < 2 or args.command[0] != "--":
+        parser.error("pass the exact check command after --")
+    if not args.candidate.strip() or not args.scope.strip():
+        parser.error("candidate and scope must be nonempty")
+    command = args.command[1:]
+
+    parent = args.evidence_dir.resolve()
+    worktree = Path.cwd()
+    if parent == worktree or worktree in parent.parents:
+        parser.error("evidence directory must be outside the project checkout")
+    if not parent.is_dir() or parent.stat().st_uid != os.geteuid() or parent.stat().st_mode & 0o077:
+        parser.error("evidence directory must exist and be private to the current user")
+    if args.gate and not re.fullmatch(r"[a-zA-Z0-9_-]+", args.gate):
+        parser.error("--gate must contain only letters, digits, underscores or dashes")
+    if bool(args.gate) != bool(args.fingerprint_command):
+        parser.error("--gate and --fingerprint-command must be used together")
+    if (args.artifact or args.refresh or args.owner) and not args.gate:
+        parser.error("--artifact, --refresh and --owner require --gate")
+
+    latest = parent / f"gate-{args.gate}.json" if args.gate else None
+    lock = latest.with_suffix(".lock").open("a") if latest else nullcontext()
+    request = {
+        "command": command,
+        "scope": args.scope,
+        "summary": args.summary,
+        "fingerprint_command": args.fingerprint_command,
+        "artifacts": args.artifact,
+    }
+    with lock as lock_file:
+        if lock_file:
+            fcntl.flock(lock_file, fcntl.LOCK_EX)
+        before = fingerprint(args.fingerprint_command)
+        if latest and not args.refresh:
+            run = previous_pass(parent, latest, request, before)
+            if run and fingerprint(args.fingerprint_command) == before:
+                reuse = Path(tempfile.mkdtemp(prefix="reuse-", dir=parent))
+                write_json(reuse / "reuse.json", {
+                    "gate": args.gate, "candidate": args.candidate, "cwd": str(worktree),
+                    "source_run_id": run.name, "source_receipt_sha256": digest(run / "run.json"),
+                    "inputs": before, "reused_at": time.time(),
+                })
+                print(f"Check reused: {run} (decision: {reuse / 'reuse.json'})", flush=True)
+                return 0
+        return capture(args, command, worktree, parent, latest, request, before)
 
 
 if __name__ == "__main__":

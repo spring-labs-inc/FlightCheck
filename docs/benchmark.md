@@ -2,6 +2,12 @@
 
 The benchmark answers two questions. Can SpringDev run and retain evidence from different project-native toolchains? How do two independent Codex attempts on the same task compare when one uses the selected SpringDev workflow?
 
+## Latest benchmark results
+
+## Historical benchmark results
+
+[Historical benchmark results](benchmark-history.md)
+
 ## Targets
 
 Use the [source pins](benchmark-pins.json) to restore independent copies of Django, ripgrep, fmt, and jsoup. Keep the same source commit and toolchain within a pair. Record the source archive digest, dependency identities, compiler or interpreter versions, host architecture, and declared test identities before an attempt. Warm dependency caches from equivalent verified seeds and give each attempt its own build directory, temporary files, and evidence store.
@@ -10,24 +16,13 @@ Restore Django and ripgrep from their verified Git bundles. Restore fmt and jsou
 
 Keep the source archives, private evaluator, reference implementation, native outputs, and review records in approved private storage outside the worker checkouts and tracked source. Workers receive a symptom-only task brief, allowed edit scope, required native checks, and the published evaluation criteria. The controller keeps the evaluator implementation and reference separate. A public historical task can still be familiar to a model. Record this limitation alongside the results.
 
+The [Contact handoff benchmark](benchmark-handoff.md) describes the saved-task fixtures and reproduction steps.
+
 ## Preflight and calibration
 
 Restore the exact pin to a clean checkout. Verify that the target can accept the example project instructions, skill, and reviewer definitions without replacing native project policy. Run the frozen native check scope and retain its original output and run packet. Record any compiler, dependency, sandbox, or harness failure separately from a candidate failure.
 
 Run one private evaluator against both the baseline and a known-correct reference. The baseline must exhibit the scoped defect and the reference must satisfy the same evaluator. Record both outputs, any unchanged control cases, and the native suite's expected skips or failures. A passing native suite alone may leave the target defect uncovered.
-
-### Initial calibration
-
-Observed on macOS 27.2 arm64. Each clean pin accepted the SpringDev instruction, skill, and reviewer files without a path collision. Native checks passed again with those files present. Original output and run packets are retained in private calibration storage. The timed arms still need a launch-profile check for actual skill and reviewer discovery.
-
-| Target | Native scope and tools | Evaluator result |
-| --- | --- | --- |
-| Django | Python 3.12.7, SQLite 3.54.0 and an offline hash-checked wheelhouse. Seven ORM modules ran 1,060 baseline tests and 1,064 reference tests, with 27 skips and three expected failures on each. | Baseline rejected with six errors across 18 cases. Reference passed all 18. |
-| ripgrep | Rust/Cargo 1.99.1 with vendored dependencies. Formatting, 78 searcher tests including the doctest, and 320 PCRE2 CLI integration tests passed on each candidate. | The baseline failed the continuing-stdin probe. The reference passed. |
-| fmt | Apple Clang 21.0.0 and CMake/CTest 3.31.6. Argument, formatting, and standard-library test groups passed on each candidate. | A wrapped value whose formatting conversion yields text failed compilation on the baseline. The reference compiled and produced the expected output, including the numeric control. |
-| jsoup | Temurin 21.0.9+10, Maven 3.9.11, and separate copies of the seeded Maven cache. Element and selector suites passed offline, with 368 baseline and 369 reference tests. | The baseline failed the replaced-child consistency assertion. The reference passed with the unaffected sibling preserved. |
-
-The restricted runner initially blocked ripgrep's system `uncompress` access to `/dev/stdout`. The full scope passed with that access available. Both timed arms need the same approved route for this check. The Java cache seed succeeded after a retry. Subsequent Maven checks used offline mode. These observations establish local compatibility for the named scopes. Other hosts, full upstream suites, and live Codex reviewer invocation remain separate checks.
 
 The native preflight commands below assume the pinned tools are available, the target checkout is the working directory, and each run has its own temporary and build directories. Set `fmt_build` and `maven_cache` to the per-run build directory and seeded Maven cache. Use the pinned Python environment and run the Django command with the checkout root on `PYTHONPATH`. For ripgrep, set the per-run Cargo home and target directory, configure its verified vendor source, and place `TMPDIR` outside the Git tree.
 

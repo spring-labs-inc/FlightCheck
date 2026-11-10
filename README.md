@@ -44,8 +44,8 @@ To have Codex adapt the configuration, give it access to the example files and u
 
 1. Select a bounded task and agree on acceptance criteria. Work in a dedicated checkout and give each deterministic criterion a reproducible check.
 2. Implement the change and run the cheap checks. For owner-facing UI, then show interactive HTML with synthetic data and pause for approval of that surface. Show renders only on request.
-3. Run independent CODE review, then applicable focused and broad tests and expensive visual checks. Run tests automatically where the project's permissions and fixtures allow.
-4. Run independent EVIDENCE review against the candidate and original check output. Route the final verdict below.
+3. Apply the [early CODE review criteria](examples/existing-project/docs/development-workflow.md#decide-on-early-code-review) and record the reason for the decision. Then run the remaining required tests and visual checks within the project's permissions.
+4. Give one independent final reviewer the current candidate, acceptance criteria, and verified gate evidence. Route the final verdict below.
 
 | Verdict | Action |
 | --- | --- |
@@ -63,4 +63,5 @@ Repair failures with the cheapest affected check first. Reuse a pass only when t
 | [Example project layout](examples/existing-project/README.md) | Review the exact paths for instructions, skill, reviewer TOML, hooks JSON, rules, and optional Python test dependencies. |
 | [Workflow guide](examples/existing-project/docs/development-workflow.md) | Adapt gate commands, evidence, review, and landing to your project. |
 | [Status card guide](docs/status-card.md) | View an optional read-only example of check outcomes, review verdicts, and owner decisions. |
+| [Benchmark guide](docs/benchmark.md) | Reproduce the pinned benchmark suite and find its results. |
 | [Project board](https://github.com/orgs/spring-labs-inc/projects/2) | Track changes to SpringDev. |
