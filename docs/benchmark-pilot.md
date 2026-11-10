@@ -1,6 +1,6 @@
 # Paired benchmark pilot plan
 
-Proposed first pair for [SpringDev #13](https://github.com/spring-labs-inc/SpringDev/issues/13). The pilot starts after owner approval and launch preflight.
+Proposed first pair for [FlightCheck #13](https://github.com/spring-labs-inc/FlightCheck/issues/13). The pilot starts after owner approval and launch preflight.
 
 The approved run is documented in the [paired pilot result](benchmark-pilot-result.md).
 
@@ -14,7 +14,7 @@ Give both arms the same symptom-only brief, a bounded code-and-test scope, and t
 
 | Item | Proposed setting |
 | --- | --- |
-| Attempts | One SpringDev-selected Codex session and one ordinary Codex session. Use fresh independent contexts and record the exact effective model and effort for both. |
+| Attempts | One Codex session using FlightCheck and one ordinary Codex session. Use fresh independent contexts and record the exact effective model and effort for both. |
 | Host and dependencies | Same arm64 host, verified Rust/Cargo toolchain, identical locked vendored dependencies, separate Cargo home, build output and scratch per arm. Use equivalent starting build-cache state and keep provisioning outside measured time. |
 | Native checks | `cargo fmt --all --check`, `cargo test --frozen -p grep-searcher`, and `cargo test --frozen --features pcre2 --test integration`. Expect the 398 baseline test identities plus any new acceptance tests. Verify equivalent permission for the system decompressor in both arms. |
 | External evaluation | Same controller-only pipe evaluator and common independent reviewer brief for both arms. Review the endpoint candidate and current native evidence. |

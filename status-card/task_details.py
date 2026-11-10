@@ -157,7 +157,7 @@ def rows(value, convert):
 
 def stages(value):
     if not isinstance(value, dict) or value.keys() - set(STAGE_NAMES):
-        raise ValueError("Expected SpringDev workflow stage names")
+        raise ValueError("Expected FlightCheck workflow stage names")
     result = {name: choice(value.get(name, "pending"), STAGE_STATES) for name in STAGE_NAMES}
     if sum(state == "current" for state in result.values()) > 1:
         raise ValueError("Only one workflow stage can be current")

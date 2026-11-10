@@ -38,7 +38,7 @@ class TaskStatusTests(unittest.TestCase):
 
         self.addCleanup(stop)
         startup = process.stdout.readline()
-        self.assertTrue(startup.startswith("SpringDev status card at http://127.0.0.1:"), startup)
+        self.assertTrue(startup.startswith("FlightCheck status card at http://127.0.0.1:"), startup)
         return startup.split()[-1]
 
     def request(self, url, method="GET"):
@@ -63,7 +63,7 @@ class TaskStatusTests(unittest.TestCase):
             self.assertEqual(status, 200)
             return json.loads(body)
 
-        status_line = f"SpringDev: [&lt; status /&gt;]({url})"
+        status_line = f"FlightCheck: [&lt; status /&gt;]({url})"
         self.assertEqual(self.publish("--url", url, "--chat-phase", "start"), status_line)
         self.assertEqual(current()["verdict"], "Pending")
         candidate = ("--candidate", "first", "--verdict", "APPROVE_WITH_NITS",

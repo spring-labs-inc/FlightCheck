@@ -1,5 +1,5 @@
 {
-  "schema": "springdev.benchmark-pins/1",
+  "schema": "flightcheck.benchmark-pins/1",
   "targets": [
     {
       "id": "django-composite-query",

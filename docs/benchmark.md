@@ -1,6 +1,6 @@
-# SpringDev benchmark
+# FlightCheck benchmark
 
-The benchmark answers two questions. Can SpringDev run and retain evidence from different project-native toolchains? How do two independent Codex attempts on the same task compare when one uses the selected SpringDev workflow?
+The benchmark answers two questions. Can FlightCheck run and retain evidence from different project-native toolchains? How do two independent Codex attempts on the same task compare when one uses the selected FlightCheck workflow?
 
 ## Latest benchmark results
 
@@ -45,8 +45,8 @@ Freeze one common task brief, two condition briefs, a common external reviewer b
 
 | Condition | Workflow |
 | --- | --- |
-| SpringDev selected | Run the task with the SpringDev repository-local configuration and explicitly select the workflow. Count its checks, reviews, repair and waits as part of the condition. |
-| Ordinary Codex | Give Codex the same task and acceptance information with ordinary project instructions. Verify that no SpringDev workflow instructions or skill are effective in this checkout. |
+| FlightCheck selected | Run the task with the FlightCheck repository-local configuration and explicitly select the workflow. Count its checks, reviews, repair and waits as part of the condition. |
+| Ordinary Codex | Give Codex the same task and acceptance information with ordinary project instructions. Verify that no FlightCheck workflow instructions or skill are effective in this checkout. |
 
 Keep the base, task, acceptance bar, model, effort, permissions, native tools, and cache starting state equivalent. Start fresh independent sessions and prevent cross-arm evidence access. Give both candidates the same external evaluator and independent review standard. Freeze the assistance policy and apply it equally. Use independent private run packets and verify digests against original tool output. Project-native checks can use an equivalent recorder where available.
 

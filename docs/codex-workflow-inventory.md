@@ -1,6 +1,6 @@
 # Codex workflow inventory
 
-This guide maps Codex configuration, instructions, verification, and permission boundaries to the [SpringDev adoption example][adoption]. The original inspection is recorded in [SpringDev #1][issue].
+This guide maps Codex configuration, instructions, verification, and permission boundaries to the [FlightCheck adoption example][adoption]. The original inspection is recorded in [FlightCheck #1][issue].
 
 ## Codex configuration layers
 
@@ -22,7 +22,7 @@ Managed requirements can constrain settings independently of this precedence. Ch
 
 Codex loads one nonempty instruction file from its home, then walks the project root-to-working-directory chain. At each project directory it prefers `AGENTS.override.md`, then `AGENTS.md`, then configured fallback names. The default project instruction budget is 32 KiB. Start a fresh session to verify what loads. [Instruction discovery][agents-md]
 
-| Surface | SpringDev use |
+| Surface | FlightCheck use |
 | --- | --- |
 | Global `AGENTS.md` or override | Keep personal guidance that applies across repositories. |
 | Project `AGENTS.md` or nested override | Record durable project rules, command boundaries, and workflow selection. Use nested instructions for scoped requirements. |
@@ -34,7 +34,7 @@ Codex loads one nonempty instruction file from its home, then walks the project 
 
 ## Hooks, tools, and triggers
 
-| Surface | SpringDev use |
+| Surface | FlightCheck use |
 | --- | --- |
 | `.codex/hooks.json` and other hook sources | Use a hook for an observable need tied to a supported event. Inspect active user, project, managed, and plugin sources. Confirm trust and test the event before relying on it. Use the owner request to select a workflow. [Codex hooks][hooks] |
 | `.codex/rules/*.rules` and user rules | Use narrow command prefixes for execution outside the sandbox. Check the effective decision and test the command parser separately. [Codex command rules][rules] |
@@ -51,7 +51,7 @@ Codex loads one nonempty instruction file from its home, then walks the project 
 3. Exercise an ordinary request and an explicitly selected workflow. Use `codex execpolicy check --rules <file> -- <command>` to evaluate command tokens without running the target. Record what was configured, what was observed, and what still needs a live probe.
 4. Verify the project's native checks, evidence locations, and independent review boundaries on a small task. Use the [workflow guide][workflow] for check scope, evidence reuse, and landing decisions.
 
-[issue]: https://github.com/spring-labs-inc/SpringDev/issues/1
+[issue]: https://github.com/spring-labs-inc/FlightCheck/issues/1
 [adoption]: ../examples/existing-project/README.md
 [claude-example]: ../examples/existing-project/CLAUDE.md
 [workflow]: ../examples/existing-project/docs/development-workflow.md

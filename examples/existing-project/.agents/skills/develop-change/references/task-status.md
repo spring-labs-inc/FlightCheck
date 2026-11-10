@@ -10,7 +10,7 @@ Give each work link a short reference such as `#12`. Include the title, a brief 
 
 Publish the checkout's short display name as `worktree`. Keep the filesystem path in the private workflow record. Update the name if the task moves to another checkout.
 
-Publish a `stages` map using the SpringDev stage names. Mark stages completed after their requirements are met, skipped when they do not apply, and current at the actual active stage. On a repair return, update the map to show the return and the stages whose evidence remains valid. On a candidate change, provide the newly verified map alongside the candidate or leave stages unpublished until verified.
+Publish a `stages` map using the FlightCheck stage names. Mark stages completed after their requirements are met, skipped when they do not apply, and current at the actual active stage. On a repair return, update the map to show the return and the stages whose evidence remains valid. On a candidate change, provide the newly verified map alongside the candidate or leave stages unpublished until verified.
 
 For a linked issue with a recorded flight association, include that flight's task ID as `flight`. For other flights, publish candidate-bound stages in `tracked_flights` using the actual workflow records. Refresh those observations on stage or candidate changes. If the new candidate has no recorded stage, clear the previous stage for that flight.
 
@@ -35,6 +35,6 @@ Check the displayed task, route diagnostic, and `Snapshot rendered` separately. 
 
 ## Opening and closing replies
 
-Put the status line at the top of the opening workflow reply when the owner first invokes SpringDev for a flight. Put the closing status block at the bottom of the reply that ends that flight. Use the same task URL at both boundaries. Leave the status block out of intermediate updates, approval pauses, repairs, resumes of the same flight, and ordinary chat.
+Put the status line at the top of the opening workflow reply when the owner first invokes FlightCheck for a flight. Put the closing status block at the bottom of the reply that ends that flight. Use the same task URL at both boundaries. Leave the status block out of intermediate updates, approval pauses, repairs, resumes of the same flight, and ordinary chat.
 
-Use the publisher's `--chat-phase start` or `--chat-phase end` output, or format the line as `SpringDev: [&lt; status /&gt;](TASK_URL)`. When no task URL is usable, leave the label as plain text. At the end, put `Verdict: <actual verdict>` on its own line below the status line if the current candidate has a recorded verdict. Leave that line out when the verdict is pending. Keep publishing snapshot updates without `--chat-phase` between the two replies.
+Use the publisher's `--chat-phase start` or `--chat-phase end` output, or format the line as `FlightCheck: [&lt; status /&gt;](TASK_URL)`. When no task URL is usable, leave the label as plain text. At the end, put `Verdict: <actual verdict>` on its own line below the status line if the current candidate has a recorded verdict. Leave that line out when the verdict is pending. Keep publishing snapshot updates without `--chat-phase` between the two replies.
