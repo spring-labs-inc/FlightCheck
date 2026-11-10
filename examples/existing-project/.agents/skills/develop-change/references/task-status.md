@@ -6,6 +6,8 @@ Use the status card only within a selected workflow. On first activation with a 
 
 Use the publisher's `--details` option for curated JSON updates. At activation publish the agreed issue and epic links, and add the verified PR link when it exists. On each check start and outcome, publish the latest check summaries from recorded native evidence, including counts only when reported. When the project uses CI and the workflow observes a provider result, publish its PR or post-merge status with the checked commit, candidate, observation time, and run URL when known.
 
+Include each linked item's tracker creation time as `created_at` when available so the newest work links appear first.
+
 Publish a `stages` map using the SpringDev stage names. Mark stages completed after their requirements are met, skipped when they do not apply, and current at the actual active stage. On a repair return, update the map to show the return and the stages whose evidence remains valid. On a candidate change, provide the newly verified map alongside the candidate or leave stages unpublished until verified.
 
 Append iteration events for actual repair returns, check reruns, and independent review outcomes. Reuse IDs from the underlying records so a resume or retry cannot duplicate history. Keep earlier events and record new attempts separately. The active workflow publishes updates from parallel checks through the same task snapshot. Keep raw evidence and secrets private. Treat all card content as informational.

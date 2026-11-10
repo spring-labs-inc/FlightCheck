@@ -52,11 +52,14 @@ def timestamp(value):
 
 
 def link(row):
-    return {
+    result = {
         "kind": choice(row.get("kind"), LINK_KINDS),
         "label": short_text(row.get("label")),
         "url": https_url(row.get("url")),
     }
+    if row.get("created_at") is not None:
+        result["created_at"] = timestamp(row["created_at"])
+    return result
 
 
 def observation(row, states):
@@ -126,7 +129,11 @@ def normalize_details(data):
     result = {}
     if "stages" in data:
         result["stages"] = stages(data["stages"])
-    for key, convert in (("links", link), ("checks", check), ("ci", ci_run), ("history", event)):
+    if "links" in data:
+        result["links"] = sorted(
+            rows(data["links"], link), key=lambda row: row.get("created_at", ""), reverse=True,
+        )
+    for key, convert in (("checks", check), ("ci", ci_run), ("history", event)):
         if key in data:
             result[key] = rows(data[key], convert)
     return result

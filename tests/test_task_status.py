@@ -176,6 +176,26 @@ class TaskStatusTests(unittest.TestCase):
                 self.publish("--candidate", "first", "--details", str(details))
             self.assertEqual(self.snapshot.read_bytes(), previous)
 
+    def test_work_links_order_by_creation_time_across_types(self):
+        details = self.snapshot.with_name("details.json")
+        items = [
+            ("issue", "Undated issue", None),
+            ("epic", "Older epic", "2026-01-01T10:00:00Z"),
+            ("pr", "Newest PR", "2026-01-01T09:00:00-05:00"),
+            ("issue", "Newer issue", "2026-01-01T12:00:00Z"),
+            ("epic", "Newer epic", "2026-01-01T12:00:00Z"),
+            ("pr", "Undated PR", None),
+        ]
+        links = [{"kind": kind, "label": label, "url": f"https://example.com/items/{index}",
+                  "created_at": created_at} for index, (kind, label, created_at) in enumerate(items)]
+        details.write_text(json.dumps({"links": links}))
+        self.publish("--details", str(details))
+        url = self.start("--task-status", str(self.snapshot)) + "status.json"
+        status, body = self.request(url)
+        self.assertEqual(status, 200)
+        self.assertEqual([link["label"] for link in json.loads(body)["links"]],
+                         ["Newest PR", "Newer issue", "Newer epic", "Older epic", "Undated issue", "Undated PR"])
+
     def test_desktop_tab_decisions_use_the_task_route(self):
         visible = {"id": "card", "url": "http://localhost:58213/task/test-task/", "visible": True}
         hidden = {**visible, "visible": False}
