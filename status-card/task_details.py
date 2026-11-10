@@ -8,6 +8,12 @@ CHECK_STATES = ("pending", "running", "passed", "failed", "interrupted", "unavai
 CI_STATES = ("pending", "running", "passed", "failed", "cancelled", "skipped", "unavailable")
 COUNT_NAMES = ("passed", "failed", "errors", "skipped", "warnings")
 EVENT_KINDS = ("repair", "rerun", "review")
+STAGE_NAMES = (
+    "Plan", "Implement", "Cheap Tests", "Interactive UI Approval",
+    "Independent Code Review", "Authoritative Gates", "Skeptical Evidence Review",
+    "Final Verdict", "PR & Merge",
+)
+STAGE_STATES = ("completed", "current", "skipped", "pending")
 
 
 def short_text(value):
@@ -107,8 +113,19 @@ def rows(value, convert):
     return [convert(row) for row in value]
 
 
+def stages(value):
+    if not isinstance(value, dict) or value.keys() - set(STAGE_NAMES):
+        raise ValueError("Expected SpringDev workflow stage names")
+    result = {name: choice(value.get(name, "pending"), STAGE_STATES) for name in STAGE_NAMES}
+    if sum(state == "current" for state in result.values()) > 1:
+        raise ValueError("Only one workflow stage can be current")
+    return result
+
+
 def normalize_details(data):
     result = {}
+    if "stages" in data:
+        result["stages"] = stages(data["stages"])
     for key, convert in (("links", link), ("checks", check), ("ci", ci_run), ("history", event)):
         if key in data:
             result[key] = rows(data[key], convert)
@@ -117,10 +134,12 @@ def normalize_details(data):
 
 def update_details(previous, details, candidate):
     """Apply explicit section updates and append only new, recorded events."""
-    if not isinstance(details, dict) or details.keys() - {"links", "checks", "ci", "events"}:
-        raise ValueError("Expected a details object with links, checks, ci, or events")
+    if not isinstance(details, dict) or details.keys() - {"links", "checks", "ci", "events", "stages"}:
+        raise ValueError("Expected a details object with stages, links, checks, ci, or events")
     update = normalize_details(details)
     result = {**normalize_details(previous), **update}
+    if previous.get("candidate") != candidate and "stages" not in update:
+        result.pop("stages", None)
     for key in ("checks", "ci"):
         if key in result:
             for row in result[key]:

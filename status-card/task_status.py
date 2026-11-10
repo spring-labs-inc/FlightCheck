@@ -93,7 +93,7 @@ def main():
     parser.add_argument("--candidate", default="")
     parser.add_argument("--verdict", choices=VERDICTS)
     parser.add_argument("--verdict-candidate")
-    parser.add_argument("--details", type=Path, help="Private JSON with curated links, checks, CI, or events")
+    parser.add_argument("--details", type=Path, help="Private JSON with curated stages, links, checks, CI, or events")
     parser.add_argument("--url", help="Published loopback URL for this task")
     parser.add_argument("--chat-phase", choices=("start", "end"), help="Print chat text for a flight boundary")
     args = parser.parse_args()

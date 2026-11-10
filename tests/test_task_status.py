@@ -97,6 +97,34 @@ class TaskStatusTests(unittest.TestCase):
         self.assertEqual(len(snapshot["gates"]), 8)
         self.assertEqual(self.request(url + "task/test-task/")[0], 404)
 
+    def test_workflow_stage_map_follows_explicit_progress_and_candidate(self):
+        details = self.snapshot.with_name("details.json")
+        stages = {"Authoritative Gates": "current", "Plan": "completed", "Interactive UI Approval": "skipped"}
+        details.write_text(json.dumps({"stages": stages}))
+        self.publish("--candidate", "first", "--details", str(details))
+        url = self.start("--task-status", str(self.snapshot)) + "status.json"
+
+        def current():
+            status, body = self.request(url)
+            self.assertEqual(status, 200)
+            return json.loads(body)
+
+        published = current()["stages"]
+        self.assertEqual(len(published), 9)
+        self.assertEqual(next(iter(published)), "Plan")
+        self.assertEqual(published["Interactive UI Approval"], "skipped")
+        self.assertEqual(published["Authoritative Gates"], "current")
+        self.assertEqual(published["PR & Merge"], "pending")
+        self.publish("--candidate", "first")
+        self.assertEqual(current()["stages"], published)
+
+        details.write_text(json.dumps({"stages": {**stages, "Implement": "current"}}))
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.publish("--candidate", "first", "--details", str(details))
+        self.assertEqual(current()["stages"], published)
+        self.publish("--candidate", "second")
+        self.assertNotIn("stages", current())
+
     def test_live_details_survive_resume_and_keep_older_evidence_stale(self):
         details = self.snapshot.with_name("details.json")
         observed = "2026-01-01T12:00:00Z"

@@ -8,7 +8,7 @@
   <script src="/task.js" defer></script>
 </head>
 <body>
-  <main class="shell">
+  <main class="shell task-card">
     <header class="masthead">
       <div class="identity"><span class="mark" aria-hidden="true">S</span><span>SpringDev <span class="muted">/ Status</span></span></div>
     </header>
@@ -30,14 +30,22 @@
         <h2 id="links-title">Work links</h2>
         <ul class="work-links" id="links"></ul>
       </nav>
-      <section class="panel" id="checks-panel" aria-labelledby="checks-title" hidden>
-        <h2 id="checks-title">Local checks</h2>
-        <ul class="gates" id="checks"></ul>
-      </section>
-      <section class="panel" id="ci-panel" aria-labelledby="ci-title" hidden>
-        <h2 id="ci-title">CI observations</h2>
-        <ul class="gates" id="ci"></ul>
-      </section>
+      <div class="task-overview" id="overview" hidden>
+        <section class="panel" id="stages-panel" aria-labelledby="stages-title" hidden>
+          <h2 id="stages-title">Workflow stages</h2>
+          <ol class="task-stages" id="stages" role="list"></ol>
+        </section>
+        <div class="task-evidence" id="evidence" hidden>
+          <section class="panel" id="checks-panel" aria-labelledby="checks-title" hidden>
+            <h2 id="checks-title">Local checks</h2>
+            <ul class="gates" id="checks"></ul>
+          </section>
+          <section class="panel" id="ci-panel" aria-labelledby="ci-title" hidden>
+            <h2 id="ci-title">CI observations</h2>
+            <ul class="gates" id="ci"></ul>
+          </section>
+        </div>
+      </div>
       <details class="panel" id="history-panel" hidden>
         <summary>Iteration history <span class="pill" id="history-count"></span></summary>
         <ol class="gates" id="history"></ol>

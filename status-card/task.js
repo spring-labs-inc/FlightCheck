@@ -55,10 +55,26 @@ function fill(id, rows, render) {
   byId(id).replaceChildren(...rows.map(render));
 }
 
+function stageRow([name, state]) {
+  const marks = { completed: "✓", current: "→", skipped: "-", pending: "·" };
+  const row = element("li", "");
+  const mark = element("span", marks[state]);
+  mark.setAttribute("aria-hidden", "true");
+  row.dataset.state = state;
+  if (state === "current") row.setAttribute("aria-current", "step");
+  const label = state === "current" ? `[ ${name} ]` : name;
+  const status = element("span", ` (${state})`, state === "skipped" ? "" : "visually-hidden");
+  const description = element("span", label);
+  description.append(status);
+  row.append(mark, description);
+  return row;
+}
+
 let lastDetails;
 function renderDetails(data) {
-  const { candidate, links = [], checks = [], ci = [], history = [] } = data;
-  const fingerprint = JSON.stringify([candidate, links, checks, ci, history]);
+  const { candidate, stages = {}, links = [], checks = [], ci = [], history = [] } = data;
+  const stageEntries = Object.entries(stages);
+  const fingerprint = JSON.stringify([candidate, stageEntries, links, checks, ci, history]);
   if (fingerprint !== lastDetails) {
     const kinds = { issue: "Issue", epic: "Epic", pr: "PR" };
     fill("links", links, ({ kind, label, url }) => {
@@ -66,6 +82,9 @@ function renderDetails(data) {
       row.append(element("span", kinds[kind], "pill"), link(label, url));
       return row;
     });
+    fill("stages", stageEntries, stageRow);
+    byId("overview").hidden = !stageEntries.length && !checks.length && !ci.length;
+    byId("evidence").hidden = !checks.length && !ci.length;
     fill("checks", checks, (check) => observationRow(check, candidate,
       Object.entries(check.counts).map(([label, count]) => `${count} ${label}`).join(" · ")));
     fill("ci", ci, (run) => observationRow(run, candidate,
@@ -84,7 +103,7 @@ function renderDetails(data) {
     setText("history-count", String(history.length));
     lastDetails = fingerprint;
   }
-  byId("task-details").hidden = ![links, checks, ci, history].some((rows) => rows.length);
+  byId("task-details").hidden = ![stageEntries, links, checks, ci, history].some((rows) => rows.length);
 }
 
 async function refresh() {

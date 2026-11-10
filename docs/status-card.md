@@ -27,6 +27,13 @@ Pass `--details /private/path/details.json` to the same publisher command. Use o
 
 ```json
 {
+  "stages": {
+    "Plan": "completed",
+    "Implement": "completed",
+    "Cheap Tests": "completed",
+    "Interactive UI Approval": "skipped",
+    "Independent Code Review": "current"
+  },
   "links": [
     {"kind": "epic", "label": "Epic #10", "url": "https://example.com/issues/10"},
     {"kind": "issue", "label": "Issue #12", "url": "https://example.com/issues/12"},
@@ -44,6 +51,7 @@ Pass `--details /private/path/details.json` to the same publisher command. Use o
 }
 ```
 
+- **Stages** reflect the workflow's recorded progress. Use the nine stage names from the README and the states `completed`, `current`, `skipped`, and `pending`. Supply at most one current stage. Unlisted stages default to pending. Publish the new stage map when the workflow advances or returns for repair. The card keeps the last map for the same candidate and clears it on a candidate change unless the update supplies a new map.
 - **Links** come from the agreed scope and recorded PR. Use HTTPS destinations without credentials or query parameters.
 - **Checks** summarize the latest observation per check group from the project's native evidence. Publish starts and outcomes as they occur. For the example capture script, use the `run.json` candidate, start or finish time, status and exit code. Add counts only when the tool reports them. A newer failure, interruption, or incomplete attempt takes the place of an earlier pass. Use `pending`, `running`, `passed`, `failed`, `interrupted`, or `unavailable`.
 - **CI** is optional. Publish an observed `pr` or `post-merge` result with the commit the provider checked and the task candidate it belongs to. Include the run URL and attempt when known. Use `pending`, `running`, `passed`, `failed`, `cancelled`, `skipped`, or `unavailable`. The card shows the recorded observation time and does not query the provider.
