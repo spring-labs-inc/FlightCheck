@@ -7,19 +7,22 @@
      ██  ██       ██  ██     ██    ██   ███  ██   ██  ██  ██   ██         ████
 ██████   ██       ██   ██  ██████  ██    ██   █████   █████    ███████     ██
 
+
     01 PLAN
       02 IMPLEMENT
-      03 CHEAP CHECKS
-      04 INTERACTIVE HTML APPROVAL  (UI only)
+      03 CHEAP TESTS
 
-    05 INDEPENDENT CODE REVIEW
+    04 INTERACTIVE UI APPROVAL
+      05 INDEPENDENT CODE REVIEW
       06 AUTHORITATIVE GATES
       07 SKEPTICAL EVIDENCE REVIEW
       08 FINAL VERDICT
-      09 LAND UNDER THE RECORDED GRANT
+      09 PR & MERGE
 ```
 
 # SpringDev
+
+<img align="right" width="380" src="docs/status-card-preview.png" alt="SpringDev example status card showing seven passing automated checks, test counts, and an APPROVE verdict">
 
 SpringDev is a set of repository instructions and Codex configuration examples for taking a change from request to verified merge. It gives maintainers a repeatable way to run their own checks, review interactive HTML for UI changes, and see the evidence behind a landing decision.
 
@@ -34,6 +37,8 @@ Open your **existing project** in Codex. Review the [example project layout](exa
 To have Codex adapt the configuration, give it access to the example files and use this prompt in your existing repository:
 
 > Review the SpringDev example project and my repository's current instructions, test commands, permissions, and delivery rules. Propose the smallest project-local diff. Adapt the workflow and reviewer files to my tools, preserve my existing policy, and verify the setup. Ask me to resolve any permission or delivery decisions that are missing.
+
+<br clear="right">
 
 ### The workflow
 
