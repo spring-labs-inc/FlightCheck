@@ -29,7 +29,7 @@ Record a verdict for the synthetic candidate, then change the candidate while re
 
 ## Historical pilot
 
-The read-only card shows the Contact us pilot's reviewed candidate, eight observed checks, independent verdict, and separate presentation and landing decisions. [Pilot summary](https://github.com/spring-labs-inc/SpringDev/issues/5) · [Spring workflow rollout](https://github.com/spring-labs-inc/Spring/pull/455)
+The read-only card shows the Contact us pilot's reviewed candidate, eight observed checks, independent verdict, and separate presentation and landing decisions. [Pilot closeout and rollout record](https://github.com/spring-labs-inc/SpringDev/issues/5)
 
 ### View the pilot card
 
@@ -59,4 +59,4 @@ On November 9, 2026, the forwarded tab reported `ERR_CONNECTION_RESET` after the
 
 The card serves only the HTML, CSS, JavaScript, and the curated `status-card/pilot.json` snapshot. It exposes no raw evidence files and accepts only reads. It has no owner-response, issue mutation, delivery, or deployment controls.
 
-The snapshot is maintained by editing the curated JSON from verified evidence. Its review time is the observed pilot verdict time, and its cutover time is the verified merge time. It does not poll GitHub, Spring, or FlightCheck. Update the snapshot only when a new recorded observation is available, then restart the loopback server. Owner decisions and the warning-capture follow-up stay on the tracker. [SpringDev #5](https://github.com/spring-labs-inc/SpringDev/issues/5) · [SpringDev #6](https://github.com/spring-labs-inc/SpringDev/issues/6)
+The server reads the curated JSON at startup. Its review time is the observed pilot verdict time, and its cutover time is the verified merge time. Update the snapshot from verified evidence when a new observation is recorded, then restart the loopback server. Owner decisions and the warning-capture follow-up stay on the tracker. [SpringDev #5](https://github.com/spring-labs-inc/SpringDev/issues/5) · [SpringDev #6](https://github.com/spring-labs-inc/SpringDev/issues/6)
