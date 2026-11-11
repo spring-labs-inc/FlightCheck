@@ -55,11 +55,11 @@ class MaintainerCardTests(unittest.TestCase):
             cwd=subdir, env=self.env, timeout=8,
         ))
 
-    def card(self, *args):
+    def card(self, *args, checkout=None):
         return subprocess.check_output(
             [sys.executable, "-B", "status-card/maintainer.py", "card",
              "--task", "test-change", "--title", "Synthetic implementation", *args],
-            cwd=self.checkout, env=self.env, text=True, timeout=8,
+            cwd=checkout or self.checkout, env=self.env, text=True, timeout=8,
         ).strip()
 
     def endpoint(self):
@@ -138,6 +138,63 @@ class MaintainerCardTests(unittest.TestCase):
         self.assertNotEqual(restarted_pid, pid)
         self.assertEqual(json.loads(self.request(footer, "status.json"))["summary"],
                          "Keep this summary on resume.")
+
+    def test_checkout_label_tracks_primary_branch_linked_worktree_and_detached_head(self):
+        self.run_git("switch", "-c", "codex/primary-label")
+        details = self.state.parent / "legacy-details.json"
+        details.write_text(json.dumps({"worktree": "old label"}))
+        footer = self.card("--details", str(details))
+        self.addCleanup(self.stop_listener, self.endpoint()["pid"])
+
+        primary = json.loads(self.request(footer, "status.json"))
+        self.assertEqual(primary["branch"], "codex/primary-label")
+        self.assertNotIn("worktree", primary)
+
+        linked = self.checkout.parent / "linked checkout"
+        self.run_git("worktree", "add", "-b", "codex/linked-branch", str(linked))
+        self.assertEqual(self.card(checkout=linked), footer)
+        worktree = json.loads(self.request(footer, "status.json"))
+        self.assertEqual(worktree["worktree"], "linked checkout")
+        self.assertNotIn("branch", worktree)
+
+        self.run_git("switch", "--detach")
+        self.assertEqual(self.card(), footer)
+        detached = json.loads(self.request(footer, "status.json"))
+        self.assertNotIn("branch", detached)
+        self.assertNotIn("worktree", detached)
+
+    def test_resume_replaces_an_older_listener_that_drops_branch_metadata(self):
+        self.run_git("switch", "-c", "codex/upgrade-label")
+        server = self.checkout / "status-card/serve.py"
+        server_source = server.read_text()
+        legacy_source = server.with_name("legacy_serve.py")
+        legacy_source.write_text(server_source)
+        server.write_text(
+            "import legacy_serve\n"
+            "read_task = legacy_serve.read_task\n"
+            "def legacy_read_task(path):\n"
+            "    snapshot = read_task(path)\n"
+            "    snapshot.pop('branch', None)\n"
+            "    return snapshot\n"
+            "legacy_serve.read_task = legacy_read_task\n"
+            "legacy_serve.main()\n"
+        )
+        self.run_git("switch", "--detach")
+        footer = self.card()
+        legacy_pid = self.endpoint()["pid"]
+        self.addCleanup(self.stop_listener, legacy_pid)
+        self.assertNotIn("branch", json.loads(self.request(footer, "status.json")))
+
+        server.write_text(server_source)
+        legacy_source.unlink()
+        self.run_git("switch", "codex/upgrade-label")
+        self.assertEqual(self.card(), footer)
+        upgraded_pid = self.endpoint()["pid"]
+        self.addCleanup(self.stop_listener, upgraded_pid)
+        self.assertNotEqual(upgraded_pid, legacy_pid)
+        self.assertEqual(json.loads(self.request(footer, "status.json"))["branch"], "codex/upgrade-label")
+        self.assertEqual(self.card(), footer)
+        self.assertEqual(self.endpoint()["pid"], upgraded_pid)
 
     def test_adoption_template_keeps_explicit_selection(self):
         example = ROOT / "examples/existing-project"
