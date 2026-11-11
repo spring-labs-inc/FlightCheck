@@ -1,4 +1,4 @@
-"""Exercise the maintainer footer through the configured Codex hooks."""
+"""Exercise maintainer footer handling and task-card publication."""
 
 import json
 import os
@@ -26,11 +26,7 @@ class MaintainerCardTests(unittest.TestCase):
         self.readme = self.checkout / "README.md"
         self.readme.write_text("Original\n")
         shutil.copytree(ROOT / "status-card", self.checkout / "status-card")
-        hooks = self.checkout / ".codex/hooks.json"
-        hooks.parent.mkdir()
         shutil.copyfile(ROOT / "AGENTS.md", self.checkout / "AGENTS.md")
-        shutil.copyfile(ROOT / ".codex/hooks.json", hooks)
-        self.hooks = json.loads(hooks.read_text())["hooks"]
         self.state = root / "state"
         self.session = "test-maintainer-session"
         self.env = dict(os.environ, FLIGHTCHECK_STATE_DIR=str(self.state), CODEX_THREAD_ID=self.session)
@@ -46,12 +42,12 @@ class MaintainerCardTests(unittest.TestCase):
         )
 
     def hook(self, event, turn, reply=None, retried=False):
-        handler = self.hooks[event][0]["hooks"][0]["command"]
         subdir = self.checkout / "status-card"
         payload = {"hook_event_name": event, "cwd": str(subdir), "session_id": self.session,
                    "turn_id": turn, "last_assistant_message": reply, "stop_hook_active": retried}
         return json.loads(subprocess.check_output(
-            ["/bin/sh", "-c", handler], input=json.dumps(payload), text=True,
+            [sys.executable, "-B", str(self.checkout / "status-card/maintainer.py"), "hook"],
+            input=json.dumps(payload), text=True,
             cwd=subdir, env=self.env, timeout=8,
         ))
 
