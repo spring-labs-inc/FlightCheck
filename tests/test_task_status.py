@@ -323,7 +323,8 @@ class TaskStatusTests(unittest.TestCase):
         expected = [name for _, name in re.findall(r"^[ \t]*(\d{2}) ([A-Z][A-Z &]+?)[ \t]*$", readme, re.MULTILINE)]
         self.publish("--candidate", "first")
         snapshot = json.loads(self.snapshot.read_text())
-        snapshot.update(stages={"PR & Merge": "completed", "Final Verdict": "completed",
+        snapshot.update(verdict="APPROVE", verdict_candidate="first",
+                        stages={"PR & Merge": "completed", "Final Verdict": "completed",
                                 "Implement": "current", "Plan": "completed",
                                 "Interactive UI Approval": "skipped"},
                         stage_updated_at={"PR & Merge": "2030-01-01T12:00:00Z"})
@@ -331,7 +332,10 @@ class TaskStatusTests(unittest.TestCase):
         url = self.start("--task-status", str(self.snapshot)) + "status.json"
         status, body = self.request(url)
         self.assertEqual(status, 200)
-        stages = json.loads(body)["stages"]
+        current = json.loads(body)
+        stages = current["stages"]
+        self.assertEqual(current["verdict"], "Pending")
+        self.assertIsNone(current["verdict_candidate"])
         self.assertEqual([name.upper() for name in stages], expected)
         self.assertEqual(stages["Implement"], "current")
         self.assertEqual(stages["Final Verdict"], "pending")
@@ -341,6 +345,19 @@ class TaskStatusTests(unittest.TestCase):
         details.write_text(json.dumps({"stages": {"Invented stage": "current"}}))
         with self.assertRaises(subprocess.CalledProcessError):
             self.publish("--candidate", "first", "--details", str(details))
+
+    def test_rewound_stage_suppresses_verdict_in_snapshot_and_closing_message(self):
+        self.publish("--candidate", "first")
+        url = self.start("--task-status", str(self.snapshot))
+        details = self.snapshot.with_name("details.json")
+        details.write_text(json.dumps({"stages": {"Plan": "current", "Final Verdict": "completed"}}))
+        closing = self.publish("--candidate", "first", "--verdict", "APPROVE",
+                               "--verdict-candidate", "first", "--details", str(details),
+                               "--url", url, "--chat-phase", "end")
+        self.assertNotIn("Verdict:", closing)
+        current = json.loads(self.snapshot.read_text())
+        self.assertEqual(current["verdict"], "Pending")
+        self.assertIsNone(current["verdict_candidate"])
 
     def test_issue_stages_are_bound_to_the_associated_flights_current_candidate(self):
         details = self.snapshot.with_name("details.json")

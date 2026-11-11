@@ -29,7 +29,11 @@ def normalize(data):
         raise ValueError("A task title is required")
     candidate = fields["candidate"].strip()
     verdict = data.get("verdict")
+    details = normalize_details(data)
+    stage_map = details.get("stages")
     current = candidate and data.get("verdict_candidate") == candidate and verdict in VERDICTS
+    if stage_map is not None:
+        current = current and stage_map["Final Verdict"] in ("current", "completed")
     return {
         "snapshot": "live",
         "task": task,
@@ -37,7 +41,7 @@ def normalize(data):
         "candidate": candidate,
         "verdict": verdict if current else "Pending",
         "verdict_candidate": candidate if current else None,
-        **normalize_details(data),
+        **details,
     }
 
 
@@ -70,6 +74,7 @@ def publish(path, data, details):
     if previous and previous["task"] != data["task"]:
         raise ValueError("A snapshot belongs to one task")
     data.update(update_details(previous, details, data["candidate"]))
+    data.update(normalize(data))
     fd, pending = tempfile.mkstemp(prefix=".status-", dir=parent)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
@@ -95,9 +100,11 @@ def main():
     args = parser.parse_args()
     try:
         data = normalize(vars(args))
-        status = chat_status(data, args.url, args.chat_phase)
+        # Validate the route before replacing the snapshot.
+        chat_status(data, args.url, args.chat_phase)
         details = json.loads(args.details.read_text(encoding="utf-8")) if args.details else {}
         publish(args.file, data, details)
+        status = chat_status(data, args.url, args.chat_phase)
     except (ValueError, OSError) as error:
         parser.error(str(error))
     if status:

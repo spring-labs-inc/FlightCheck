@@ -255,6 +255,26 @@ class MaintainerCardTests(unittest.TestCase):
         snapshot = json.loads(self.request(footer, "status.json"))
         self.assertEqual(list(snapshot["stages"])[:2], ["Plan", "Implement"])
 
+    def test_same_candidate_repair_clears_approval_and_does_not_restore_it_on_advance(self):
+        details = self.state.parent / "repair-details.json"
+        details.write_text(json.dumps({"stages": {"Final Verdict": "completed", "PR & Merge": "current"}}))
+        footer = self.card("--details", str(details))
+        self.addCleanup(self.stop_listener, self.endpoint()["pid"])
+        original = json.loads(self.request(footer, "status.json"))
+        self.assertEqual(self.card("--details", str(details), "--verdict", "APPROVE",
+                                   "--verdict-candidate", original["candidate"]), footer)
+        self.assertEqual(json.loads(self.request(footer, "status.json"))["verdict"], "APPROVE")
+        details.write_text(json.dumps({"stages": {"Plan": "current", "Final Verdict": "completed"}}))
+        self.assertEqual(self.card("--details", str(details)), footer)
+        repaired = json.loads(self.request(footer, "status.json"))
+        self.assertEqual(repaired["candidate"], original["candidate"])
+        self.assertEqual(repaired["verdict"], "Pending")
+        self.assertIsNone(repaired["verdict_candidate"])
+        self.assertEqual(repaired["stages"]["Final Verdict"], "pending")
+        details.write_text(json.dumps({"stages": {"Final Verdict": "completed", "PR & Merge": "current"}}))
+        self.assertEqual(self.card("--details", str(details)), footer)
+        self.assertEqual(json.loads(self.request(footer, "status.json"))["verdict"], "Pending")
+
     def test_adoption_template_keeps_explicit_selection(self):
         example = ROOT / "examples/existing-project"
         instructions = (example / "AGENTS.md").read_text()

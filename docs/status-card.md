@@ -2,7 +2,7 @@
 
 ## Current task
 
-The task card publishes a short summary and the verdict for the current candidate. Each task has one stable loopback route. The card shows `Pending` until a verdict is recorded for that exact candidate. The README screenshot shows this view with synthetic task data. In this repository, follow the [maintainer instructions](#maintainer-implementation-replies). Adopters can enable the card for selected workflows.
+The task card publishes a short summary and the verdict for the current candidate. Each task has one stable loopback route. The card shows `Pending` until a verdict is recorded for that exact candidate. Returning to a stage before Final Verdict clears the recorded verdict, including when the candidate is unchanged. A new verdict must be recorded after the repair is reviewed. The README screenshot shows this view with synthetic task data. In this repository, follow the [maintainer instructions](#maintainer-implementation-replies). Adopters can enable the card for selected workflows.
 
 For adoption in another project, keep this `status-card/` directory available to the workflow and record its path in the project setup. Keep the snapshot in a private directory outside the checkout. Assign a unique task ID and an available port per task. Record the directory, task ID, and port with the selected workflow so a resume uses the same route. Only the active workflow writes that task's curated snapshot. Keep raw output and secrets out of its title and summary.
 
