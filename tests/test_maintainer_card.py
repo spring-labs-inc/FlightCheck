@@ -225,6 +225,36 @@ class MaintainerCardTests(unittest.TestCase):
         snapshot = json.loads(self.request(footer, "status.json"))
         self.assertIn("Implement", snapshot["stage_updated_at"])
 
+    def test_resume_replaces_an_older_listener_that_reorders_stages(self):
+        server = self.checkout / "status-card/serve.py"
+        source = server.read_text()
+        legacy_source = server.with_name("legacy_serve.py")
+        legacy_source.write_text(source)
+        server.write_text(
+            "import legacy_serve\n"
+            "read_task = legacy_serve.read_task\n"
+            "def legacy_read_task(path):\n"
+            "    snapshot = read_task(path)\n"
+            "    if 'stages' in snapshot:\n"
+            "        snapshot['stages'] = dict(reversed(list(snapshot['stages'].items())))\n"
+            "    return snapshot\n"
+            "legacy_serve.read_task = legacy_read_task\n"
+            "legacy_serve.main()\n"
+        )
+        footer = self.card()
+        legacy_pid = self.endpoint()["pid"]
+        self.addCleanup(self.stop_listener, legacy_pid)
+        server.write_text(source)
+        legacy_source.unlink()
+        details = self.state.parent / "stage-details.json"
+        details.write_text(json.dumps({"stages": {"Plan": "completed", "Implement": "current"}}))
+        self.assertEqual(self.card("--details", str(details)), footer)
+        upgraded_pid = self.endpoint()["pid"]
+        self.addCleanup(self.stop_listener, upgraded_pid)
+        self.assertNotEqual(upgraded_pid, legacy_pid)
+        snapshot = json.loads(self.request(footer, "status.json"))
+        self.assertEqual(list(snapshot["stages"])[:2], ["Plan", "Implement"])
+
     def test_adoption_template_keeps_explicit_selection(self):
         example = ROOT / "examples/existing-project"
         instructions = (example / "AGENTS.md").read_text()

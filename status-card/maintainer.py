@@ -126,7 +126,8 @@ def current_card(task, port, expected_candidate):
 
 def card_matches(status, data):
     fields = ("branch", "worktree", "stages", "stage_updated_at", "links", "checks", "ci", "history")
-    return all(status.get(key) == data.get(key) for key in fields)
+    return (all(status.get(key) == data.get(key) for key in fields)
+            and list(status.get("stages", {})) == list(data.get("stages", {})))
 
 
 def stop_outdated_listener(snapshot, data, endpoint):

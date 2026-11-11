@@ -1,6 +1,7 @@
 """Verify the publisher, task-specific HTTP routes, and example isolation."""
 
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -290,7 +291,11 @@ class TaskStatusTests(unittest.TestCase):
         for field in ("checks", "ci"):
             self.assertEqual(resumed[field], changed[field])
 
-    def test_stage_changes_sort_by_time_and_clear_with_the_candidate(self):
+    def test_stages_follow_the_readme_and_clear_later_completions_on_rewind(self):
+        readme = (CARD.parent / "README.md").read_text()
+        readme_stages = re.findall(r"^[ \t]*(\d{2}) ([A-Z][A-Z &]+?)[ \t]*$", readme, re.MULTILINE)
+        self.assertEqual([int(number) for number, _ in readme_stages], list(range(1, 10)))
+        expected = [name for _, name in readme_stages]
         details = self.snapshot.with_name("details.json")
         stage_states = {"Plan": "completed", "Implement": "completed", "Authoritative Gates": "current"}
         times = {"Plan": "2020-01-01T10:00:00Z", "Implement": "2020-01-01T11:00:00Z",
@@ -298,18 +303,44 @@ class TaskStatusTests(unittest.TestCase):
         details.write_text(json.dumps({"stages": stage_states, "stage_updated_at": times}))
         self.publish("--candidate", "first", "--details", str(details))
         initial = json.loads(self.snapshot.read_text())
-        self.assertEqual(list(initial["stages"])[:3], ["Authoritative Gates", "Implement", "Plan"])
+        self.assertEqual([name.upper() for name in initial["stages"]], expected)
         stage_states.update({"Plan": "current", "Authoritative Gates": "completed"})
         details.write_text(json.dumps({"stages": stage_states}))
         self.publish("--candidate", "first", "--details", str(details))
         changed = json.loads(self.snapshot.read_text())
         self.assertEqual(next(iter(changed["stages"])), "Plan")
-        self.assertEqual(changed["stage_updated_at"]["Implement"], initial["stage_updated_at"]["Implement"])
+        self.assertEqual([name.upper() for name in changed["stages"]], expected)
+        self.assertTrue(all(state == "pending" for name, state in changed["stages"].items() if name != "Plan"))
+        self.assertGreater(changed["stage_updated_at"]["Implement"], initial["stage_updated_at"]["Implement"])
         self.publish("--candidate", "first", "--details", str(details))
         self.assertEqual(json.loads(self.snapshot.read_text())["stage_updated_at"], changed["stage_updated_at"])
         self.publish("--candidate", "second")
         self.assertNotIn("stages", json.loads(self.snapshot.read_text()))
         self.assertNotIn("stage_updated_at", json.loads(self.snapshot.read_text()))
+
+    def test_old_snapshots_preserve_stage_definitions_and_hide_future_completions(self):
+        readme = (CARD.parent / "README.md").read_text()
+        expected = [name for _, name in re.findall(r"^[ \t]*(\d{2}) ([A-Z][A-Z &]+?)[ \t]*$", readme, re.MULTILINE)]
+        self.publish("--candidate", "first")
+        snapshot = json.loads(self.snapshot.read_text())
+        snapshot.update(stages={"PR & Merge": "completed", "Final Verdict": "completed",
+                                "Implement": "current", "Plan": "completed",
+                                "Interactive UI Approval": "skipped"},
+                        stage_updated_at={"PR & Merge": "2030-01-01T12:00:00Z"})
+        self.snapshot.write_text(json.dumps(snapshot))
+        url = self.start("--task-status", str(self.snapshot)) + "status.json"
+        status, body = self.request(url)
+        self.assertEqual(status, 200)
+        stages = json.loads(body)["stages"]
+        self.assertEqual([name.upper() for name in stages], expected)
+        self.assertEqual(stages["Implement"], "current")
+        self.assertEqual(stages["Final Verdict"], "pending")
+        self.assertEqual(stages["PR & Merge"], "pending")
+        self.assertEqual(stages["Interactive UI Approval"], "skipped")
+        details = self.snapshot.with_name("details.json")
+        details.write_text(json.dumps({"stages": {"Invented stage": "current"}}))
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.publish("--candidate", "first", "--details", str(details))
 
     def test_issue_stages_are_bound_to_the_associated_flights_current_candidate(self):
         details = self.snapshot.with_name("details.json")

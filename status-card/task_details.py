@@ -165,6 +165,11 @@ def stages(value):
     result = {name: choice(value.get(name, "pending"), STAGE_STATES) for name in STAGE_NAMES}
     if sum(state == "current" for state in result.values()) > 1:
         raise ValueError("Only one workflow stage can be current")
+    active = False
+    for name, state in result.items():
+        if active and state == "completed":
+            result[name] = "pending"
+        active = active or state == "current"
     return result
 
 
@@ -188,11 +193,6 @@ def normalize_details(data):
         if not isinstance(times, dict) or times.keys() - set(STAGE_NAMES):
             raise ValueError("Expected timestamps for FlightCheck workflow stages")
         result["stage_updated_at"] = {name: timestamp(value) for name, value in times.items()}
-        if "stages" in result:
-            result["stages"] = dict(sorted(
-                result["stages"].items(),
-                key=lambda item: result["stage_updated_at"].get(item[0], ""), reverse=True,
-            ))
     if "tracked_flights" in data:
         flights = data["tracked_flights"]
         if not isinstance(flights, dict):
