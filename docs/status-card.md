@@ -2,7 +2,7 @@
 
 ## Current task
 
-For a selected Codex workflow, the optional task card publishes a short summary and the verdict for the current candidate. Each task has one stable loopback route. The card shows `Pending` until a verdict is recorded for that exact candidate. The README screenshot shows this view with synthetic task data.
+The task card publishes a short summary and the verdict for the current candidate. Each task has one stable loopback route. The card shows `Pending` until a verdict is recorded for that exact candidate. The README screenshot shows this view with synthetic task data. In this repository, follow the [maintainer instructions](#maintainer-implementation-replies). Adopters can enable the card for selected workflows.
 
 For adoption in another project, keep this `status-card/` directory available to the workflow and record its path in the project setup. Keep the snapshot in a private directory outside the checkout. Assign a unique task ID and an available port per task. Record the directory, task ID, and port with the selected workflow so a resume uses the same route. Only the active workflow writes that task's curated snapshot. Keep raw output and secrets out of its title and summary.
 
@@ -70,6 +70,22 @@ Each supplied `links`, `checks`, or `ci` list or `tracked_flights` map replaces 
 Use a synthetic task on both a local checkout and an SSH-connected checkout. Confirm the status link appears at the top of the opening reply and the bottom of the closing reply. Check that ordinary chat, intermediate replies, and resumes of the same flight omit it. Activate the workflow with the card absent, then resume with the card visible and again with its tab hidden. Check that the same task route stays open in one tab. Confirm that the current task and `Snapshot rendered` appear in the desktop view.
 
 Record a verdict for the synthetic candidate, then change the candidate while retaining the old verdict binding in the test input. Confirm the card shows `Pending` and the closing block omits the stale verdict. Stop the listener and check the chat fallback, then restore the original port and reload the same tab. Record host HTTP, the desktop route, and the rendered task as separate observations.
+
+## Maintainer implementation replies
+
+The [root instructions](../AGENTS.md) select FlightCheck for implementation in this repository. Start or resume the card from the implementation checkout. Keep the same task ID for the life of the task.
+
+```sh
+python3 -B status-card/maintainer.py card --task example-change --title "Example change"
+```
+
+Run the command before an implementation reply and use its output as the reply's last paragraph. The command fingerprints the current checkout, publishes the private snapshot, and verifies the task endpoint. On resume it reuses the recorded port and restores a stopped listener if that port is available. Pass `--summary` and `--details` to update the curated card content. Supply `--verdict` and `--verdict-candidate` together after a verdict for that candidate has been recorded.
+
+The default state directory is `$XDG_STATE_HOME/flightcheck` or `~/.local/state/flightcheck`. If the session restricts that path, set `FLIGHTCHECK_STATE_DIR` to the same absolute, owner-only directory outside the checkout for Codex and its hooks. Use a host that permits IPv4 loopback binds. The listener runs in the background while the card is needed. Its startup log is in the private task directory.
+
+Review and trust the [repository-local hooks](../.codex/hooks.json) in Codex once. The hook compares the checkout to its state at the start of the turn and also checks turns that ran the maintainer card command. If the last reply is missing the current task link, the hook requests a correction once. The root instructions also cover replies sent before the stop hook runs. [Codex hook trust](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks)
+
+In a fresh chat here, request a small docs change and open the card from the last line of the reply. Resume the task and verify that the link is the same. In a separate Git checkout with only the adoption example, make the same request and verify that a flight starts only when you select `$develop-change`.
 
 ## Synthetic snapshot
 

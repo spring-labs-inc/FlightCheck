@@ -1,0 +1,147 @@
+"""Exercise the maintainer footer through the configured Codex hooks."""
+
+import json
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+import time
+import unittest
+from http.client import HTTPConnection
+from pathlib import Path
+from urllib.parse import urlsplit
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class MaintainerCardTests(unittest.TestCase):
+    def setUp(self):
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        root = Path(scratch.name)
+        self.checkout = root / "maintainer checkout"
+        self.checkout.mkdir()
+        self.readme = self.checkout / "README.md"
+        self.readme.write_text("Original\n")
+        shutil.copytree(ROOT / "status-card", self.checkout / "status-card")
+        hooks = self.checkout / ".codex/hooks.json"
+        hooks.parent.mkdir()
+        shutil.copyfile(ROOT / "AGENTS.md", self.checkout / "AGENTS.md")
+        shutil.copyfile(ROOT / ".codex/hooks.json", hooks)
+        self.hooks = json.loads(hooks.read_text())["hooks"]
+        self.state = root / "state"
+        self.session = "test-maintainer-session"
+        self.env = dict(os.environ, FLIGHTCHECK_STATE_DIR=str(self.state), CODEX_THREAD_ID=self.session)
+        self.run_git("init", "-q")
+        self.run_git("add", ".")
+        self.run_git("commit", "-qm", "Synthetic starting point")
+
+    def run_git(self, *args):
+        subprocess.run(
+            ["git", "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test",
+             "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", *args],
+            check=True, cwd=self.checkout, env=self.env, capture_output=True, timeout=5,
+        )
+
+    def hook(self, event, turn, reply=None, retried=False):
+        handler = self.hooks[event][0]["hooks"][0]["command"]
+        subdir = self.checkout / "status-card"
+        payload = {"hook_event_name": event, "cwd": str(subdir), "session_id": self.session,
+                   "turn_id": turn, "last_assistant_message": reply, "stop_hook_active": retried}
+        return json.loads(subprocess.check_output(
+            ["/bin/sh", "-c", handler], input=json.dumps(payload), text=True,
+            cwd=subdir, env=self.env, timeout=8,
+        ))
+
+    def card(self, *args):
+        return subprocess.check_output(
+            [sys.executable, "-B", "status-card/maintainer.py", "card",
+             "--task", "test-change", "--title", "Synthetic implementation", *args],
+            cwd=self.checkout, env=self.env, text=True, timeout=8,
+        ).strip()
+
+    def endpoint(self):
+        endpoint, = self.state.glob("*/tasks/test-change/endpoint.json")
+        return json.loads(endpoint.read_text())
+
+    def stop_listener(self, pid):
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+
+    def request(self, footer, suffix=""):
+        route = urlsplit(footer.rsplit("(", 1)[1].rstrip(")"))
+        connection = HTTPConnection(route.hostname, route.port, timeout=1)
+        try:
+            connection.request("GET", route.path + suffix)
+            response = connection.getresponse()
+            self.assertEqual(response.status, 200)
+            return response.read()
+        finally:
+            connection.close()
+
+    def test_turn_requires_a_current_clickable_footer_only_for_implementation(self):
+        self.readme.write_text("Pre-existing change\n")
+        self.assertEqual(self.hook("UserPromptSubmit", "question"), {})
+        self.assertEqual(self.hook("Stop", "question", "A read-only reply."), {})
+        self.assertFalse(list(self.state.glob("*/tasks/*")))
+
+        self.hook("UserPromptSubmit", "implementation")
+        self.readme.write_text("Change made in this turn\n")
+        self.assertEqual(self.hook("Stop", "implementation", "Edited.")["decision"], "block")
+        footer = self.card()
+        self.addCleanup(self.stop_listener, self.endpoint()["pid"])
+        self.assertIn(b"<html", self.request(footer))
+        self.assertEqual(json.loads(self.request(footer, "status.json"))["task"], "test-change")
+        self.assertEqual(self.hook("Stop", "implementation", "Edited.\n\n" + footer), {})
+        self.assertEqual(self.hook("Stop", "implementation", footer + "\n\nVerdict: Pending")["decision"], "block")
+        self.assertEqual(self.hook("Stop", "implementation", "```\n\n" + footer)["decision"], "block")
+        self.assertIn("systemMessage", self.hook("Stop", "implementation", "Missing again.", retried=True))
+
+        self.hook("UserPromptSubmit", "resume")
+        self.assertEqual(self.card(), footer)
+        self.assertEqual(self.hook("Stop", "resume", "Awaiting approval.")["decision"], "block")
+        self.assertEqual(self.hook("Stop", "resume", "Awaiting approval.\n\n" + footer), {})
+        self.readme.write_text("Another edit\n")
+        self.assertEqual(self.hook("Stop", "resume", footer)["decision"], "block")
+        self.assertEqual(self.card(), footer)
+        self.assertEqual(self.hook("Stop", "resume", footer), {})
+
+        self.hook("UserPromptSubmit", "later-question")
+        self.assertEqual(self.hook("Stop", "later-question", "Another read-only reply."), {})
+
+    def test_resume_restores_a_stopped_listener_at_the_same_url(self):
+        footer = self.card("--summary", "Keep this summary on resume.")
+        pid = self.endpoint()["pid"]
+        self.addCleanup(self.stop_listener, pid)
+        self.stop_listener(pid)
+        route = urlsplit(footer.rsplit("(", 1)[1].rstrip(")"))
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            connection = HTTPConnection(route.hostname, route.port, timeout=0.1)
+            try:
+                connection.connect()
+            except ConnectionRefusedError:
+                break
+            finally:
+                connection.close()
+            time.sleep(0.02)
+        else:
+            self.fail("Stopped listener still accepts connections")
+
+        self.assertEqual(self.card(), footer)
+        restarted_pid = self.endpoint()["pid"]
+        self.addCleanup(self.stop_listener, restarted_pid)
+        self.assertNotEqual(restarted_pid, pid)
+        self.assertEqual(json.loads(self.request(footer, "status.json"))["summary"],
+                         "Keep this summary on resume.")
+
+    def test_adoption_template_keeps_explicit_selection(self):
+        example = ROOT / "examples/existing-project"
+        instructions = (example / "AGENTS.md").read_text()
+        self.assertIn("when the owner explicitly selects", instructions)
+        self.assertIn("`$develop-change`", instructions)
+        self.assertEqual(json.loads((example / ".codex/hooks.json").read_text())["hooks"], {})

@@ -1,0 +1,27 @@
+{
+  "description": "Check implementation reply footers when developing FlightCheck itself.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -B \"$(git rev-parse --show-toplevel)/status-card/maintainer.py\" hook",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -B \"$(git rev-parse --show-toplevel)/status-card/maintainer.py\" hook",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
