@@ -178,7 +178,7 @@ class TaskStatusTests(unittest.TestCase):
                 self.publish("--candidate", "first", "--details", str(details))
             self.assertEqual(self.snapshot.read_bytes(), previous)
 
-    def test_work_links_group_by_type_then_sort_newest_first(self):
+    def test_work_links_sort_by_recent_activity_across_types(self):
         details = self.snapshot.with_name("details.json")
         items = [
             ("issue", "Undated issue", None),
@@ -199,10 +199,117 @@ class TaskStatusTests(unittest.TestCase):
         self.assertEqual(status, 200)
         published = json.loads(body)["links"]
         self.assertEqual([link["label"] for link in published],
-                         ["Newer epic", "Older epic", "Newer issue", "Undated issue",
-                          "Newest PR", "Older PR", "Undated PR"])
-        self.assertEqual(published[1]["title"], "Status card rollout")
-        self.assertEqual(published[1]["description"], "Coordinate the status card changes.")
+                         ["Newest PR", "Older PR", "Newer issue", "Newer epic",
+                          "Older epic", "Undated issue", "Undated PR"])
+        self.assertEqual(published[4]["title"], "Status card rollout")
+        self.assertEqual(published[4]["description"], "Coordinate the status card changes.")
+
+    def test_check_ci_and_legacy_history_lists_sort_by_activity(self):
+        details = self.snapshot.with_name("details.json")
+        times = ["2026-01-01T12:00:00Z", "2026-01-01T09:00:00-05:00", "2026-01-01T14:00:00Z"]
+        checks = [{"name": f"Check {index}", "candidate": "first", "state": "passed", "observed_at": value}
+                  for index, value in enumerate(times)]
+        ci = [{**row, "name": f"CI {index}", "kind": "pr", "commit": "example"}
+              for index, row in enumerate(checks)]
+        events = [{"id": str(index), "kind": "rerun", "candidate": "first", "summary": f"Event {index}",
+                   "observed_at": value} for index, value in enumerate(times)]
+        details.write_text(json.dumps({"checks": checks, "ci": ci, "events": events}))
+        self.publish("--candidate", "first", "--details", str(details))
+        current = json.loads(self.snapshot.read_text())
+        self.assertEqual([row["name"] for row in current["checks"]], ["Check 1", "Check 2", "Check 0"])
+        self.assertEqual([row["name"] for row in current["ci"]], ["CI 1", "CI 2", "CI 0"])
+        self.assertEqual([row["id"] for row in current["history"]], ["1", "2", "0"])
+        current["history"].reverse()
+        self.snapshot.write_text(json.dumps(current))
+        self.publish("--candidate", "first")
+        self.assertEqual([row["id"] for row in json.loads(self.snapshot.read_text())["history"]], ["2", "1", "0"])
+
+    def test_modified_rows_move_first_and_unchanged_resumes_keep_their_times(self):
+        details = self.snapshot.with_name("details.json")
+        checks = [{"name": name, "candidate": "first", "state": "passed", "observed_at": observed}
+                  for name, observed in (("Older", "2020-01-01T10:00:00Z"), ("Newer", "2020-01-01T11:00:00Z"))]
+        links = [{"kind": "issue", "label": row["name"], "url": f"https://example.com/{index}",
+                  "created_at": row["observed_at"]} for index, row in enumerate(checks)]
+        ci = [{**row, "kind": "pr", "commit": "example"} for row in checks]
+        details.write_text(json.dumps({"checks": checks, "links": links, "ci": ci}))
+        self.publish("--candidate", "first", "--details", str(details))
+        checks[0]["state"] = "failed"
+        links[0]["description"] = "Latest update"
+        ci[0]["state"] = "running"
+        details.write_text(json.dumps({"checks": checks, "links": links, "ci": ci}))
+        self.publish("--candidate", "first", "--details", str(details))
+        modified = json.loads(self.snapshot.read_text())
+        for field in ("checks", "ci"):
+            self.assertEqual(modified[field][0]["name"], "Older")
+            self.assertIn("updated_at", modified[field][0])
+        self.assertEqual(modified["links"][0]["label"], "Older")
+        self.assertIn("updated_at", modified["links"][0])
+        self.publish("--candidate", "first", "--details", str(details))
+        resumed = json.loads(self.snapshot.read_text())
+        for field in ("checks", "ci", "links"):
+            self.assertEqual(resumed[field], modified[field])
+
+    def test_changed_records_with_older_observations_get_a_new_activity_time(self):
+        details = self.snapshot.with_name("details.json")
+        check = {"name": "Revised check", "candidate": "first", "state": "passed",
+                 "observed_at": "2020-01-01T10:00:00Z"}
+        ci = {**check, "kind": "pr", "commit": "example"}
+        details.write_text(json.dumps({"checks": [check], "ci": [ci]}))
+        self.publish("--candidate", "first", "--details", str(details))
+        check.update(state="failed", observed_at="2020-01-01T09:00:00Z")
+        ci.update(state="failed", observed_at="2020-01-01T09:00:00Z")
+        details.write_text(json.dumps({"checks": [check], "ci": [ci]}))
+        self.publish("--candidate", "first", "--details", str(details))
+        changed = json.loads(self.snapshot.read_text())
+        for field in ("checks", "ci"):
+            self.assertGreater(changed[field][0]["updated_at"], changed[field][0]["observed_at"])
+        self.publish("--candidate", "first", "--details", str(details))
+        resumed = json.loads(self.snapshot.read_text())
+        for field in ("checks", "ci"):
+            self.assertEqual(resumed[field], changed[field])
+
+    def test_explicit_stale_updates_move_checks_and_ci_to_the_top(self):
+        details = self.snapshot.with_name("details.json")
+        checks = [{"name": name, "candidate": "first", "state": "passed", "observed_at": observed}
+                  for name, observed in (("Invalidated", "2020-01-01T10:00:00Z"),
+                                         ("Unchanged", "2020-01-01T11:00:00Z"))]
+        ci = [{**row, "kind": "pr", "commit": "example"} for row in checks]
+        details.write_text(json.dumps({"checks": checks, "ci": ci}))
+        self.publish("--candidate", "first", "--details", str(details))
+        checks[0]["stale"] = True
+        ci[0]["stale"] = True
+        details.write_text(json.dumps({"checks": checks, "ci": ci}))
+        self.publish("--candidate", "first", "--details", str(details))
+        changed = json.loads(self.snapshot.read_text())
+        for field in ("checks", "ci"):
+            self.assertEqual(changed[field][0]["name"], "Invalidated")
+            self.assertTrue(changed[field][0]["stale"])
+            self.assertIn("updated_at", changed[field][0])
+        self.publish("--candidate", "first", "--details", str(details))
+        resumed = json.loads(self.snapshot.read_text())
+        for field in ("checks", "ci"):
+            self.assertEqual(resumed[field], changed[field])
+
+    def test_stage_changes_sort_by_time_and_clear_with_the_candidate(self):
+        details = self.snapshot.with_name("details.json")
+        stage_states = {"Plan": "completed", "Implement": "completed", "Authoritative Gates": "current"}
+        times = {"Plan": "2020-01-01T10:00:00Z", "Implement": "2020-01-01T11:00:00Z",
+                 "Authoritative Gates": "2020-01-01T12:00:00Z"}
+        details.write_text(json.dumps({"stages": stage_states, "stage_updated_at": times}))
+        self.publish("--candidate", "first", "--details", str(details))
+        initial = json.loads(self.snapshot.read_text())
+        self.assertEqual(list(initial["stages"])[:3], ["Authoritative Gates", "Implement", "Plan"])
+        stage_states.update({"Plan": "current", "Authoritative Gates": "completed"})
+        details.write_text(json.dumps({"stages": stage_states}))
+        self.publish("--candidate", "first", "--details", str(details))
+        changed = json.loads(self.snapshot.read_text())
+        self.assertEqual(next(iter(changed["stages"])), "Plan")
+        self.assertEqual(changed["stage_updated_at"]["Implement"], initial["stage_updated_at"]["Implement"])
+        self.publish("--candidate", "first", "--details", str(details))
+        self.assertEqual(json.loads(self.snapshot.read_text())["stage_updated_at"], changed["stage_updated_at"])
+        self.publish("--candidate", "second")
+        self.assertNotIn("stages", json.loads(self.snapshot.read_text()))
+        self.assertNotIn("stage_updated_at", json.loads(self.snapshot.read_text()))
 
     def test_issue_stages_are_bound_to_the_associated_flights_current_candidate(self):
         details = self.snapshot.with_name("details.json")

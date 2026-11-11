@@ -124,8 +124,9 @@ def current_card(task, port, expected_candidate):
     return None
 
 
-def checkout_matches(status, data):
-    return all(status.get(key) == data.get(key) for key in ("branch", "worktree"))
+def card_matches(status, data):
+    fields = ("branch", "worktree", "stages", "stage_updated_at", "links", "checks", "ci", "history")
+    return all(status.get(key) == data.get(key) for key in fields)
 
 
 def stop_outdated_listener(snapshot, data, endpoint):
@@ -171,7 +172,7 @@ def start_listener(snapshot, data, port):
             raise ValueError("Card listener could not start. Check listener.log in the task directory")
         actual_port = int(actual)
         status = current_card(data["task"], actual_port, data["candidate"])
-        if (port and actual_port != port) or not status or not checkout_matches(status, data):
+        if (port and actual_port != port) or not status or not card_matches(status, data):
             raise ValueError("Card listener did not serve the current task")
         return {"port": actual_port, "pid": process.pid}
     except BaseException:
@@ -207,7 +208,7 @@ def show_card(checkout, state, args):
         endpoint = read_json(endpoint_file)
         port = endpoint.get("port", 0)
         status = current_card(args.task, port, current) if port else None
-        if status and not checkout_matches(status, data):
+        if status and not card_matches(status, data):
             stop_outdated_listener(snapshot, data, endpoint)
             status = None
         if not status:

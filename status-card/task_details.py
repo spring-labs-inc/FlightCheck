@@ -65,8 +65,9 @@ def link(row):
         "label": short_text(row.get("label")),
         "url": https_url(row.get("url")),
     }
-    if row.get("created_at") is not None:
-        result["created_at"] = timestamp(row["created_at"])
+    for field in ("created_at", "updated_at"):
+        if row.get(field) is not None:
+            result[field] = timestamp(row[field])
     for field in ("title", "description"):
         if row.get(field) not in (None, ""):
             result[field] = short_text(row[field])
@@ -105,13 +106,16 @@ def observation(row, states):
     stale = row.get("stale", False)
     if type(stale) is not bool:
         raise ValueError("Expected a boolean for stale status")
-    return {
+    result = {
         "name": short_text(row.get("name")),
         "state": choice(row.get("state"), states),
         "candidate": short_text(row.get("candidate")),
         "observed_at": timestamp(row.get("observed_at")),
         "stale": stale,
     }
+    if row.get("updated_at") is not None:
+        result["updated_at"] = timestamp(row["updated_at"])
+    return result
 
 
 def check(row):
@@ -164,6 +168,14 @@ def stages(value):
     return result
 
 
+def latest_activity(row):
+    return max(row.get(field, "") for field in ("observed_at", "updated_at", "created_at"))
+
+
+def newest_first(items):
+    return sorted(items, key=latest_activity, reverse=True)
+
+
 def normalize_details(data):
     result = {}
     for key in ("branch", "worktree"):
@@ -171,26 +183,33 @@ def normalize_details(data):
             result[key] = short_text(data[key])
     if "stages" in data:
         result["stages"] = stages(data["stages"])
+    if "stage_updated_at" in data:
+        times = data["stage_updated_at"]
+        if not isinstance(times, dict) or times.keys() - set(STAGE_NAMES):
+            raise ValueError("Expected timestamps for FlightCheck workflow stages")
+        result["stage_updated_at"] = {name: timestamp(value) for name, value in times.items()}
+        if "stages" in result:
+            result["stages"] = dict(sorted(
+                result["stages"].items(),
+                key=lambda item: result["stage_updated_at"].get(item[0], ""), reverse=True,
+            ))
     if "tracked_flights" in data:
         flights = data["tracked_flights"]
         if not isinstance(flights, dict):
             raise ValueError("Expected a map of tracked flight observations")
         result["tracked_flights"] = {task_id(flight): tracked_flight(record) for flight, record in flights.items()}
     if "links" in data:
-        by_recency = sorted(
-            rows(data["links"], link), key=lambda row: row.get("created_at", ""), reverse=True,
-        )
-        result["links"] = sorted(by_recency, key=lambda row: LINK_KINDS.index(row["kind"]))
+        result["links"] = newest_first(rows(data["links"], link))
     for key, convert in (("checks", check), ("ci", ci_run), ("history", event)):
         if key in data:
-            result[key] = rows(data[key], convert)
+            result[key] = newest_first(rows(data[key], convert))
     return result
 
 
 def update_details(previous, details, candidate):
     """Apply explicit section updates and append only new, recorded events."""
     if not isinstance(details, dict) or details.keys() - {
-        "branch", "worktree", "links", "checks", "ci", "events", "stages", "tracked_flights",
+        "branch", "worktree", "links", "checks", "ci", "events", "stages", "stage_updated_at", "tracked_flights",
     }:
         raise ValueError("Expected a details object with supported task status fields")
     update = normalize_details(details)
@@ -199,8 +218,32 @@ def update_details(previous, details, candidate):
         result.pop("branch", None)
         result.pop("worktree", None)
     result.update(update)
+    now = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+    if "stages" in update or "stage_updated_at" in update:
+        times = {**previous.get("stage_updated_at", {}), **update.get("stage_updated_at", {})}
+        for name, state in update.get("stages", {}).items():
+            before = previous.get("stages", {}).get(name, "pending")
+            if state != before and name not in update.get("stage_updated_at", {}):
+                times[name] = now
+        result["stage_updated_at"] = times
     if previous.get("candidate") != candidate and "stages" not in update:
         result.pop("stages", None)
+        result.pop("stage_updated_at", None)
+    identities = {"links": ("kind", "url"), "checks": ("name", "candidate"),
+                  "ci": ("kind", "name", "candidate", "commit", "attempt")}
+    for key, fields in identities.items():
+        prior = {tuple(row.get(field) for field in fields): row for row in previous.get(key, [])}
+        for row in update.get(key, []):
+            before = prior.get(tuple(row.get(field) for field in fields))
+            if not before or "updated_at" in row:
+                continue
+            ignored = {"created_at", "updated_at", "observed_at"}
+            content = {name: value for name, value in row.items() if name not in ignored}
+            old_content = {name: value for name, value in before.items() if name not in ignored}
+            if content != old_content and row.get("observed_at", "") <= before.get("observed_at", ""):
+                row["updated_at"] = now
+            elif "updated_at" in before:
+                row["updated_at"] = before["updated_at"]
     for key in ("checks", "ci"):
         if key in result:
             for row in result[key]:
@@ -212,5 +255,5 @@ def update_details(previous, details, candidate):
             if row["id"] in history and history[row["id"]] != row:
                 raise ValueError("An existing history event cannot change")
             history[row["id"]] = row
-        result["history"] = sorted(history.values(), key=lambda row: row["observed_at"], reverse=True)
-    return result
+        result["history"] = list(history.values())
+    return normalize_details(result)
