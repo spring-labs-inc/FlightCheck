@@ -7,9 +7,11 @@ import json
 import os
 import re
 import select
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 from http.client import HTTPConnection, HTTPException
 from pathlib import Path
 
@@ -25,6 +27,15 @@ def git(cwd, *args):
 
 def git_path(cwd, *args):
     return Path(os.fsdecode(git(cwd, "rev-parse", *args).rstrip(b"\n"))).resolve()
+
+
+def checkout_details(checkout):
+    git_dir = git_path(checkout, "--path-format=absolute", "--git-dir")
+    common_dir = git_path(checkout, "--path-format=absolute", "--git-common-dir")
+    if git_dir != common_dir:
+        return {"worktree": checkout.name}
+    branch = os.fsdecode(git(checkout, "branch", "--show-current").rstrip(b"\n"))
+    return {"branch": branch or None}
 
 
 def candidate(checkout):
@@ -93,22 +104,56 @@ def card_url(task, port):
     return f"http://127.0.0.1:{port}{task_path(task)}"
 
 
-def card_is_current(task, port, expected_candidate):
+def current_card(task, port, expected_candidate):
     connection = HTTPConnection("127.0.0.1", port, timeout=0.75)
     try:
         connection.request("GET", task_path(task) + "status.json")
         response = connection.getresponse()
         if response.status != 200:
-            return False
+            return None
         status = json.loads(response.read(1024 * 1024))
-        return (
+        if (
             isinstance(status, dict) and status.get("snapshot") == "live" and status.get("task") == task
             and status.get("publicationPort") == port and status.get("candidate") == expected_candidate
-        )
+        ):
+            return status
     except (OSError, ValueError, HTTPException):
-        return False
+        return None
     finally:
         connection.close()
+    return None
+
+
+def checkout_matches(status, data):
+    return all(status.get(key) == data.get(key) for key in ("branch", "worktree"))
+
+
+def stop_outdated_listener(snapshot, data, endpoint):
+    pid, port = endpoint.get("pid"), endpoint["port"]
+    if type(pid) is not int or pid < 2:
+        raise ValueError("The outdated card listener has no recorded process ID")
+    process = subprocess.run(
+        ["ps", "-ww", "-p", str(pid), "-o", "uid=", "-o", "command="],
+        capture_output=True, text=True,
+    )
+    if process.returncode == 1 and not process.stdout.strip() and not process.stderr.strip():
+        return
+    process.check_returncode()
+    fields = process.stdout.strip().split(maxsplit=1)
+    suffixes = tuple(f"/status-card/serve.py --port {argument} --task-status {snapshot}"
+                     for argument in (0, port))
+    if len(fields) != 2 or fields[0] != str(os.geteuid()) or not fields[1].endswith(suffixes):
+        raise ValueError("The recorded process does not match the outdated card listener")
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        if current_card(data["task"], port, data["candidate"]) is None:
+            return
+        time.sleep(0.05)
+    raise ValueError("The outdated card listener did not stop")
 
 
 def start_listener(snapshot, data, port):
@@ -125,7 +170,8 @@ def start_listener(snapshot, data, port):
         if not line.startswith(prefix) or not actual.isdigit():
             raise ValueError("Card listener could not start. Check listener.log in the task directory")
         actual_port = int(actual)
-        if (port and actual_port != port) or not card_is_current(data["task"], actual_port, data["candidate"]):
+        status = current_card(data["task"], actual_port, data["candidate"])
+        if (port and actual_port != port) or not status or not checkout_matches(status, data):
             raise ValueError("Card listener did not serve the current task")
         return {"port": actual_port, "pid": process.pid}
     except BaseException:
@@ -152,9 +198,19 @@ def show_card(checkout, state, args):
             "verdict_candidate": args.verdict_candidate if args.verdict else previous.get("verdict_candidate"),
         })
         details = json.loads(args.details.read_text(encoding="utf-8")) if args.details else {}
+        if not isinstance(details, dict):
+            raise ValueError("Expected a details object")
+        details.pop("branch", None)
+        details.pop("worktree", None)
+        details.update(checkout_details(checkout))
         publish(snapshot, data, details)
-        port = read_json(endpoint_file).get("port", 0)
-        if not port or not card_is_current(args.task, port, current):
+        endpoint = read_json(endpoint_file)
+        port = endpoint.get("port", 0)
+        status = current_card(args.task, port, current) if port else None
+        if status and not checkout_matches(status, data):
+            stop_outdated_listener(snapshot, data, endpoint)
+            status = None
+        if not status:
             endpoint = start_listener(snapshot, data, port)
             write_json(endpoint_file, endpoint)
             port = endpoint["port"]
@@ -203,7 +259,7 @@ def check_turn(checkout, state, event):
         return {}
     if task:
         port = read_json(task_dir(state, task) / "endpoint.json").get("port")
-        if port and card_is_current(task, port, current):
+        if port and current_card(task, port, current):
             footer = chat_status({"task": task}, card_url(task, port), "start")
             if has_footer(event.get("last_assistant_message") or "", footer):
                 return {}
