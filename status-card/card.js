@@ -23,7 +23,10 @@ function snapshotIsValid(data) {
 }
 
 function renderGates(gates) {
-  const rows = gates.map(({ name, state, detail }) => {
+  const activity = (gate) => Math.max(-Infinity,
+    ...[gate.updated_at, gate.observed_at, gate.created_at].map(Date.parse).filter(Number.isFinite));
+  const ordered = [...gates].sort((left, right) => activity(right) - activity(left));
+  const rows = ordered.map(({ name, state, detail }) => {
     const row = document.createElement("li");
     const description = document.createElement("div");
     const label = document.createElement("span");
@@ -43,7 +46,7 @@ function renderGates(gates) {
   });
   byId("gates").replaceChildren(...rows);
   setText("gate-count", `${gates.filter(({ state }) => state === "passed").length}/${gates.length} passed`);
-  const pending = gates.filter(({ state }) => state === "pending").map(({ name }) => name);
+  const pending = ordered.filter(({ state }) => state === "pending").map(({ name }) => name);
   setText("pending", pending.length ? pending.join(" · ") : "None in this example.");
 }
 

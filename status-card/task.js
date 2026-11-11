@@ -30,13 +30,19 @@ function dateLabel(value) {
   return time;
 }
 
+function activityTime(data) {
+  return [data.observed_at, data.updated_at, data.created_at]
+    .filter((value) => Number.isFinite(Date.parse(value)))
+    .sort((left, right) => Date.parse(right) - Date.parse(left))[0];
+}
+
 function observationRow(data, candidate, detail) {
   const row = element("li", "");
   const description = element("div", "");
   const name = element("span", data.url ? "" : data.name, "gate-name");
   if (data.url) name.append(link(data.name, data.url));
   const meta = element("span", detail ? `${detail} · ` : "", "gate-detail");
-  meta.append(dateLabel(data.observed_at));
+  meta.append(dateLabel(activityTime(data)));
   const state = candidate === data.candidate && !data.stale ? data.state : "stale";
   if (state === "stale") {
     meta.append(` · Candidate ${data.candidate.slice(0, 12)}`);
@@ -55,12 +61,13 @@ function fill(id, rows, render) {
   byId(id).replaceChildren(...rows.map(render));
 }
 
-function stageRow([name, state]) {
+function stageRow([name, state], updatedAt) {
   const marks = { completed: "✓", current: "→", skipped: "-", pending: "·" };
   const row = element("li", "");
   const mark = element("span", marks[state]);
   mark.setAttribute("aria-hidden", "true");
   row.dataset.state = state;
+  if (updatedAt) row.title = `Updated ${timeFormat.format(new Date(updatedAt))}`;
   if (state === "current") row.setAttribute("aria-current", "step");
   const label = state === "current" ? `[ ${name} ]` : name;
   const status = element("span", ` (${state})`, state === "skipped" ? "" : "visually-hidden");
@@ -91,10 +98,7 @@ function renderWorkLinks(links, stages) {
     renderWorkLinkStage();
     return;
   }
-  const groups = [
-    ["epic", "Epic"], ["issue", "Issue"], ["pr", "PR"],
-  ].map(([kind, label]) => ({ kind, label, items: links.filter((item) => item.kind === kind) }))
-    .filter(({ items }) => items.length);
+  const labels = { epic: "Epic", issue: "Issue", pr: "PR" };
   const choices = [];
   const detail = byId("work-link-detail");
 
@@ -119,36 +123,27 @@ function renderWorkLinks(links, stages) {
     byId("work-link-destination").replaceChildren(destination);
   }
 
-  fill("links", groups, ({ kind, label, items }, groupIndex) => {
-    const group = element("li", "");
-    items.forEach((item, index) => {
-      const entry = element("span", "", "work-link-item");
-      if (index === 0) {
-        if (groupIndex > 0) {
-          const separator = element("span", "|", "work-link-separator");
-          separator.setAttribute("aria-hidden", "true");
-          entry.append(separator);
-        }
-        entry.append(element("span", label, "pill"), " ");
-      }
-      const reference = item.label.replace(/^(?:epic|issue|pr)\s+(?=#)/i, "");
-      const text = kind === "epic" && item.title ? `${reference} ${item.title}` : reference;
-      const key = `${kind}:${item.url}`;
-      const button = element("button", text, "work-link-select");
-      button.type = "button";
-      button.setAttribute("aria-label", `${label} ${text}`);
-      button.setAttribute("aria-controls", "work-link-detail");
-      const choice = { key, item, button };
-      button.addEventListener("click", () => {
-        selectedWorkLink = selectedWorkLink?.key === key ? undefined : choice;
-        showSelection();
-      });
-      choices.push(choice);
-      entry.append(button);
-      if (index + 1 < items.length) entry.append(",");
-      group.append(entry, " ");
+  fill("links", links, (item) => {
+    const row = element("li", "");
+    const entry = element("span", "", "work-link-item");
+    const label = labels[item.kind];
+    entry.append(element("span", label, "pill"), " ");
+    const reference = item.label.replace(/^(?:epic|issue|pr)\s+(?=#)/i, "");
+    const text = item.kind === "epic" && item.title ? `${reference} ${item.title}` : reference;
+    const key = `${item.kind}:${item.url}`;
+    const button = element("button", text, "work-link-select");
+    button.type = "button";
+    button.setAttribute("aria-label", `${label} ${text}`);
+    button.setAttribute("aria-controls", "work-link-detail");
+    const choice = { key, item, button };
+    button.addEventListener("click", () => {
+      selectedWorkLink = selectedWorkLink?.key === key ? undefined : choice;
+      showSelection();
     });
-    return group;
+    choices.push(choice);
+    entry.append(button);
+    row.append(entry, " ");
+    return row;
   });
   showSelection();
   lastLinks = signature;
@@ -159,9 +154,9 @@ function renderDetails(data) {
   const { candidate, stages = {}, links = [], checks = [], ci = [], history = [] } = data;
   const stageEntries = Object.entries(stages);
   renderWorkLinks(links, data.issue_stages ?? {});
-  const fingerprint = JSON.stringify([candidate, stageEntries, checks, ci, history]);
+  const fingerprint = JSON.stringify([candidate, stageEntries, data.stage_updated_at, checks, ci, history]);
   if (fingerprint !== lastDetails) {
-    fill("stages", stageEntries, stageRow);
+    fill("stages", stageEntries, (entry) => stageRow(entry, data.stage_updated_at?.[entry[0]]));
     byId("evidence").hidden = !checks.length && !ci.length;
     fill("checks", checks, (check) => observationRow(check, candidate,
       Object.entries(check.counts).map(([label, count]) => `${count} ${label}`).join(" · ")));
