@@ -1,0 +1,198 @@
+{
+  "schema": "flightcheck.benchmark-qualification/2",
+  "suite_sha256": "b50ed3f3c9fd198435debf1bd2521f64beac38507367d0156621408cf0e5f16f",
+  "original_records_commit": "d3352ecb76997b5aee51d629d80596742e4bf833",
+  "original_files_verified_unchanged": 209,
+  "private_archive_inventory_sha256": "e24d3a7baeea3e389ef7a7bdfced48bd26c6458f16c583c3d770c859dd1d4304",
+  "interpretation": "Maintenance qualification only; frozen verdicts, timings, incomplete status and original evaluator unchanged. No new measured cohort.",
+  "results": [
+    {
+      "target": "django",
+      "label": "baseline",
+      "suite_passed": false,
+      "passed": [
+        "django:explicit-composite-pk-control",
+        "django:reject-one-sql-column",
+        "django:literal-tuple-control"
+      ],
+      "failed": [
+        "django:implicit-queryset-membership",
+        "django:direct-tuple-lookup-caller-isolation",
+        "django:reject-three-sql-columns",
+        "django:implicit-projection-shadowing-extra-alias"
+      ],
+      "report_sha256": "ad8b4c378b50cd2a0b12cf27461179d0aa59e98f75b735dcdd7cbbba5048f044",
+      "source_fingerprint": "e426891f4fbb417d9da5e06d08960f058c50e4794e453f0d07a5f37c37d0513e"
+    },
+    {
+      "target": "django",
+      "label": "old-reference",
+      "suite_passed": false,
+      "passed": [
+        "django:implicit-queryset-membership",
+        "django:explicit-composite-pk-control",
+        "django:reject-one-sql-column",
+        "django:implicit-projection-shadowing-extra-alias",
+        "django:literal-tuple-control"
+      ],
+      "failed": [
+        "django:direct-tuple-lookup-caller-isolation",
+        "django:reject-three-sql-columns"
+      ],
+      "report_sha256": "1e676ab6c2fce79aa18934674ce11b97bb8a6594e374f07c4fd994429256bba2",
+      "source_fingerprint": "dd16e92b79881fd38283748dd64d4ab741486bb3170996effa63a2f9fa77af19"
+    },
+    {
+      "target": "django",
+      "label": "django-2",
+      "suite_passed": false,
+      "passed": [
+        "django:implicit-queryset-membership",
+        "django:explicit-composite-pk-control",
+        "django:reject-one-sql-column",
+        "django:implicit-projection-shadowing-extra-alias",
+        "django:literal-tuple-control"
+      ],
+      "failed": [
+        "django:direct-tuple-lookup-caller-isolation",
+        "django:reject-three-sql-columns"
+      ],
+      "report_sha256": "23d107012585acb1fdeb4c6bd9d08d93ee47739433b7ccf04c7a6b5ab0648a49",
+      "source_fingerprint": "610b1e39f0d12b91ef5182efe00ab835790bc6aefc8b23bfe4db74a6923f4f73"
+    },
+    {
+      "target": "django",
+      "label": "django-3",
+      "suite_passed": false,
+      "passed": [
+        "django:implicit-queryset-membership",
+        "django:explicit-composite-pk-control",
+        "django:reject-one-sql-column",
+        "django:literal-tuple-control"
+      ],
+      "failed": [
+        "django:direct-tuple-lookup-caller-isolation",
+        "django:reject-three-sql-columns",
+        "django:implicit-projection-shadowing-extra-alias"
+      ],
+      "report_sha256": "f377fdc1dfd3be279f2a8b338996de3ec336a3b58e944049673d38af4dd77037",
+      "source_fingerprint": "55c2303ed0d5841c6c8e9917ee0d07a76e2f419369bcf5575b218dd6d3b8954a"
+    },
+    {
+      "target": "ripgrep",
+      "label": "baseline",
+      "suite_passed": false,
+      "passed": [
+        "ripgrep:implicit-binary-file-filtering",
+        "ripgrep:explicit-text-control",
+        "ripgrep:bom-buffer-boundary-named-file",
+        "ripgrep:bom-buffer-boundary-regular-stdin"
+      ],
+      "failed": [
+        "ripgrep:two-byte-first-line",
+        "ripgrep:multiple-short-lines"
+      ],
+      "report_sha256": "383c77a46bbbc27def2905ebea6cbfbf3c1a1759dcbd467af9fe62cf174fa261",
+      "source_fingerprint": "9e4e37cda2c6d21c919a37c8ede4994c124c3bf498c53b771885ab7dbdcdd899"
+    },
+    {
+      "target": "ripgrep",
+      "label": "old-reference",
+      "suite_passed": false,
+      "passed": [
+        "ripgrep:multiple-short-lines",
+        "ripgrep:explicit-text-control",
+        "ripgrep:bom-buffer-boundary-named-file",
+        "ripgrep:bom-buffer-boundary-regular-stdin"
+      ],
+      "failed": [
+        "ripgrep:two-byte-first-line",
+        "ripgrep:implicit-binary-file-filtering"
+      ],
+      "report_sha256": "f9c4e74959ee54fa106a9c141d60aaeb0e7f6d1e38f6420060a53302a313871f",
+      "source_fingerprint": "a496f64b1d482f75cb2ab0a0aa979da132bcc07976cd4ff898fb6030e27e09ad"
+    },
+    {
+      "target": "ripgrep",
+      "label": "ripgrep-2",
+      "suite_passed": false,
+      "passed": [
+        "ripgrep:two-byte-first-line",
+        "ripgrep:multiple-short-lines",
+        "ripgrep:explicit-text-control",
+        "ripgrep:bom-buffer-boundary-named-file",
+        "ripgrep:bom-buffer-boundary-regular-stdin"
+      ],
+      "failed": [
+        "ripgrep:implicit-binary-file-filtering"
+      ],
+      "report_sha256": "5dd9d04a3a37852ba2e104d408531f9a2067ecc087b75264adb987db50669fcf",
+      "source_fingerprint": "fcaff57cbb3e75c4c17226b64c7ad48d4715a87f30a5f91681f97fbf74ba46a5"
+    },
+    {
+      "target": "django",
+      "label": "django-reference-v2",
+      "suite_passed": true,
+      "passed": [
+        "django:implicit-queryset-membership",
+        "django:explicit-composite-pk-control",
+        "django:direct-tuple-lookup-caller-isolation",
+        "django:reject-one-sql-column",
+        "django:reject-three-sql-columns",
+        "django:implicit-projection-shadowing-extra-alias",
+        "django:literal-tuple-control"
+      ],
+      "failed": [],
+      "report_sha256": "44632b2af8d6d214659abada2f464b7b41fc0dc05a8208b9b3613384bc9c8682",
+      "source_fingerprint": "6db79ba13450d6db67e52b80afad1baf2473f05f27ef51b05c37135595635156",
+      "source_pin": "f8fce8d4dce7cf6d272a29351faddd5fa76f1aa0",
+      "origin": "django-1",
+      "patch_sha256": "901f524b2ca702b8bbf9e8d045d883c3713328a0cf604aa7d423b8d46865f1a1",
+      "new_files_sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "native_totals": {
+        "passed": 1041,
+        "skipped": 27,
+        "expected_failures": 3,
+        "failed": 0
+      },
+      "baseline_identities_preserved": true,
+      "original_evaluator_passed": true,
+      "native_output_sha256": [
+        "752ac5a4deac29c9962c9fac2f662c874f68b2ecf114e67396e875f858d884e6"
+      ]
+    },
+    {
+      "target": "ripgrep",
+      "label": "ripgrep-reference-v2",
+      "suite_passed": true,
+      "passed": [
+        "ripgrep:two-byte-first-line",
+        "ripgrep:multiple-short-lines",
+        "ripgrep:implicit-binary-file-filtering",
+        "ripgrep:explicit-text-control",
+        "ripgrep:bom-buffer-boundary-named-file",
+        "ripgrep:bom-buffer-boundary-regular-stdin"
+      ],
+      "failed": [],
+      "report_sha256": "aa1c36310c890cf0ac8b83453c5b8a3c1c22de13819351be27b33bf326cfe021",
+      "source_fingerprint": "17e9cb54e6c6c66501b7d7063e312381f62aa5adf64da57809ac26448ea596c2",
+      "source_pin": "3a612f88b805e14aef45bfa43e25a54abc6297fc",
+      "origin": "ripgrep-3",
+      "patch_sha256": "6793b08393c37ab3b2ed9f4730aec35cd509d76094a3070cd13f0093324e3969",
+      "new_files_sha256": "2e5e15a02c8aada76cb0f468eb5db709c5dbea5f5fb205c23d584f655e0252dc",
+      "native_totals": {
+        "passed": 415,
+        "skipped": 0,
+        "expected_failures": 0,
+        "failed": 0
+      },
+      "baseline_identities_preserved": true,
+      "original_evaluator_passed": true,
+      "native_output_sha256": [
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "2df9ea68fe5b96380b19853800ca68c4189e82c882946681fb07b2a47bade088",
+        "cc1fce4f10257fc1aa681dd3d05076144e195202e54d9de4769fe18e35f1dbc4"
+      ]
+    }
+  ]
+}

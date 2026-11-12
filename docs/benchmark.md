@@ -67,3 +67,27 @@ python3 -B -m unittest discover -s tests -p 'test_handoff.py'
 ```
 
 The tests create temporary checkouts and private evidence directories. They exercise fresh receipts, reuse, blocked review packets, and frozen coverage baselines using the standard library. For your own project, follow the [task JSON and evidence setup](../examples/existing-project/docs/development-workflow.md#resume-summary-and-final-packet).
+
+## Versioned qualification after escaped defects
+
+The original twelve authoritative attempts, timings, first verdicts, private evaluator, and endpoint decisions are immutable. Post-hoc defects belong in a separately versioned qualification record; they do not retroactively turn a measured APPROVE into a rejection or restart an incomplete attempt. No new measured cohort is implied by maintenance work.
+
+The public [known-case suite](../benchmarks/regressions.py) covers the escaped Django projection/caller-isolation cases and ripgrep binary-file behavior, plus streaming, BOM/buffer-boundary, regular-stdin, and positive compatibility controls. These tests qualify future references and belong in future visible acceptance gates before approval. They are deliberately separate from FlightCheck's project-independent handoff helpers. A private evaluator must still assess the frozen candidate after the workflow's first final verdict, without feeding repairs, and retain unseen cases to limit benchmark overfitting.
+
+```sh
+# Use the pinned interpreter and an exact restored source checkout.
+python -B benchmarks/regressions.py django --source "$django_checkout" --output "$qualification_reports"
+python -B benchmarks/regressions.py ripgrep --binary "$built_rg" --output "$qualification_reports"
+```
+
+For a recorded gate, point `--output` at `FLIGHTCHECK_REPORT_DIR` and retain `coverage.json` and `result.json` with `--isolated-reports`. Do not reuse checkout XML, a historical glob, or an earlier candidate's report. The controller owns qualification; workers cannot change its frozen suite, expected outcomes, baseline identities, or private references. Include suite, fixture, native producer, toolchain, environment and product identity in fingerprints. Never use a required fixture's absence as a skip or an empty passing report.
+
+Before launching another cohort, restore clean exact pins and version the task, checks, evaluator and references together. Test the baseline, old reference, corrected reference, and known escaped candidates against the same new suite. The baseline must reproduce the target symptom while unchanged controls pass. An old reference failing expanded cases is a calibration gap to correct, not an acceptable new reference. Verify corrected references against both the original private evaluator and the full frozen native scope with every baseline identity/outcome preserved. Retain reference patches and new files privately alongside original native outputs and before/after identities. Distinguish pre-existing baseline defects from newly introduced regressions. Publish a qualification summary with hashes and evidence references, without exposing the private evaluator or reference implementation.
+
+The [version 2 qualification record](../benchmarks/qualification-v2.md) records this maintenance pass. It is not a rerun of the twelve attempts or a paired performance comparison. Before any future trial, also probe the actual worker and reviewer boundaries, readable original evidence, isolated report production, check ownership and final handoff. Read-only reviewers request counterexamples; the controller executes them and retains before-failure/after-pass proof for confirmed repairs. Harness failures are recorded separately from product defects and must not be described as an APPROVE or silently repaired inside measured source.
+
+For qualification reuse, the fingerprint must read the external inputs, not just an inventory filename or its declared hashes. The optional [benchmark fingerprint helper](../benchmarks/fingerprint.py) reads a controller-owned manifest with explicit `files` and `trees` lists. Each tree has `path` and optional generated component names in `exclude`. Include restored product source/tests, built binaries, native baselines, helper/evaluator code, original records and retained evidence. Include runtime/dependency identities in the surrounding project probe. File links bind both link identity and target content; missing inputs or linked directories fail closed. A changed, added or removed input invalidates reuse. Keep the manifest and helper protected from the worker; validate expected archive digests again in the fresh qualification command.
+
+```sh
+python -B benchmarks/fingerprint.py /private/controller/qualification-inputs.json
+```

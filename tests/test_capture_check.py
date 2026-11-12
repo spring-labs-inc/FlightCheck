@@ -151,14 +151,14 @@ class CaptureCheckTests(unittest.TestCase):
         probe = [sys.executable, "-c", "from pathlib import Path; print(Path('inputs').read_text())"]
         script = (
             "import os, sys; from pathlib import Path; "
-            "Path('report').write_text('original report'); "
+            "(Path(os.environ['FLIGHTCHECK_REPORT_DIR']) / 'report').write_text('original report'); "
             "print('native check ran'); sys.exit(int(os.environ['CHECK_FAIL']))"
         )
         command = [sys.executable, "-c", script]
         invocation = self.invocation(command)
         invocation[-len(command) - 1:-len(command) - 1] = [
             "--gate", "fixture", "--fingerprint-command", json.dumps(probe),
-            "--artifact", "report", *(["--refresh"] if refresh else []),
+            "--artifact", "report", "--isolated-reports", *(["--refresh"] if refresh else []),
         ]
         return subprocess.run(
             invocation, check=False, cwd=self.project, env=dict(self.env, CHECK_FAIL=str(int(fail))),
@@ -203,6 +203,59 @@ class CaptureCheckTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertIsNone(packet["inputs_before"])
         self.assertIn(b"native check ran", self.run_reusable().stdout)
+
+    def isolated(self, script, *extra):
+        command = [sys.executable, "-c", script]
+        invocation = self.invocation(command)
+        at = invocation.index("--")
+        invocation[at:at] = ["--gate", "isolated", "--owner", "controller", "--refresh",
+            "--fingerprint-command", json.dumps([sys.executable, "-c", "print('stable fixture')"]),
+            "--isolated-reports", "--artifact", "report", *extra]
+        result = subprocess.run(invocation, cwd=self.project, env=self.env, capture_output=True, timeout=10)
+        packet, output = self.read_run(result.stdout)
+        return result, packet, output
+
+    def test_stale_checkout_report_cannot_supply_a_new_invocations_artifact(self):
+        (self.project / "report").write_text("old passing report")
+        result, packet, _ = self.isolated("print('no report was produced')")
+        self.assertEqual(result.returncode, 0)
+        self.assertNotIn("report", packet["artifacts"])
+        self.assertEqual(list(Path(packet["report_directory"]).iterdir()), [])
+
+    def test_failed_reproduction_reports_are_retained_and_runs_are_isolated(self):
+        script = ("import os, sys; from pathlib import Path; "
+                  "(Path(os.environ['FLIGHTCHECK_REPORT_DIR'])/'report').write_text('observed failure'); sys.exit(1)")
+        result, first, _ = self.isolated(script)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(first["inputs_before"], first["inputs_after"])
+        retained = self.evidence / first["run_id"] / "artifact-0"
+        self.assertEqual(retained.read_text(), "observed failure")
+        _, second, _ = self.isolated(script.replace("observed failure", "second failure"))
+        self.assertNotEqual(first["report_directory"], second["report_directory"])
+        self.assertEqual(retained.read_text(), "observed failure")
+
+    def test_report_symlink_cannot_import_an_old_or_external_report(self):
+        (self.project / "report").write_text("old pass")
+        script = ("import os; from pathlib import Path; "
+                  "(Path(os.environ['FLIGHTCHECK_REPORT_DIR'])/'report').symlink_to(Path('report').resolve())")
+        _, packet, _ = self.isolated(script)
+        self.assertNotIn("report", packet["artifacts"])
+
+    def test_private_directory_creation_and_nested_checkout_rejection(self):
+        self.evidence.rmdir()
+        result, packet, _ = self.isolated("print('probe')", "--create-evidence-dir")
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(self.evidence.stat().st_mode & 0o777, 0o700)
+        subprocess.run(["git", "init", "-q", str(self.project)], check=True, capture_output=True)
+        nested = self.project / "src"
+        nested.mkdir()
+        forbidden = self.project / "evidence"
+        command = self.invocation([sys.executable, "-c", "print('must not run')"])
+        command[command.index("--evidence-dir") + 1] = str(forbidden)
+        command.insert(command.index("--"), "--create-evidence-dir")
+        bad = subprocess.run(command, cwd=nested, capture_output=True, timeout=10)
+        self.assertEqual(bad.returncode, 2)
+        self.assertFalse(forbidden.exists())
 
 
 if __name__ == "__main__":
