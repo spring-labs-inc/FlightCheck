@@ -2,6 +2,12 @@
 
 This directory mirrors the files you can add to your own repository. Open your project in Codex and review the examples before merging them into the corresponding paths. Keep existing instructions, nested overrides, rules, hooks, and dependency files. Resolve overlaps by editing the relevant entries in your project.
 
+## License when adopting
+
+These example files are covered by the repository's [PolyForm Noncommercial 1.0.0 license](../../LICENSE). Before copying them, read the [licensing and adoption guide](../../docs/licensing.md). Carry the license text or its canonical URL and any supplied `Required Notice:` lines with copied or adapted FlightCheck material. Keep your project's own license in place and identify the FlightCheck-derived files or portions separately.
+
+Use outside the license's permissions requires separate authorization from the licensor, including commercial workflow use that is not covered by its stated organizational permissions. Contact [jeff@springfinance.io](mailto:jeff@springfinance.io). Copying the examples does not itself grant commercial permission.
+
 | Example | When to apply it |
 | --- | --- |
 | [`AGENTS.md`](AGENTS.md) | Merge the workflow entry into the project instructions. Keep product rules and tool boundaries here or in the project's existing runbooks. |

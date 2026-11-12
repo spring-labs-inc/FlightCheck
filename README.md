@@ -26,6 +26,12 @@
 
 FlightCheck is a set of repository instructions and Codex configuration examples for taking a change from request to verified merge. It gives maintainers a repeatable way to run their own checks, review interactive HTML for UI changes, and see the evidence behind a landing decision.
 
+### License and commercial use
+
+FlightCheck is source available under [PolyForm Noncommercial 1.0.0](LICENSE). The license permits noncommercial uses and use by its specified organizations. Uses outside those permissions require separate authorization from the licensor; contact [jeff@springfinance.io](mailto:jeff@springfinance.io). An inquiry does not grant permission. Subscriptions are deferred.
+
+Before copying workflow files, read the [licensing and adoption guide](docs/licensing.md). Outside code contributions are currently deferred; [bug reports and feature requests are welcome](CONTRIBUTING.md).
+
 ### Get started
 
 Use Git and a Codex client that discovers repository skills and supports separate [read-only reviewer sessions](examples/existing-project/docs/development-workflow.md#independent-review). Open your **existing project** in Codex, review the [example project layout](examples/existing-project/README.md), and merge the relevant files at the paths shown. Keep your project's instructions and permissions. Your project supplies the commands and runtimes for its checks, previews, CI, and delivery as applicable.
@@ -71,7 +77,6 @@ Repair failures with the cheapest affected check first. Reuse a pass only when t
 | [Claude Code pointer](examples/existing-project/README.md#adopt-flightcheck-in-an-existing-repository) | The optional [`CLAUDE.md`](examples/existing-project/CLAUDE.md) imports the shared project instructions into Claude Code. |
 | [Benchmark guide](docs/benchmark.md) | Reproduce the pinned benchmark suite and find its results. |
 | [Handoff reproduction](docs/benchmark.md#rehearse-a-handoff-with-synthetic-data) | Exercise the receipt and handoff workflow locally with synthetic data. |
-| [Project board](https://github.com/orgs/spring-labs-inc/projects/2) | Track changes to FlightCheck. |
 
 #### Run the FlightCheck tests
 
