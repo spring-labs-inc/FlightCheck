@@ -5,9 +5,12 @@ from collections import Counter
 import hashlib
 import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 
-from capture_check import digest, fingerprint, latest_run, matches_pass
+from capture_check import digest, evidence_directory, fingerprint, latest_run, matches_pass
+from proof import acceptance_status, contract_status, freeze, obligations_status, record_review, verdict_status
 
 COVERAGE_OUTCOMES = ("passed", "skipped", "expected_failures", "failed")
 EARLY_CODE_CRITERIA = (
@@ -66,6 +69,7 @@ def verified_coverage(root, run, receipt, request, contract):
         "baseline": {"required": len(required), "matched": len(required) - len(missing) - len(changed),
                      "missing": missing, "outcome_changed": changed},
         "report": str(report),
+        "passed_tests": sorted(test for test, outcome in current.items() if outcome == "passed"),
     }
 
 
@@ -77,9 +81,12 @@ def gate_status(root, gate, candidate, final):
     request = gate["request"]
     result = {"id": gate_id, "scope": request["scope"]}
     try:
+        if request["artifacts"] and request.get("isolated_reports") is not True:
+            return dict(result, status="unverified", reason="reports require invocation-specific isolation")
         run, receipt = latest_run(root, latest)
         owner = receipt.get("owner", "controller")
-        result.update(receipt=str(run / "run.json"), exit_code=receipt["exit_code"], owner=owner)
+        result.update(receipt=str(run / "run.json"), exit_code=receipt["exit_code"], owner=owner,
+                      started_at=receipt.get("started_at"), finished_at=receipt.get("finished_at"))
         if owner not in (gate.get("owner", "controller"), "controller"):
             return dict(result, status="unverified", reason="receipt owner does not match the gate assignment")
         if receipt["status"] != "finished":
@@ -209,6 +216,9 @@ def code_review_packet(task, root):
         raise ValueError("The CODE review needs a candidate identity")
     diff = evidence_path(root, task["diff"])
     packet = {"action": "start", "candidate": candidate, "diff": {"path": str(diff), "sha256": digest(diff)}}
+    _, contract_error = contract_status(task, root)
+    if contract_error:
+        return dict(packet, action="blocked", blockers=["acceptance contract"], reason=contract_error)
     packet.update({key: task[key] for key in ("scope", "acceptance") if key in task})
     cheap = [gate_status(root, gate, candidate, final=True)
              for gate in configured_gates(task.get("gates", [])) if gate.get("phase") == "cheap"]
@@ -217,6 +227,11 @@ def code_review_packet(task, root):
         blockers = [check["id"] for check in cheap if check["status"] not in ("passed", "reused")]
         if blockers:
             return dict(packet, action="blocked", blockers=blockers)
+    all_checks = [gate_status(root, gate, candidate, final=True) for gate in configured_gates(task.get("gates", []))]
+    obligations = obligations_status(task, root, all_checks, code=True)
+    packet["review_obligations"] = obligations
+    if obligations["blockers"]:
+        return dict(packet, action="blocked", blockers=obligations["blockers"])
     prior = task.get("early_review")
     if (not isinstance(prior, dict) or prior.get("scope_unchanged") is not True
             or prior.get("verdict") != "REVISE"):
@@ -257,6 +272,10 @@ def build_packet(task, root, final):
         "candidate": candidate, "saved_candidate": saved, "candidate_changed": saved != candidate,
         "preview": preview, "checks": checks, "blockers": blockers,
     }
+    acceptance = acceptance_status(task, root, checks)
+    obligations = obligations_status(task, root, checks)
+    blockers.extend(acceptance["blockers"] + obligations["blockers"])
+    packet.update(acceptance_evidence=acceptance, review_obligations=obligations)
     if final:
         diff = evidence_path(root, task["diff"])
         packet.update(diff={"path": str(diff), "sha256": digest(diff)},
@@ -270,22 +289,60 @@ def build_packet(task, root, final):
     return packet
 
 
+def preflight(task, root, amendment=None):
+    """Exercise the actual recorder and verifier without running project tests."""
+    configured_gates(task["gates"])
+    contract = freeze(task, root, amendment)
+    probe = root / "preflight"
+    probe.mkdir(mode=0o700, exist_ok=True)
+    command = [sys.executable, "-c", "print('FlightCheck evidence round trip')"]
+    fingerprint_command = [sys.executable, "-c", "print('FlightCheck preflight v1')"]
+    request = {"command": command, "scope": "Evidence handoff preflight", "summary": None,
+               "fingerprint_command": fingerprint_command, "artifacts": []}
+    invocation = [sys.executable, "-B", str(Path(__file__).with_name("capture_check.py")),
+                  "--evidence-dir", str(probe), "--candidate", task["candidate"],
+                  "--scope", request["scope"], "--gate", "preflight", "--owner", "controller",
+                  "--fingerprint-command", json.dumps(fingerprint_command), "--refresh", "--", *command]
+    result = subprocess.run(invocation, capture_output=True, text=True)
+    if result.returncode:
+        raise ValueError("Evidence preflight failed: " + result.stdout + result.stderr)
+    check = gate_status(probe, {"id": "preflight", "request": request}, task["candidate"], final=True)
+    if check["status"] != "passed":
+        raise ValueError("Evidence preflight receipt could not be verified")
+    return {"candidate": task["candidate"], "contract": contract, "evidence": str(root),
+            "probe": check, "ready": True,
+            "reviewer_access": "The adapter must separately verify read access and write rejection in the actual reviewer client."}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("resume", "review", "code-review", "checks", "brief"))
+    parser.add_argument("mode", choices=("preflight", "resume", "review", "code-review", "checks", "brief", "requests", "verdict"))
     parser.add_argument("--task", type=Path, required=True)
     parser.add_argument("--evidence-dir", type=Path)
+    parser.add_argument("--review", type=Path, help="Actual native reviewer output for requests/verdict")
+    parser.add_argument("--amend-contract", help="Evidence-root-relative owner scope decision; preflight only")
     args = parser.parse_args()
     if args.mode != "brief" and args.evidence_dir is None:
         parser.error("--evidence-dir is required for receipt and review commands")
     final = args.mode == "review"
+    if args.mode in ("requests", "verdict") and args.review is None:
+        parser.error("--review is required for requests/verdict")
+    if args.amend_contract and args.mode != "preflight":
+        parser.error("--amend-contract is only available during preflight")
     try:
         task = read_json(args.task)
         if args.mode == "brief":
             packet = implementation_brief(task)
         else:
-            root = args.evidence_dir.resolve(strict=True)
-            if args.mode == "checks":
+            root = evidence_directory(args.evidence_dir, Path.cwd(), create=args.mode == "preflight")
+            if args.mode == "preflight":
+                packet = preflight(task, root, args.amend_contract)
+            elif args.mode in ("requests", "verdict"):
+                review = record_review(task, root, args.review)
+                final_packet = build_packet(task, root, final=True)
+                packet = (verdict_status(task, root, final_packet, review) if args.mode == "verdict"
+                          else {"candidate": task["candidate"], **final_packet["review_obligations"]})
+            elif args.mode == "checks":
                 packet = check_plan(task, root)
             elif args.mode == "code-review":
                 packet = code_review_packet(task, root)
@@ -294,7 +351,8 @@ def main():
     except (OSError, KeyError, TypeError, ValueError) as error:
         parser.exit(2, f"Cannot build handoff packet: {error}\n")
     print(json.dumps(packet, indent=2))
-    return int(packet.get("action") == "blocked" or (final and not packet["ready_for_review"]))
+    return int(packet.get("action") == "blocked" or (final and not packet["ready_for_review"])
+               or (args.mode == "verdict" and not packet["ready_for_approval"]))
 
 
 if __name__ == "__main__":

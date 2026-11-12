@@ -14,7 +14,8 @@ This directory mirrors the files you can add to your own repository. Open your p
 | [`github-reads.rules`](.codex/rules/github-reads.rules) | Optional GitHub CLI rule example. Replace the example repository only if you want this exact read to require an approval prompt when evaluated for outside-sandbox execution. |
 | [`requirements.dev.txt`](requirements.dev.txt) | Optional dependency example for projects that choose pytest. Use your existing development manifest and lockfile conventions. |
 | [`capture_check.py`](scripts/capture_check.py) | Optional output recorder and automatic pass reuse for native checks. Configure a gate identifier and a project-owned fingerprint probe to enable reuse. |
-| [`handoff.py`](scripts/handoff.py) | Use the recorder receipts to summarize resumed work and validate prerequisites for the final review packet. |
+| [`proof.py`](scripts/proof.py) | Acceptance contracts, retained reviewer requests, and regression-proof validation used by `handoff.py`. |
+| [`handoff.py`](scripts/handoff.py) | Use the recorder receipts to summarize resumed work and validate acceptance proof, reviewer obligations, and the final review packet. Copy its adjacent `proof.py` module too. |
 
 Codex loads project instructions based on the working directory and active overrides. Skill discovery, project trust, and approval policy are separate. Review the effective project settings on the client that will run the workflow. The examples require no global configuration, plugin, hook, external package, or new CI service. [Project instructions](https://learn.chatgpt.com/docs/agent-configuration/agents-md) · [Skills](https://learn.chatgpt.com/docs/build-skills) · [Hooks](https://learn.chatgpt.com/docs/hooks) · [Command rules](https://learn.chatgpt.com/docs/agent-configuration/rules)
 

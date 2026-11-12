@@ -100,6 +100,25 @@ def matches_pass(run, packet, request, current):
                for index, artifact in enumerate(request["artifacts"]))
 
 
+def evidence_directory(path, worktree, create=False):
+    parent = path.resolve()
+    worktree = worktree.resolve()
+    try:
+        git = subprocess.run(["git", "-C", str(worktree), "rev-parse", "--show-toplevel"],
+                             stdin=subprocess.DEVNULL, capture_output=True, text=True)
+        if git.returncode == 0:
+            worktree = Path(git.stdout.strip()).resolve()
+    except OSError:
+        pass  # Non-Git projects still use the configured working directory.
+    if parent == worktree or worktree in parent.parents:
+        raise ValueError("evidence directory must be outside the project checkout")
+    if create:
+        parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if not parent.is_dir() or parent.stat().st_uid != os.geteuid() or parent.stat().st_mode & 0o077:
+        raise ValueError("evidence directory must exist and be private to the current user")
+    return parent
+
+
 def previous_pass(parent, latest, request, current):
     try:
         run, packet = latest_run(parent, latest)
@@ -108,11 +127,11 @@ def previous_pass(parent, latest, request, current):
         return None
 
 
-def run_command(command, output):
+def run_command(command, output, env=None):
     """Forward terminal interrupts to the check's own process group."""
     with subprocess.Popen(
         command, stdout=output, stderr=subprocess.STDOUT, start_new_session=True,
-        stdin=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL, env=env,
     ) as child:
         def forward(signum, _frame):
             try:
@@ -171,9 +190,16 @@ def capture(args, command, worktree, parent, latest, request, before):
         write_json(latest, run.name)
     print(f"Check evidence: {run}", flush=True)
 
+    environment = None
+    if args.isolated_reports:
+        reports = run / "reports"
+        reports.mkdir(mode=0o700)
+        environment = dict(os.environ, FLIGHTCHECK_REPORT_DIR=str(reports))
+        packet["report_directory"] = str(reports)
+
     with log.open("xb") as output:
         try:
-            code = run_command(command, output)
+            code = run_command(command, output, environment)
         except OSError as error:
             packet.update(status="unavailable", finished_at=time.time(), error=str(error))
             packet["output"]["status"] = "unavailable"
@@ -198,11 +224,15 @@ def capture(args, command, worktree, parent, latest, request, before):
         packet["warnings"] = warnings
     elif not interrupted:
         packet["warnings"]["status"] = "unclassified"
-    if latest and code == 0:
+    # Retain failing reproductions as well as passes. They never qualify for reuse.
+    if latest and not interrupted:
         for index, artifact in enumerate(args.artifact):
             retained = run / f"artifact-{index}"
             try:
-                shutil.copyfile(artifact, retained)
+                source = (run / "reports" / artifact) if args.isolated_reports else Path(artifact)
+                if args.isolated_reports and (source.is_symlink() or (run / "reports").resolve() not in source.resolve().parents):
+                    raise OSError("Report link escapes or aliases the isolated report directory")
+                shutil.copyfile(source, retained)
                 packet["artifacts"][artifact] = digest(retained)
             except OSError as error:
                 print(f"Cannot retain {artifact}: {error}", file=sys.stderr)
@@ -215,6 +245,7 @@ def capture(args, command, worktree, parent, latest, request, before):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--evidence-dir", required=True, type=Path)
+    parser.add_argument("--create-evidence-dir", action="store_true", help="Create the configured private evidence directory if absent")
     parser.add_argument("--candidate", required=True, help="Frozen candidate identity")
     parser.add_argument("--scope", required=True, help="Intended gate coverage")
     parser.add_argument("--summary", choices=("pytest",), help="Interpret tool-specific totals")
@@ -222,6 +253,8 @@ def main():
     parser.add_argument("--owner", choices=("worker", "controller"), help="Role responsible for this check run")
     parser.add_argument("--fingerprint-command", type=fingerprint_argv, help="JSON argv for the gate input probe")
     parser.add_argument("--artifact", action="append", default=[], help="Report file to retain, repeatable")
+    parser.add_argument("--isolated-reports", action="store_true",
+                        help="Set FLIGHTCHECK_REPORT_DIR to a fresh run directory; artifacts are relative to it")
     parser.add_argument("--refresh", action="store_true", help="Run the gate even if a reusable pass exists")
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
@@ -231,18 +264,23 @@ def main():
         parser.error("candidate and scope must be nonempty")
     command = args.command[1:]
 
-    parent = args.evidence_dir.resolve()
     worktree = Path.cwd()
-    if parent == worktree or worktree in parent.parents:
-        parser.error("evidence directory must be outside the project checkout")
-    if not parent.is_dir() or parent.stat().st_uid != os.geteuid() or parent.stat().st_mode & 0o077:
-        parser.error("evidence directory must exist and be private to the current user")
+    try:
+        parent = evidence_directory(args.evidence_dir, worktree, args.create_evidence_dir)
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
     if args.gate and not re.fullmatch(r"[a-zA-Z0-9_-]+", args.gate):
         parser.error("--gate must contain only letters, digits, underscores or dashes")
     if bool(args.gate) != bool(args.fingerprint_command):
         parser.error("--gate and --fingerprint-command must be used together")
-    if (args.artifact or args.refresh or args.owner) and not args.gate:
-        parser.error("--artifact, --refresh and --owner require --gate")
+    if (args.artifact or args.refresh or args.owner or args.isolated_reports) and not args.gate:
+        parser.error("--artifact, --refresh, --owner and --isolated-reports require --gate")
+    if args.artifact and not args.isolated_reports:
+        parser.error("artifacts require --isolated-reports; produce reports in FLIGHTCHECK_REPORT_DIR")
+    if len(set(args.artifact)) != len(args.artifact):
+        parser.error("artifact paths must be unique")
+    if args.isolated_reports and any(Path(a).is_absolute() or ".." in Path(a).parts for a in args.artifact):
+        parser.error("isolated artifact paths must stay inside the run's report directory")
 
     latest = parent / f"gate-{args.gate}.json" if args.gate else None
     lock = latest.with_suffix(".lock").open("a") if latest else nullcontext()
@@ -253,6 +291,8 @@ def main():
         "fingerprint_command": args.fingerprint_command,
         "artifacts": args.artifact,
     }
+    if args.isolated_reports:
+        request["isolated_reports"] = True
     with lock as lock_file:
         if lock_file:
             fcntl.flock(lock_file, fcntl.LOCK_EX)

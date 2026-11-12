@@ -22,10 +22,10 @@ Use the optional [project resource index](project-resources.md) only when the ta
 
 ## Run and resume
 
-1. Record task scope, acceptance, checkout, base, current diff, and intended delivery. Give each deterministic criterion a reproducible assertion. Present a bounded implementation plan before editing.
+1. Record task scope, acceptance, checkout, base, current diff, and intended delivery. Give each deterministic criterion a reproducible assertion and structured proof mapping. Complete the preflight below before implementation or review. Present a bounded implementation plan before editing.
 2. Implement and run applicable cheap checks on the candidate. Record failures from independent checks together when they can run safely. Repair failures and refresh affected checks before moving on. For owner-facing UI, then provide the exact interactive HTML URLs and synthetic fixture identities, bind the preview to the candidate surface, and pause for the owner's answer. Get new approval after a surface edit unless the owner explicitly waives the preview pause. Show rendered images only on request.
 3. [Decide whether to run early CODE review](#decide-on-early-code-review). If triggered, ask the reviewer to inspect the candidate and scripted acceptance after the cheap checks pass. Repair blocking findings and refresh affected cheap checks before any CODE re-review. Run the remaining required gates and retain any earlier receipts that cover the required command, scope, and current inputs. Bind any visual findings and freshness check to the report from that run. Execute deterministic checks within the project tool boundary and record live-only checks separately.
-4. Validate the final packet with the shared handoff command, then ask one independent final reviewer to inspect the current diff and evidence. Give them a compact packet with the candidate, acceptance criteria, required gates and pass or reuse receipts, original outputs, applicable owner decisions and delivery limits, and any early findings and repairs. Route the verdict after the reviewer returns.
+4. Validate the final packet with the shared handoff command, then ask one independent final reviewer to inspect the current diff and evidence. Give them a compact packet with the candidate, acceptance criteria, required gates and pass or reuse receipts, original outputs, applicable owner decisions and delivery limits, and any early findings and repairs. Record the actual review and validate `handoff.py verdict` after the reviewer returns; only a successful verdict validation permits authorized landing.
 
 On resume, reconcile any open work with the current checkout, active processes and applicable provider state. Use the shared resume summary to route the task. When it reports `final_review`, establish any required reuse receipts, validate the final packet, and send it directly to the independent final reviewer. If the candidate or evidence changes during preparation, or the final packet is blocked, return to the normal resume path. Keep failures and interrupted results. Repair in scope and run the cheapest affected check first. Reassess the need for early CODE review after material changes to scope, behavior, risk, or acceptance assertions. Renew final review when its candidate or evidence changes. Record elapsed time, reruns, and review returns. Continue repair within actual limits and explicit holds, without fixed time or iteration quotas.
 
@@ -47,7 +47,7 @@ For each check, record the run and candidate identity, exact command, coverage a
 
 ### Capture native check output
 
-Use your project's existing artifact recorder or copy the optional [capture script](../scripts/capture_check.py). The example needs Python 3 on a POSIX host and uses the standard library. Run it from the project root with an existing owner-only evidence directory outside the checkout. Set `evidence_dir` to that approved location and `candidate` to the current frozen candidate identity.
+Use your project's existing artifact recorder or copy the optional [capture script](../scripts/capture_check.py). The example needs Python 3 on a POSIX host and uses the standard library. Run it from the project root with an owner-only evidence directory outside the checkout. Use `--create-evidence-dir` to create a missing directory with mode 0700; an existing public directory is rejected. Set `evidence_dir` to that approved location and `candidate` to the current frozen candidate identity.
 
 ```sh
 python3 scripts/capture_check.py --evidence-dir "$evidence_dir" --candidate "$candidate" \
@@ -72,7 +72,7 @@ python3 scripts/capture_check.py --evidence-dir "$evidence_dir" --candidate "$ca
   -- .venv/bin/python -m pytest -q
 ```
 
-The project implements the fingerprint command. Its stable, nonsecret output must cover every gate input and the relevant runtime, including dependencies, fixtures and configuration. Exit unsuccessfully if any required input is unavailable. For a visual gate, use a command that validates a freshly produced, current report. Supply each report to retain with `--artifact` using stable checkout-relative paths.
+The project implements the fingerprint command. Its stable, nonsecret output must cover every gate input and the relevant runtime, including dependencies, fixtures and configuration. Exit unsuccessfully if any required input is unavailable. For a visual gate, use a command that validates a freshly produced, current report. Supply each report to retain with `--artifact` using stable paths relative to the invocation report directory. When retaining reports, add `--isolated-reports`. The recorder creates a fresh private directory and supplies it to the native runner as `FLIGHTCHECK_REPORT_DIR`. The producer must write its reports there during that invocation; checkout reports, old globs, symlinks, and missing reports cannot supply proof. Include the producer and all its inputs in the fingerprint.
 
 Keep one private evidence root per task and use the same gate identifier for all attempts of a given check. The recorder serializes those attempts, marks the newest one before executing, and compares the current fingerprint to both fingerprints from that run. It checks the saved command, scope and original output and report digests before recording reuse. A failed, interrupted or incomplete newer attempt prevents reuse of an older pass. Use `--refresh` to force a new attempt under that gate identifier, including after an explicit invalidation. Send every governing attempt through the recorder when reuse is enabled. The recorder retains the native exit status if a check ran, and missing artifacts or fingerprints make the receipt ineligible for reuse.
 
@@ -80,7 +80,7 @@ Include link-target existence in docs fingerprints. For visual checks, bind the 
 
 ### Verify native test coverage
 
-A project can produce a fresh JSON coverage report from each governing native run and retain it using `--artifact`. Use the trusted check runner to translate native reports into four arrays of unique test identities named `passed`, `skipped`, `expected_failures`, and `failed`. Regenerate the report from that run and clear old reports before execution. Keep required baseline identities and their outcomes in a separate file with the same schema. Freeze its digest independently of the worker.
+A project can produce a fresh JSON coverage report from each governing native run and retain it using `--artifact`. Use the trusted check runner to translate native reports into four arrays of unique test identities named `passed`, `skipped`, `expected_failures`, and `failed`. Generate the report from that run inside `FLIGHTCHECK_REPORT_DIR`, using `--isolated-reports`; never glob historical reports to calculate current coverage. Keep required baseline identities and their outcomes in a separate file with the same schema. Freeze its digest independently of the worker.
 
 Set the gate's optional `coverage` object with `artifact` equal to the report path in `request.artifacts`, `baseline` equal to the baseline file path under the evidence root, and `baseline_sha256` equal to its frozen digest. The handoff verifies both digests, compares identities and outcomes, and includes verified totals and the baseline comparison. A reported failure, missing required identity, changed baseline outcome, or damaged evidence blocks the gate.
 
@@ -96,7 +96,7 @@ Use the resulting plan at the applicable stage. Carry a current verified receipt
 
 ## Resume summary and final packet
 
-Use [`handoff.py`](../scripts/handoff.py) next to the recorder. The project adapter writes a task JSON file for the current checkout before either command. Use the same required gate definitions for recording and validation.
+Use [`handoff.py`](../scripts/handoff.py) and its adjacent [`proof.py`](../scripts/proof.py) module next to the recorder. The project adapter writes a task JSON file for the current checkout before either command. Use the same required gate definitions for recording and validation.
 
 ```sh
 python3 scripts/handoff.py resume --task "$task_json" --evidence-dir "$evidence_dir"
@@ -140,3 +140,40 @@ Retain each review's actual role, candidate, coverage, findings, and disposition
 | Review missing or incomplete | Pending | Wait for the missing evidence or review. |
 
 Before any provider write, verify the actual head, target, branch protections, required CI, and current grant. If the provider requires no CI, record it as inapplicable. A required check with no result stays pending. After an ambiguous provider response, inspect the actual remote state before retrying. Record the verified result.
+
+
+## Acceptance proof and handoff preflight
+
+The adapter records human scope and delivery first, then writes structured `acceptance` entries in the private task file. Each entry has an `id`, `description`, and nonempty `proofs`. A check proof uses `{"kind":"check","gate":"behavior","assertion":"tests/test_api.py::test_rejects_invalid checks the returned error","tests":["test_api.test_rejects_invalid"]}`. `tests` names exact identities in that gate's verified coverage report. Omit identities only for a check with no native test identities, such as a diff policy check, and describe its actual assertion. Every configured gate remains required. Suite success and counts alone do not prove the assertion's adequacy.
+
+An owner decision proof uses `{"kind":"owner","reference":"owner-decision.json"}`. The referenced private file needs `authority: "owner"`, `accepted: true`, the current `candidate`, `criterion` ID, and a nonempty `source` and `reason` taken from the actual owner instruction. For a nonautomatable criterion, set `automatable: false`, explain `reason`, and use `{"kind":"review","assertion":"What the independent reviewer must inspect"}`. Do not reclassify an automatable requirement to bypass a failed test.
+
+```sh
+python3 scripts/handoff.py preflight --task "$task_json" --evidence-dir "$evidence_dir"
+```
+
+Preflight creates the private directory when missing, freezes the acceptance criteria and complete required gate definitions (command, scope, fingerprint probe, reports, coverage baseline/digest, and phase) in `acceptance-contract.json`, and executes and validates a small real recorder probe. The adapter must additionally verify its actual reviewer sandbox: reviewers can read the entire packet and needed source but cannot write source or evidence, execute native checks, access secrets or provider write tools, or run executable hooks. A failed read or write-boundary probe is a harness failure to repair before launch. Instruction text alone is not a sandbox. Limit native check write access to its invocation report directory, necessary build/cache/scratch paths, and disposable fixtures; keep the acceptance contract, ledger, baselines, and controller receipts protected by the tool boundary.
+
+On resume, run preflight with the same task root. Missing, legacy prose-only, changed, or dropped acceptance/gates block review. To implement an actual owner scope change, record a private owner decision containing the current candidate, `authority`, `accepted`, `source`, `reason`, and `previous_contract_sha256` for the existing contract; pass its relative path with `--amend-contract`. This archives the old contract. An already authorized instruction can supply the decision without asking the owner again. Keeping a gate ID does not authorize changing its definition or removing coverage. Added gates strengthen the contract and need no waiver. Ownership may move to the controller and per-run reuse references may change without weakening the frozen definitions. Migrate older tasks explicitly rather than silently treating old prose as verified proof.
+
+## Reviewer-requested tests and functional repairs
+
+A read-only reviewer challenges the proposed evidence against boundaries, invalid inputs, alternate callers, and compatibility controls relevant to this project. When a suspected failure is reproducible, return a concrete test request instead of running it. Native review JSON must contain `candidate`, `role` (`CODE` or `EVIDENCE`), `verdict`, `coverage` inspected, `criteria` assessments, `challenge`, `findings`, and `test_requests`. Each criterion assessment is `{"id":"behavior","sufficient":true,"reason":"Why the actual assertions prove this requirement"}`. `challenge` explains independently considered counterexamples and adequacy; it is not a test-count summary. Each finding has `id`, `kind` (`functional`, `process`, or `nit`), `severity`, `reference`, and `impact`. Each request has `id`, `criterion`, `input`, `expected`, and `reason`. Empty arrays explicitly mean zero findings/requests. Keep incomplete reviews pending.
+
+```sh
+python3 scripts/handoff.py requests --task "$task_json" --evidence-dir "$evidence_dir" --review "$native_review"
+```
+
+This records the actual native output and appends obligations to a private ledger. Omitting an earlier obligation from a later review cannot clear it. The controller adds a required gate with verified coverage and `request_checks[request_id]` containing `gate`, `assertion`, and exact `tests`. Execute it through the recorder **after** the request, owned by `controller`. Relabeling an old pass, worker self-certification, or removing the request cannot unblock approval. Return original output to the reviewer; repair in scope and obtain a fresh review of the current candidate. This adds evidence within existing stages, not new workflow stages.
+
+A confirmed functional finding also requires `regressions[finding_id]` with a failing `before` receipt relative to the evidence root, current `after_gate`, a four-outcome coverage `report`, a retained test/fixture manifest `spec`, and identical `tests` identities. The controller reproduces the failure against the finding's original source candidate in a disposable snapshot, then runs the identical test and fixtures against the repair. Retain both artifacts (including failed-run artifacts) with `--isolated-reports`; their spec digests must match, before must fail those tests with nonzero status, and after must pass them under a current controller receipt. Bind the fingerprint to both product and test inputs. When adding tests to the historical snapshot, record product identity and the separate test overlay; never mislabel the instrumented source as the original product. Retain every governing attempt. Process findings and nits do not automatically require a behavioral regression.
+
+If a regression genuinely cannot be automated, use `regressions[finding_id] = {"exception":"owner-exception.json"}` only with an actual current owner decision including `finding`, source, and reason. This forces observations, not plain APPROVE. The final reviewer must explain the remaining risk. There is no automatic exception for inconvenience or a benchmark deadline.
+
+```sh
+python3 scripts/handoff.py review --task "$task_json" --evidence-dir "$evidence_dir"
+# Launch the separate read-only EVIDENCE reviewer on that validated packet.
+python3 scripts/handoff.py verdict --task "$task_json" --evidence-dir "$evidence_dir" --review "$native_review"
+```
+
+The final command retains actual review output, checks every criterion's independent assessment, outstanding requests/regressions, current candidate and prerequisites, and severity/verdict consistency. Exit 1 keeps approval pending. Observations additionally require a current owner decision referenced by `observation_approval`, bound to the returned `observations_sha256`. Existing authorized decisions may be recorded; never manufacture acceptance. Metadata validation cannot decide whether an assertion is meaningful: the separate reviewer must read the actual tests, source, and original evidence and reject incomplete or circular proof.
