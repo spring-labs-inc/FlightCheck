@@ -1,0 +1,2337 @@
+{
+  "schema": "flightcheck.paired-benchmark-results/1",
+  "experiment": "paired-authoritative-20261111",
+  "workflow_commit": "4ff0e7c5556615bd0dbf082b915ea8747c02be56",
+  "requested_model": "gpt-6.1-sol",
+  "requested_effort": "high",
+  "host": {
+    "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "python": "3.13.18 (main, Oct 25 2026, 18:31:23) [Clang 21.0.0 (clang-2100.3.34.2)]",
+    "codex": "codex-cli 0.167.0"
+  },
+  "source_pins": {
+    "schema": "flightcheck.benchmark-pins/1",
+    "targets": [
+      {
+        "id": "django-composite-query",
+        "language": "Python",
+        "repository": "https://github.com/django/django",
+        "version": "5.2.x development snapshot",
+        "commit": "f8fce8d4dce7cf6d272a29351faddd5fa76f1aa0",
+        "source_archive": {
+          "format": "git bundle",
+          "sha256": "35f4bef619f1a413deac3c0ad016960dd2564f6f18908ddc2af401a46bc6225e"
+        }
+      },
+      {
+        "id": "ripgrep-line-buffering",
+        "language": "Rust",
+        "repository": "https://github.com/BurntSushi/ripgrep",
+        "version": "15.0.0",
+        "commit": "3a612f88b805e14aef45bfa43e25a54abc6297fc",
+        "source_archive": {
+          "format": "git bundle",
+          "sha256": "b5a5ff6c0b6484380e0f2f4da01b0f05071322e80b5949b0909219259fe0069f"
+        }
+      },
+      {
+        "id": "fmt-wrapped-value",
+        "language": "C++",
+        "repository": "https://github.com/fmtlib/fmt",
+        "version": "11.2.0",
+        "commit": "40626af88bd7df9a5fb80be7b25ac85b122d6c21",
+        "source_archive": {
+          "format": "git archive tar",
+          "sha256": "b93b8fa1777c5876c5a35867be2ede804240f8627e7e69e147b1718f4063a235"
+        }
+      },
+      {
+        "id": "jsoup-replaced-child",
+        "language": "Java",
+        "repository": "https://github.com/jhy/jsoup",
+        "version": "1.21.2",
+        "commit": "b02837b6c77b94799c055f8fa446fb770bfb49f1",
+        "source_archive": {
+          "format": "git archive tar",
+          "sha256": "21efc3ba2646998b4cbca98c6520c569dc118ebc3ef1ce3e9319d18bba483c6e"
+        }
+      }
+    ]
+  },
+  "manifest_sha256": "5035e0bffd124d8bc178b654b7b4d6744ab469185c85078b141c8d3a39d33ded",
+  "evidence_inventory_sha256": "7d34182efc02444da7c2d68f10b76b04b942019abfa706c300df55059befda1c",
+  "native_toolchains": {
+    "rust": {
+      "name": "rust",
+      "url": "https://static.rust-lang.org/dist/2026-10-15/rust-1.99.1-aarch64-apple-darwin.tar.xz",
+      "digest_algorithm": "sha256",
+      "digest": "30976378b6aaefd1861ba475905c6ba22a44c981418ce52285006af26337f98c",
+      "home": "/private/tmp/flightcheck-benchmark-20261111/tools/rust"
+    },
+    "jdk": {
+      "name": "jdk",
+      "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.13_9.tar.gz",
+      "digest_algorithm": "sha256",
+      "digest": "bf036b35b071bfb2f54f2c0af8ee8d88afa95ee6eb3dce02c0f94cfc2524d04a",
+      "home": "/private/tmp/flightcheck-benchmark-20261111/tools/jdk-distribution/jdk-21.0.13+9/Contents/Home"
+    },
+    "maven": {
+      "name": "maven",
+      "url": "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.16/apache-maven-3.9.16-bin.tar.gz",
+      "digest_algorithm": "sha512",
+      "digest": "831a8591fe20c8243b1dbe7d71e3244f31d1665b0804b2e825e38cbbe5ce0cafb8338851f90780735568773e0a6cd07bbec107cda0b896b008b861075358b6f6",
+      "home": "/private/tmp/flightcheck-benchmark-20261111/tools/maven-distribution/apache-maven-3.9.16"
+    }
+  },
+  "attempts": [
+    {
+      "sequence": 1,
+      "id": "django-r1-ordinary",
+      "target": "django",
+      "repetition": 1,
+      "pair": 1,
+      "within_pair_order": 1,
+      "arm": "ordinary",
+      "workspace": "w001",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794462127.125833,
+      "finished_at": 1794462503.946955,
+      "workflow_candidate": "8bf61bd2b6186288c9e9f4d76c23b2b2de4af277068c7ca71d64375bdf56d373",
+      "final_candidate": "8bf61bd2b6186288c9e9f4d76c23b2b2de4af277068c7ca71d64375bdf56d373",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 376.82112193107605,
+      "workflow_seconds": 375.91003489494324,
+      "iterations": 1,
+      "repair_iterations": 0,
+      "review_returns": 0,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 7,
+      "source_setup_seconds_excluded": 5.315045118331909,
+      "phase_seconds": {
+        "implementer": 238.8438639640808,
+        "code_review": 0,
+        "final_skeptical_review": 132.2313311100006,
+        "controller_gates": 3.4153199195861816,
+        "hidden_evaluation": 0.6692790985107422
+      },
+      "unallocated_controller_seconds": 1.661327838897705,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 3,
+      "native_scope_invocations": 1,
+      "historical_reproduction_invocations": 0,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "486c90c111662339636fc4869893221c51343be631b357036bb7eee82ef982e9",
+      "candidate_diff_sha256": "cf6527726766f9763849e8f4aebcf52759f9ef8fa43b2a891f63cc0e6be0b70a",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 2,
+      "id": "django-r1-flightcheck",
+      "target": "django",
+      "repetition": 1,
+      "pair": 1,
+      "within_pair_order": 2,
+      "arm": "flightcheck",
+      "workspace": "w002",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794462505.250439,
+      "finished_at": 1794463113.6928902,
+      "workflow_candidate": "e38da9aaf071a757f544c5f43ce2da93645fa3be42ae83df077b2f6a11221fbc",
+      "final_candidate": "e38da9aaf071a757f544c5f43ce2da93645fa3be42ae83df077b2f6a11221fbc",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 608.4424512386322,
+      "workflow_seconds": 607.2532291412354,
+      "iterations": 1,
+      "repair_iterations": 0,
+      "review_returns": 0,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 4,
+      "source_setup_seconds_excluded": 5.390892028808594,
+      "phase_seconds": {
+        "implementer": 364.03779911994934,
+        "code_review": 0,
+        "final_skeptical_review": 228.67100310325623,
+        "controller_gates": 7.613689184188843,
+        "hidden_evaluation": 0.6697330474853516
+      },
+      "unallocated_controller_seconds": 7.450226783752441,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 5,
+      "native_scope_invocations": 2,
+      "historical_reproduction_invocations": 1,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "b6b594c373e17cbdd9b18d7dffe2ded311b838988c4fc1d17479d8cb8efcf339",
+      "candidate_diff_sha256": "ce70ac3963c537f1db2d6cc0d9d2417a99f82e5aceaffa41038f4849cf826158",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 3,
+      "id": "ripgrep-r1-flightcheck",
+      "target": "ripgrep",
+      "repetition": 1,
+      "pair": 2,
+      "within_pair_order": 1,
+      "arm": "flightcheck",
+      "workspace": "w003",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794463114.697835,
+      "finished_at": 1794464123.545485,
+      "workflow_candidate": "17daef0b55070ba7a17c458e8cf0f33200a1ab06882d88b99b49694fadde8b1f",
+      "final_candidate": "17daef0b55070ba7a17c458e8cf0f33200a1ab06882d88b99b49694fadde8b1f",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 1008.847650051117,
+      "workflow_seconds": 1008.5705389976501,
+      "iterations": 1,
+      "repair_iterations": 0,
+      "review_returns": 0,
+      "controller_repairs": [],
+      "code_reviews": 1,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 10,
+      "source_setup_seconds_excluded": 0.2729630470275879,
+      "phase_seconds": {
+        "implementer": 690.3042330741882,
+        "code_review": 186.18757224082947,
+        "final_skeptical_review": 109.39015698432922,
+        "controller_gates": 20.130277395248413,
+        "hidden_evaluation": 0.15419697761535645
+      },
+      "unallocated_controller_seconds": 2.68121337890625,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 5,
+      "native_scope_invocations": 2,
+      "historical_reproduction_invocations": 1,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "1d399d194f8d05f8040a0fb90e3c48525e76df006c34436553bc2e9c8e71a534",
+      "candidate_diff_sha256": "1fbc7788144b6f1729635544e979a7b123774e767b78a9df5c46ff676ef12dc1",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 4,
+      "id": "ripgrep-r1-ordinary",
+      "target": "ripgrep",
+      "repetition": 1,
+      "pair": 2,
+      "within_pair_order": 2,
+      "arm": "ordinary",
+      "workspace": "w004",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794464124.1360269,
+      "finished_at": 1794467678.939647,
+      "workflow_candidate": "885c7717a36db021f6badbc89c434809aa4028acfa2c7e4db9b097f17caf2a4f",
+      "final_candidate": "885c7717a36db021f6badbc89c434809aa4028acfa2c7e4db9b097f17caf2a4f",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 3554.8036201000214,
+      "workflow_seconds": 3554.520405292511,
+      "iterations": 5,
+      "repair_iterations": 4,
+      "review_returns": 4,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 5,
+      "source_edit_checkpoints": 36,
+      "source_setup_seconds_excluded": 0.258469820022583,
+      "phase_seconds": {
+        "implementer": 2445.8761570453644,
+        "code_review": 0,
+        "final_skeptical_review": 1077.035643339157,
+        "controller_gates": 27.975132942199707,
+        "hidden_evaluation": 0.15512824058532715
+      },
+      "unallocated_controller_seconds": 3.7615585327148438,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 15,
+      "native_scope_invocations": 5,
+      "historical_reproduction_invocations": 0,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "8a30dccf0bceaa0ee054992ed8cc05351c000d10f67752f14588457c357e6ad9",
+      "candidate_diff_sha256": "e3a460c8751b5742f6ecbdfe5bf18cc933466bdfd21cb2404f9d6dbda73c72d1",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 5,
+      "id": "fmt-r1-ordinary",
+      "target": "fmt",
+      "repetition": 1,
+      "pair": 3,
+      "within_pair_order": 1,
+      "arm": "ordinary",
+      "workspace": "w005",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794467679.618693,
+      "finished_at": 1794467995.109277,
+      "workflow_candidate": "e2aab7250ff1f475fab1512cba8ac8aa31cc2b4bb1ad234f7d01faaec15705d7",
+      "final_candidate": "e2aab7250ff1f475fab1512cba8ac8aa31cc2b4bb1ad234f7d01faaec15705d7",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 315.49058389663696,
+      "workflow_seconds": 314.3027217388153,
+      "iterations": 1,
+      "repair_iterations": 0,
+      "review_returns": 0,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 3,
+      "source_setup_seconds_excluded": 0.5532538890838623,
+      "phase_seconds": {
+        "implementer": 178.47269201278687,
+        "code_review": 0,
+        "final_skeptical_review": 133.89613389968872,
+        "controller_gates": 1.3969979286193848,
+        "hidden_evaluation": 1.083324909210205
+      },
+      "unallocated_controller_seconds": 0.6414351463317871,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 2,
+      "native_scope_invocations": 1,
+      "historical_reproduction_invocations": 0,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "80dc923dbe6d6d16358e5eab8fd89cea1f1ece0b95041f16285fa3e08c45538e",
+      "candidate_diff_sha256": "178123e13902830de9a7d20ab2b52576d4222a662282ae7be66c92d840de912f",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 6,
+      "id": "fmt-r1-flightcheck",
+      "target": "fmt",
+      "repetition": 1,
+      "pair": 3,
+      "within_pair_order": 2,
+      "arm": "flightcheck",
+      "workspace": "w006",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794467995.456291,
+      "finished_at": 1794468413.5046651,
+      "workflow_candidate": "3a44effd715be71bebccf13687d5e62500b65644f1fb918793c2e44628014f71",
+      "final_candidate": "3a44effd715be71bebccf13687d5e62500b65644f1fb918793c2e44628014f71",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 418.0483741760254,
+      "workflow_seconds": 416.86725902557373,
+      "iterations": 1,
+      "repair_iterations": 0,
+      "review_returns": 0,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 5,
+      "source_setup_seconds_excluded": 0.5611228942871094,
+      "phase_seconds": {
+        "implementer": 274.96440291404724,
+        "code_review": 0,
+        "final_skeptical_review": 125.02853298187256,
+        "controller_gates": 15.402663707733154,
+        "hidden_evaluation": 1.0742871761322021
+      },
+      "unallocated_controller_seconds": 1.5784873962402344,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 4,
+      "native_scope_invocations": 2,
+      "historical_reproduction_invocations": 1,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "87091bcffa23cf9d158629f22df5dd39840445ff1374f6e2c6d9b8e30857876e",
+      "candidate_diff_sha256": "a8923c37f7039d1a68eb8297c54bbaf2ea5527159f35192a1bcddb01e98ce51b",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 7,
+      "id": "jsoup-r1-flightcheck",
+      "target": "jsoup",
+      "repetition": 1,
+      "pair": 4,
+      "within_pair_order": 1,
+      "arm": "flightcheck",
+      "workspace": "w007",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794468413.873121,
+      "finished_at": 1794468941.0464509,
+      "workflow_candidate": "8246b3ce6e17bfacdbea047db71bd5e5f332c083b8d8d86e62f0e62ff48d86c1",
+      "final_candidate": "8246b3ce6e17bfacdbea047db71bd5e5f332c083b8d8d86e62f0e62ff48d86c1",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 527.1733298301697,
+      "workflow_seconds": 526.3997178077698,
+      "iterations": 1,
+      "repair_iterations": 0,
+      "review_returns": 0,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 4,
+      "source_setup_seconds_excluded": 0.49486517906188965,
+      "phase_seconds": {
+        "implementer": 356.8012616634369,
+        "code_review": 0,
+        "final_skeptical_review": 157.49282836914062,
+        "controller_gates": 9.751586198806763,
+        "hidden_evaluation": 0.6685409545898438
+      },
+      "unallocated_controller_seconds": 2.4591126441955566,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 4,
+      "native_scope_invocations": 2,
+      "historical_reproduction_invocations": 1,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "9fb10cd2d8cd6fffc8db27dd71275786ecf398344e788e50f7fd08c5336a53de",
+      "candidate_diff_sha256": "732817dd155458bfbf34a03e45df370ce941b2840be9203897edf0a9b329d1fe",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 8,
+      "id": "jsoup-r1-ordinary",
+      "target": "jsoup",
+      "repetition": 1,
+      "pair": 4,
+      "within_pair_order": 2,
+      "arm": "ordinary",
+      "workspace": "w008",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794468941.574666,
+      "finished_at": 1794469328.073524,
+      "workflow_candidate": "506ab032b59755019a44c9e39ea8de8cd61423206e167156430aeacb06f89539",
+      "final_candidate": "506ab032b59755019a44c9e39ea8de8cd61423206e167156430aeacb06f89539",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 386.4988579750061,
+      "workflow_seconds": 385.69249296188354,
+      "iterations": 1,
+      "repair_iterations": 0,
+      "review_returns": 0,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 4,
+      "source_setup_seconds_excluded": 0.4732367992401123,
+      "phase_seconds": {
+        "implementer": 238.76970076560974,
+        "code_review": 0,
+        "final_skeptical_review": 141.30283498764038,
+        "controller_gates": 4.910088300704956,
+        "hidden_evaluation": 0.6665201187133789
+      },
+      "unallocated_controller_seconds": 0.8497138023376465,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 2,
+      "native_scope_invocations": 1,
+      "historical_reproduction_invocations": 0,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "948fb03dc367834993d2a9887ecf168338585a8e6ca8fe2f719b9842240d5c06",
+      "candidate_diff_sha256": "dbefe30c0238d306a54356b0efa382afd464d6b1d9fcf6e07242ea2aac914acc",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 9,
+      "id": "ripgrep-r2-ordinary",
+      "target": "ripgrep",
+      "repetition": 2,
+      "pair": 5,
+      "within_pair_order": 1,
+      "arm": "ordinary",
+      "workspace": "w009",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794469328.46985,
+      "finished_at": 1794470512.253249,
+      "workflow_candidate": "2b64e09f8db3855f8abb75763f62fd62dda43e3dd6f3c93c58dd6060b44ba8d0",
+      "final_candidate": "2b64e09f8db3855f8abb75763f62fd62dda43e3dd6f3c93c58dd6060b44ba8d0",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 1183.7833988666534,
+      "workflow_seconds": 1183.509890794754,
+      "iterations": 2,
+      "repair_iterations": 1,
+      "review_returns": 1,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 2,
+      "source_edit_checkpoints": 12,
+      "source_setup_seconds_excluded": 0.24883317947387695,
+      "phase_seconds": {
+        "implementer": 812.5942878723145,
+        "code_review": 0,
+        "final_skeptical_review": 357.09574818611145,
+        "controller_gates": 12.381443977355957,
+        "hidden_evaluation": 0.15553593635559082
+      },
+      "unallocated_controller_seconds": 1.5563828945159912,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 6,
+      "native_scope_invocations": 2,
+      "historical_reproduction_invocations": 0,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "0401557cddfce8f9bc321053dc5df32c079ed364b0a56377462791a015d03b81",
+      "candidate_diff_sha256": "da45d7f30314334b5c691a901bdb7f341e22ea609832390ead8b0f5b23418d2d",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 10,
+      "id": "ripgrep-r2-flightcheck",
+      "target": "ripgrep",
+      "repetition": 2,
+      "pair": 5,
+      "within_pair_order": 2,
+      "arm": "flightcheck",
+      "workspace": "w010",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794470512.7942789,
+      "finished_at": 1794472997.7938151,
+      "workflow_candidate": "858b92f09f8566af6321713e8bf7a86dfc879ab8b0d8074920f0b233c4b32723",
+      "final_candidate": "858b92f09f8566af6321713e8bf7a86dfc879ab8b0d8074920f0b233c4b32723",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 2484.9995362758636,
+      "workflow_seconds": 2484.719793319702,
+      "iterations": 3,
+      "repair_iterations": 2,
+      "review_returns": 2,
+      "controller_repairs": [],
+      "code_reviews": 3,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 34,
+      "source_setup_seconds_excluded": 0.2636740207672119,
+      "phase_seconds": {
+        "implementer": 1541.7722969055176,
+        "code_review": 606.4934659004211,
+        "final_skeptical_review": 217.80785393714905,
+        "controller_gates": 111.87167263031006,
+        "hidden_evaluation": 0.15435504913330078
+      },
+      "unallocated_controller_seconds": 6.8998918533325195,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 16,
+      "native_scope_invocations": 9,
+      "historical_reproduction_invocations": 7,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "21006486f831fcbf9082ac910702e39d3015826461b69de69a92aa395fa81eba",
+      "candidate_diff_sha256": "e1c428f6bb279f7474610adf49096caf9347f2d54837a4ffc858cf752ab1cabe",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 11,
+      "id": "fmt-r2-flightcheck",
+      "target": "fmt",
+      "repetition": 2,
+      "pair": 6,
+      "within_pair_order": 1,
+      "arm": "flightcheck",
+      "workspace": "w011",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794472999.361257,
+      "finished_at": 1794473442.946846,
+      "workflow_candidate": "90c17d654cf9d0eb7ecd7779bc4f1e02c259914977ce532844c822237483ed0a",
+      "final_candidate": "90c17d654cf9d0eb7ecd7779bc4f1e02c259914977ce532844c822237483ed0a",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 443.58558893203735,
+      "workflow_seconds": 442.39937591552734,
+      "iterations": 1,
+      "repair_iterations": 0,
+      "review_returns": 0,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 2,
+      "source_setup_seconds_excluded": 0.5625903606414795,
+      "phase_seconds": {
+        "implementer": 226.39266514778137,
+        "code_review": 0,
+        "final_skeptical_review": 198.9878659248352,
+        "controller_gates": 15.562633991241455,
+        "hidden_evaluation": 1.0796780586242676
+      },
+      "unallocated_controller_seconds": 1.5627458095550537,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 4,
+      "native_scope_invocations": 2,
+      "historical_reproduction_invocations": 1,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "4bfb9ca9f3ac3b9ab05246a01cce194f9f2b14fba2371a347f8b653bbedfc09e",
+      "candidate_diff_sha256": "1409d1960874df89a6b62c9a163d564df36d22d65d6855d0e1264936b1b47130",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 12,
+      "id": "fmt-r2-ordinary",
+      "target": "fmt",
+      "repetition": 2,
+      "pair": 6,
+      "within_pair_order": 2,
+      "arm": "ordinary",
+      "workspace": "w012",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794473443.363395,
+      "finished_at": 1794473671.36517,
+      "workflow_candidate": "946b68c691211cf30d792f3eb8bcc6471b097012091f001ce380eeb78f4308f8",
+      "final_candidate": "946b68c691211cf30d792f3eb8bcc6471b097012091f001ce380eeb78f4308f8",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 228.0017750263214,
+      "workflow_seconds": 226.80848693847656,
+      "iterations": 1,
+      "repair_iterations": 0,
+      "review_returns": 0,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 2,
+      "source_setup_seconds_excluded": 0.5662930011749268,
+      "phase_seconds": {
+        "implementer": 112.4176378250122,
+        "code_review": 0,
+        "final_skeptical_review": 112.48012900352478,
+        "controller_gates": 1.3694980144500732,
+        "hidden_evaluation": 1.0875349044799805
+      },
+      "unallocated_controller_seconds": 0.6469752788543701,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 2,
+      "native_scope_invocations": 1,
+      "historical_reproduction_invocations": 0,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "bf2fe4982332adf864288ef708fce37b8b452512b2f8e607a907cb5e5c44b682",
+      "candidate_diff_sha256": "ee52a5b98e3884e2b998f507d51b2728bdb515d1f9276c61abd186a6ddb847fe",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 13,
+      "id": "jsoup-r2-ordinary",
+      "target": "jsoup",
+      "repetition": 2,
+      "pair": 7,
+      "within_pair_order": 1,
+      "arm": "ordinary",
+      "workspace": "w013",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794473671.770738,
+      "finished_at": 1794473946.2882261,
+      "workflow_candidate": "422e3a1f71b325c4033e8b32d56f9c60167e29dd2f924d2db7a490cab4afb7df",
+      "final_candidate": "422e3a1f71b325c4033e8b32d56f9c60167e29dd2f924d2db7a490cab4afb7df",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 274.5174882411957,
+      "workflow_seconds": 273.70798802375793,
+      "iterations": 1,
+      "repair_iterations": 0,
+      "review_returns": 0,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 5,
+      "source_setup_seconds_excluded": 0.4811849594116211,
+      "phase_seconds": {
+        "implementer": 144.43744921684265,
+        "code_review": 0,
+        "final_skeptical_review": 123.59153819084167,
+        "controller_gates": 4.963555335998535,
+        "hidden_evaluation": 0.6701507568359375
+      },
+      "unallocated_controller_seconds": 0.8547947406768799,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 2,
+      "native_scope_invocations": 1,
+      "historical_reproduction_invocations": 0,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "cc1deac904be7f752b59a2b5686b22f6fbf45bf8303482449ecfa67d9b5b5be0",
+      "candidate_diff_sha256": "75063ad3475585693fa0b640f56bbdde782eb069d66be575364f6a93a260719f",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 14,
+      "id": "jsoup-r2-flightcheck",
+      "target": "jsoup",
+      "repetition": 2,
+      "pair": 7,
+      "within_pair_order": 2,
+      "arm": "flightcheck",
+      "workspace": "w014",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794473946.763391,
+      "finished_at": 1794474487.37438,
+      "workflow_candidate": "2a2fc7868d1764ddf7998223bffa2ba17416a668f50084115402f25cc08b59f5",
+      "final_candidate": "2a2fc7868d1764ddf7998223bffa2ba17416a668f50084115402f25cc08b59f5",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 540.6109890937805,
+      "workflow_seconds": 539.7964878082275,
+      "iterations": 1,
+      "repair_iterations": 0,
+      "review_returns": 0,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 4,
+      "source_setup_seconds_excluded": 0.508918046951294,
+      "phase_seconds": {
+        "implementer": 350.65024995803833,
+        "code_review": 0,
+        "final_skeptical_review": 176.87015295028687,
+        "controller_gates": 9.663728713989258,
+        "hidden_evaluation": 0.673022985458374
+      },
+      "unallocated_controller_seconds": 2.7538344860076904,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 4,
+      "native_scope_invocations": 2,
+      "historical_reproduction_invocations": 1,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "fefa9693bb363c013615307cbb644d5e2490388cb935b5eb2ae2054998f5395c",
+      "candidate_diff_sha256": "35c6d3ee858dbe5e900ab524e48f44b0129a5a903facef8f4c2b5f351acadf7e",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 15,
+      "id": "django-r2-flightcheck",
+      "target": "django",
+      "repetition": 2,
+      "pair": 8,
+      "within_pair_order": 1,
+      "arm": "flightcheck",
+      "workspace": "w015",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794474488.155412,
+      "finished_at": 1794474986.701744,
+      "workflow_candidate": "f9700b2f3ef28a905c105ad24157f602a68a26c294d801e4935798f888185062",
+      "final_candidate": "f9700b2f3ef28a905c105ad24157f602a68a26c294d801e4935798f888185062",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 498.5463321208954,
+      "workflow_seconds": 497.62893319129944,
+      "iterations": 1,
+      "repair_iterations": 0,
+      "review_returns": 0,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 7,
+      "source_setup_seconds_excluded": 5.420763969421387,
+      "phase_seconds": {
+        "implementer": 315.69383931159973,
+        "code_review": 0,
+        "final_skeptical_review": 171.2485990524292,
+        "controller_gates": 6.132601261138916,
+        "hidden_evaluation": 0.6712551116943359
+      },
+      "unallocated_controller_seconds": 4.800037384033203,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 5,
+      "native_scope_invocations": 2,
+      "historical_reproduction_invocations": 1,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "670dfe2dbc61571cd6b9465e36e1aa1b15067e8ad738cbaa85099b003406a2e6",
+      "candidate_diff_sha256": "08c2978147d1a7a06d97a451631a37951033c21a581ec2a6b1663643cb9dfa0c",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 16,
+      "id": "django-r2-ordinary",
+      "target": "django",
+      "repetition": 2,
+      "pair": 8,
+      "within_pair_order": 2,
+      "arm": "ordinary",
+      "workspace": "w016",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794474988.534719,
+      "finished_at": 1794475652.831806,
+      "workflow_candidate": "c33cf11bbd2a10c0d5ea02309d1a35b984abf5b5cd0b5b54f39e8aa094fa9356",
+      "final_candidate": "c33cf11bbd2a10c0d5ea02309d1a35b984abf5b5cd0b5b54f39e8aa094fa9356",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 664.2970869541168,
+      "workflow_seconds": 663.0307388305664,
+      "iterations": 2,
+      "repair_iterations": 1,
+      "review_returns": 1,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 2,
+      "source_edit_checkpoints": 5,
+      "source_setup_seconds_excluded": 5.3613810539245605,
+      "phase_seconds": {
+        "implementer": 370.748850107193,
+        "code_review": 0,
+        "final_skeptical_review": 277.77987408638,
+        "controller_gates": 9.25338339805603,
+        "hidden_evaluation": 0.6814899444580078
+      },
+      "unallocated_controller_seconds": 5.833489418029785,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 6,
+      "native_scope_invocations": 2,
+      "historical_reproduction_invocations": 0,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "b8c78cd4fd92dcdb4a072ad79e4a81fe228aafbfbb1e5b3ab9e726caade74b24",
+      "candidate_diff_sha256": "b5ae4f292dbc144cd795c89f5b95e0be71ae048c482c2e9d2b3d624bedbf7ddb",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 17,
+      "id": "fmt-r3-ordinary",
+      "target": "fmt",
+      "repetition": 3,
+      "pair": 9,
+      "within_pair_order": 1,
+      "arm": "ordinary",
+      "workspace": "w017",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794475653.699473,
+      "finished_at": 1794475899.406944,
+      "workflow_candidate": "9a38497f926b18138f15935625fc315d676d9628df867c9586878224227b2b8c",
+      "final_candidate": "9a38497f926b18138f15935625fc315d676d9628df867c9586878224227b2b8c",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 245.70747113227844,
+      "workflow_seconds": 244.52134704589844,
+      "iterations": 1,
+      "repair_iterations": 0,
+      "review_returns": 0,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 2,
+      "source_setup_seconds_excluded": 0.5502450466156006,
+      "phase_seconds": {
+        "implementer": 129.9611520767212,
+        "code_review": 0,
+        "final_skeptical_review": 112.65412521362305,
+        "controller_gates": 1.3542802333831787,
+        "hidden_evaluation": 1.0804328918457031
+      },
+      "unallocated_controller_seconds": 0.6574807167053223,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 2,
+      "native_scope_invocations": 1,
+      "historical_reproduction_invocations": 0,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "aeaa0c101f59f483f0de851317bca17a3ebd04e00c7f3bda94b73dc5c871330d",
+      "candidate_diff_sha256": "60ec108d75a259b0167c6f6d96b169e1597e672d936f9b55f4daf3bc0402e24d",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 18,
+      "id": "fmt-r3-flightcheck",
+      "target": "fmt",
+      "repetition": 3,
+      "pair": 9,
+      "within_pair_order": 2,
+      "arm": "flightcheck",
+      "workspace": "w018",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794475899.710319,
+      "finished_at": 1794476347.130997,
+      "workflow_candidate": "30dc90b40b8f339b364abd935e8ad47833e0283d17a77efa4d27ac5064d91b04",
+      "final_candidate": "30dc90b40b8f339b364abd935e8ad47833e0283d17a77efa4d27ac5064d91b04",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 447.42067790031433,
+      "workflow_seconds": 446.2610430717468,
+      "iterations": 1,
+      "repair_iterations": 0,
+      "review_returns": 0,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 2,
+      "source_setup_seconds_excluded": 0.5501689910888672,
+      "phase_seconds": {
+        "implementer": 287.64197301864624,
+        "code_review": 0,
+        "final_skeptical_review": 141.84063291549683,
+        "controller_gates": 15.431892156600952,
+        "hidden_evaluation": 1.0703938007354736
+      },
+      "unallocated_controller_seconds": 1.4357860088348389,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 4,
+      "native_scope_invocations": 2,
+      "historical_reproduction_invocations": 1,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "c7702ec4cf2ec19f2c745480b3796bd6bc4618564cba73abd2b05e6f2cdaca5a",
+      "candidate_diff_sha256": "9ae2770436fdabb04059deff6a96a9cac88c19923902a8e3aa9bad944641bc11",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 19,
+      "id": "jsoup-r3-flightcheck",
+      "target": "jsoup",
+      "repetition": 3,
+      "pair": 10,
+      "within_pair_order": 1,
+      "arm": "flightcheck",
+      "workspace": "w019",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794476347.599435,
+      "finished_at": 1794476898.380543,
+      "workflow_candidate": "3099a4e7c02b06e68f76d31f163f2f76969ee5337559d6764e8321844f01025d",
+      "final_candidate": "3099a4e7c02b06e68f76d31f163f2f76969ee5337559d6764e8321844f01025d",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 550.7811079025269,
+      "workflow_seconds": 549.9864580631256,
+      "iterations": 1,
+      "repair_iterations": 0,
+      "review_returns": 0,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 4,
+      "source_setup_seconds_excluded": 0.5045461654663086,
+      "phase_seconds": {
+        "implementer": 335.83294701576233,
+        "code_review": 0,
+        "final_skeptical_review": 201.58275771141052,
+        "controller_gates": 9.94625210762024,
+        "hidden_evaluation": 0.6542749404907227
+      },
+      "unallocated_controller_seconds": 2.764876127243042,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 4,
+      "native_scope_invocations": 2,
+      "historical_reproduction_invocations": 1,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "42c84990ea33698b97ff0fb652e61ba1813de5b1b60bf109f4bc5602155afd13",
+      "candidate_diff_sha256": "65c274849a1c53d1846526c5dcb170e39a66736000317d184c0617a582174af5",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 20,
+      "id": "jsoup-r3-ordinary",
+      "target": "jsoup",
+      "repetition": 3,
+      "pair": 10,
+      "within_pair_order": 2,
+      "arm": "ordinary",
+      "workspace": "w020",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794476898.9408908,
+      "finished_at": 1794477153.972325,
+      "workflow_candidate": "b6bbceee104b2ae26dad899ec5ea217b7862b49328d179253c73c9cd91c206ad",
+      "final_candidate": "b6bbceee104b2ae26dad899ec5ea217b7862b49328d179253c73c9cd91c206ad",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 255.03143429756165,
+      "workflow_seconds": 254.2401101589203,
+      "iterations": 1,
+      "repair_iterations": 0,
+      "review_returns": 0,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 4,
+      "source_setup_seconds_excluded": 0.47556400299072266,
+      "phase_seconds": {
+        "implementer": 134.8416268825531,
+        "code_review": 0,
+        "final_skeptical_review": 113.69275236129761,
+        "controller_gates": 5.001834869384766,
+        "hidden_evaluation": 0.6536030769348145
+      },
+      "unallocated_controller_seconds": 0.8416171073913574,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 2,
+      "native_scope_invocations": 1,
+      "historical_reproduction_invocations": 0,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "4b0ba426bc119dea0b56aef6f8418961aac781b6a29456e0e11d232e3b7146b9",
+      "candidate_diff_sha256": "8b273319a3033441e68d0bf9d7ab40d82178c313cab93b2532d5fd1b84c9be3c",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 21,
+      "id": "django-r3-ordinary",
+      "target": "django",
+      "repetition": 3,
+      "pair": 11,
+      "within_pair_order": 1,
+      "arm": "ordinary",
+      "workspace": "w021",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794477155.262364,
+      "finished_at": 1794477587.537965,
+      "workflow_candidate": "dfa2f11fd4219d9f8b5382ab4b4243763baa0c614563595615639ecb7e4c22f4",
+      "final_candidate": "dfa2f11fd4219d9f8b5382ab4b4243763baa0c614563595615639ecb7e4c22f4",
+      "final_skeptical_verdict": "APPROVE_WITH_NITS",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 432.27560114860535,
+      "workflow_seconds": 431.1745798587799,
+      "iterations": 1,
+      "repair_iterations": 0,
+      "review_returns": 0,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 3,
+      "source_setup_seconds_excluded": 5.313932180404663,
+      "phase_seconds": {
+        "implementer": 203.60494995117188,
+        "code_review": 0,
+        "final_skeptical_review": 221.0451979637146,
+        "controller_gates": 4.2362048625946045,
+        "hidden_evaluation": 0.6729552745819092
+      },
+      "unallocated_controller_seconds": 2.7162930965423584,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 3,
+      "native_scope_invocations": 1,
+      "historical_reproduction_invocations": 0,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "b2a7e64abd2fc6a69ed242bdfd97932f6238f6c2bd7250a61a08314a6962b7f4",
+      "candidate_diff_sha256": "4a79cf25e5effaf39a5abfdc0c8f9d34dbf9d660d5b78fd7b87605126e73bb1d",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 22,
+      "id": "django-r3-flightcheck",
+      "target": "django",
+      "repetition": 3,
+      "pair": 11,
+      "within_pair_order": 2,
+      "arm": "flightcheck",
+      "workspace": "w022",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794477588.567279,
+      "finished_at": 1794478180.2541041,
+      "workflow_candidate": "25ad8133d96beb52d3abd63003d8e68f3d9304bf1a67e056e99adfd01221fb0e",
+      "final_candidate": "25ad8133d96beb52d3abd63003d8e68f3d9304bf1a67e056e99adfd01221fb0e",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 591.6868250370026,
+      "workflow_seconds": 590.7620129585266,
+      "iterations": 1,
+      "repair_iterations": 0,
+      "review_returns": 0,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 7,
+      "source_setup_seconds_excluded": 5.435938119888306,
+      "phase_seconds": {
+        "implementer": 368.932941198349,
+        "code_review": 0,
+        "final_skeptical_review": 210.88047409057617,
+        "controller_gates": 6.144230365753174,
+        "hidden_evaluation": 0.6803951263427734
+      },
+      "unallocated_controller_seconds": 5.048784255981445,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 5,
+      "native_scope_invocations": 2,
+      "historical_reproduction_invocations": 1,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "9153e3c643472bcc39a4e0e3ffab8a0d6f329360402382fb393a1960d27cce71",
+      "candidate_diff_sha256": "9ec2e34b3dc3680c9b5fdb3398e8172df878b9329f2ac44a50f75c0dbe1c1125",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 23,
+      "id": "ripgrep-r3-flightcheck",
+      "target": "ripgrep",
+      "repetition": 3,
+      "pair": 12,
+      "within_pair_order": 1,
+      "arm": "flightcheck",
+      "workspace": "w023",
+      "status": "incomplete",
+      "reason": "RuntimeError: Prerequisites block CODE: [\"test-request:CODE_test_null_data_stream\", \"regression:CODE_null_data_flush\"]",
+      "started_at": 1794478180.9948318,
+      "finished_at": 1794480514.517449,
+      "workflow_candidate": null,
+      "final_candidate": "a751cc1c9a29353c0411d1b7807dea75bea979fdefcddaf4b0260099516815a8",
+      "final_skeptical_verdict": null,
+      "blind_approval": false,
+      "hidden_passed": null,
+      "escaped_defect": false,
+      "endpoint_reached": false,
+      "elapsed_seconds": 2333.5226171016693,
+      "workflow_seconds": 2333.5226171016693,
+      "iterations": 4,
+      "repair_iterations": 3,
+      "review_returns": 2,
+      "controller_repairs": [
+        "regression-proof"
+      ],
+      "code_reviews": 2,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 28,
+      "source_setup_seconds_excluded": 0.26671290397644043,
+      "phase_seconds": {
+        "implementer": 1700.774490594864,
+        "code_review": 333.4132697582245,
+        "final_skeptical_review": 228.85034608840942,
+        "controller_gates": 64.75201296806335,
+        "hidden_evaluation": 0
+      },
+      "unallocated_controller_seconds": 5.732497692108154,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 1,
+      "controller_gate_invocations": 11,
+      "native_scope_invocations": 5,
+      "historical_reproduction_invocations": 4,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "afcb92bc620d47d4a81e4ab619da8782816a08cbd191ad599c136cbaf29075c9",
+      "candidate_diff_sha256": "d23cd2ab86ed56ed93f14bdd9b39574aacaa9fd2fb444de1ff1f7a94aa503655",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    },
+    {
+      "sequence": 24,
+      "id": "ripgrep-r3-ordinary",
+      "target": "ripgrep",
+      "repetition": 3,
+      "pair": 12,
+      "within_pair_order": 2,
+      "arm": "ordinary",
+      "workspace": "w024",
+      "status": "completed",
+      "reason": null,
+      "started_at": 1794480515.674036,
+      "finished_at": 1794481256.482233,
+      "workflow_candidate": "70af87e74eb700466fa23554a9d094eba03e9dd14abb07ee49d788d1cf7a8abb",
+      "final_candidate": "70af87e74eb700466fa23554a9d094eba03e9dd14abb07ee49d788d1cf7a8abb",
+      "final_skeptical_verdict": "APPROVE",
+      "blind_approval": true,
+      "hidden_passed": true,
+      "escaped_defect": false,
+      "endpoint_reached": true,
+      "elapsed_seconds": 740.8081970214844,
+      "workflow_seconds": 740.5306649208069,
+      "iterations": 1,
+      "repair_iterations": 0,
+      "review_returns": 0,
+      "controller_repairs": [],
+      "code_reviews": 0,
+      "skeptical_reviews": 1,
+      "source_edit_checkpoints": 9,
+      "source_setup_seconds_excluded": 0.2559020519256592,
+      "phase_seconds": {
+        "implementer": 562.966551065445,
+        "code_review": 0,
+        "final_skeptical_review": 172.3235101699829,
+        "controller_gates": 4.45842981338501,
+        "hidden_evaluation": 0.15547895431518555
+      },
+      "unallocated_controller_seconds": 0.9042270183563232,
+      "interrupted": false,
+      "timing_complete": true,
+      "controller_repair_count": 0,
+      "controller_gate_invocations": 3,
+      "native_scope_invocations": 1,
+      "historical_reproduction_invocations": 0,
+      "unexpected_failed_controller_gates": 0,
+      "failed_private_case_ids": [],
+      "result_sha256": "6f87ea6a962c50af05a11a2a24ce50f61987deebf34f0c11015f452a55502e91",
+      "candidate_diff_sha256": "c1f693a56af6d5cfc323f0ee204097518b9f66e7b09e67371b5127300b316f53",
+      "observed_configurations": [
+        [
+          "gpt-6.1-sol",
+          "high"
+        ]
+      ]
+    }
+  ],
+  "additional_diagnostics": {
+    "plan_sha256": "dcd960e92dc8783bd8b85259aa3117e362f247cb8dca6cbcde40f4d98bbd9e65",
+    "summary_sha256": "3adf78b84ef144905bb24c53e05b2fcf8f4acced19c4c3fbbd182710ab48255e",
+    "cases_by_target": {
+      "ripgrep": [
+        "posthoc:null-data-stdin-open",
+        "posthoc:parallel-lf-stdin-open",
+        "posthoc:parallel-null-data-stdin-open",
+        "posthoc:explicit-utf8-short-line",
+        "posthoc:explicit-windows1252-short-line",
+        "posthoc:bom-compatibility-auto-le",
+        "posthoc:bom-compatibility-explicit-le",
+        "posthoc:bom-compatibility-auto-be",
+        "posthoc:bom-compatibility-explicit-be",
+        "posthoc:binary-explicit-utf8",
+        "posthoc:binary-bom-window",
+        "posthoc:binary-utf16-preprocessor"
+      ],
+      "django": [
+        "posthoc:duplicate-pk-values",
+        "posthoc:duplicate-pk-values-list",
+        "posthoc:duplicate-scalar-validation"
+      ]
+    },
+    "observations": [
+      {
+        "id": "django-r1-ordinary",
+        "target": "django",
+        "kind": "measured-candidate",
+        "arm": "ordinary",
+        "repetition": 1,
+        "candidate": "8bf61bd2b6186288c9e9f4d76c23b2b2de4af277068c7ca71d64375bdf56d373",
+        "status": "observed",
+        "passed": false,
+        "failed_cases": [
+          "posthoc:duplicate-pk-values",
+          "posthoc:duplicate-pk-values-list",
+          "posthoc:duplicate-scalar-validation"
+        ],
+        "producer_sha256": "79443cd2f36a736886c085fa355f59d082abeb851de4b428ada7a48899ce171a",
+        "binary_sha256": null,
+        "report_sha256": "7a11fa97d98a5d66801d9c15420709d483162e8a48c553c1f645950422f7b90d",
+        "reason": null,
+        "cases": [
+          {
+            "id": "posthoc:duplicate-pk-values",
+            "passed": false,
+            "error": "ValueError: 'in' subquery lookup of 'pk' must have 2 fields (received 4)"
+          },
+          {
+            "id": "posthoc:duplicate-pk-values-list",
+            "passed": false,
+            "error": "ValueError: 'in' subquery lookup of 'pk' must have 2 fields (received 4)"
+          },
+          {
+            "id": "posthoc:duplicate-scalar-validation",
+            "passed": false,
+            "error": "AssertionError: Repeated scalar selection was not rejected by ValueError during lookup construction"
+          }
+        ]
+      },
+      {
+        "id": "django-r1-flightcheck",
+        "target": "django",
+        "kind": "measured-candidate",
+        "arm": "flightcheck",
+        "repetition": 1,
+        "candidate": "e38da9aaf071a757f544c5f43ce2da93645fa3be42ae83df077b2f6a11221fbc",
+        "status": "observed",
+        "passed": true,
+        "failed_cases": [],
+        "producer_sha256": "79443cd2f36a736886c085fa355f59d082abeb851de4b428ada7a48899ce171a",
+        "binary_sha256": null,
+        "report_sha256": "e7e0e3028120064232c19a4aa07cfee8dcb9773f292f5de6137859ed6e164333",
+        "reason": null,
+        "cases": [
+          {
+            "id": "posthoc:duplicate-pk-values",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:duplicate-pk-values-list",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:duplicate-scalar-validation",
+            "passed": true,
+            "error": null
+          }
+        ]
+      },
+      {
+        "id": "ripgrep-r1-flightcheck",
+        "target": "ripgrep",
+        "kind": "measured-candidate",
+        "arm": "flightcheck",
+        "repetition": 1,
+        "candidate": "17daef0b55070ba7a17c458e8cf0f33200a1ab06882d88b99b49694fadde8b1f",
+        "status": "observed",
+        "passed": false,
+        "failed_cases": [
+          "posthoc:null-data-stdin-open",
+          "posthoc:parallel-lf-stdin-open",
+          "posthoc:parallel-null-data-stdin-open"
+        ],
+        "producer_sha256": "2faca1a5bce72898b62e56ffa985964c2ad5d7bab35434f2116983488f977a00",
+        "binary_sha256": "bc5daa8a487de5ef86e3ded9d3b5d18614c33783c89ba0a2180cbf53286a5eb4",
+        "report_sha256": "c2afa8c7c9d0b1968b847762c646c0557aa4173e3af5a6e0eb35bfac803ae6ca",
+        "reason": null,
+        "cases": [
+          {
+            "id": "posthoc:null-data-stdin-open",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:parallel-lf-stdin-open",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:parallel-null-data-stdin-open",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:explicit-utf8-short-line",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:explicit-windows1252-short-line",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-auto-le",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-explicit-le",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-auto-be",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-explicit-be",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:binary-explicit-utf8",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:binary-bom-window",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:binary-utf16-preprocessor",
+            "passed": true,
+            "error": null
+          }
+        ]
+      },
+      {
+        "id": "ripgrep-r1-ordinary",
+        "target": "ripgrep",
+        "kind": "measured-candidate",
+        "arm": "ordinary",
+        "repetition": 1,
+        "candidate": "885c7717a36db021f6badbc89c434809aa4028acfa2c7e4db9b097f17caf2a4f",
+        "status": "observed",
+        "passed": true,
+        "failed_cases": [],
+        "producer_sha256": "2faca1a5bce72898b62e56ffa985964c2ad5d7bab35434f2116983488f977a00",
+        "binary_sha256": "8fa1592dd909eaeb4f54b9ad9d3b21af70452397be6295a6bdbf8ccd61ed6c37",
+        "report_sha256": "84c36bb0a7f50136f49dbbb71082be3c5fe0888da92acbb9808aad582ef741e4",
+        "reason": null,
+        "cases": [
+          {
+            "id": "posthoc:null-data-stdin-open",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:parallel-lf-stdin-open",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:parallel-null-data-stdin-open",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:explicit-utf8-short-line",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:explicit-windows1252-short-line",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-auto-le",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-explicit-le",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-auto-be",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-explicit-be",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:binary-explicit-utf8",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:binary-bom-window",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:binary-utf16-preprocessor",
+            "passed": true,
+            "error": null
+          }
+        ]
+      },
+      {
+        "id": "ripgrep-r2-ordinary",
+        "target": "ripgrep",
+        "kind": "measured-candidate",
+        "arm": "ordinary",
+        "repetition": 2,
+        "candidate": "2b64e09f8db3855f8abb75763f62fd62dda43e3dd6f3c93c58dd6060b44ba8d0",
+        "status": "observed",
+        "passed": false,
+        "failed_cases": [
+          "posthoc:null-data-stdin-open",
+          "posthoc:parallel-lf-stdin-open",
+          "posthoc:parallel-null-data-stdin-open"
+        ],
+        "producer_sha256": "2faca1a5bce72898b62e56ffa985964c2ad5d7bab35434f2116983488f977a00",
+        "binary_sha256": "161aab866a7ad2698c279c512cce39e24dd88df1ad81e7d6b22ca48ba8421748",
+        "report_sha256": "a8e02d379fd14d0e2f542e9ec14b81aa4a216a34c3716f35e6353114f46ce28b",
+        "reason": null,
+        "cases": [
+          {
+            "id": "posthoc:null-data-stdin-open",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:parallel-lf-stdin-open",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:parallel-null-data-stdin-open",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:explicit-utf8-short-line",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:explicit-windows1252-short-line",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-auto-le",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-explicit-le",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-auto-be",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-explicit-be",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:binary-explicit-utf8",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:binary-bom-window",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:binary-utf16-preprocessor",
+            "passed": true,
+            "error": null
+          }
+        ]
+      },
+      {
+        "id": "ripgrep-r2-flightcheck",
+        "target": "ripgrep",
+        "kind": "measured-candidate",
+        "arm": "flightcheck",
+        "repetition": 2,
+        "candidate": "858b92f09f8566af6321713e8bf7a86dfc879ab8b0d8074920f0b233c4b32723",
+        "status": "observed",
+        "passed": false,
+        "failed_cases": [
+          "posthoc:null-data-stdin-open",
+          "posthoc:parallel-lf-stdin-open",
+          "posthoc:parallel-null-data-stdin-open"
+        ],
+        "producer_sha256": "2faca1a5bce72898b62e56ffa985964c2ad5d7bab35434f2116983488f977a00",
+        "binary_sha256": "65aa8aeeecbebba6557dfd316b89da2c29e77b2698b3039b88b2ca0d107cc7a3",
+        "report_sha256": "5e39deed858cf1e9ac694824db3e808483693431f158755eb1cfb26963506743",
+        "reason": null,
+        "cases": [
+          {
+            "id": "posthoc:null-data-stdin-open",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:parallel-lf-stdin-open",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:parallel-null-data-stdin-open",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:explicit-utf8-short-line",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:explicit-windows1252-short-line",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-auto-le",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-explicit-le",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-auto-be",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-explicit-be",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:binary-explicit-utf8",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:binary-bom-window",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:binary-utf16-preprocessor",
+            "passed": true,
+            "error": null
+          }
+        ]
+      },
+      {
+        "id": "django-r2-flightcheck",
+        "target": "django",
+        "kind": "measured-candidate",
+        "arm": "flightcheck",
+        "repetition": 2,
+        "candidate": "f9700b2f3ef28a905c105ad24157f602a68a26c294d801e4935798f888185062",
+        "status": "observed",
+        "passed": true,
+        "failed_cases": [],
+        "producer_sha256": "79443cd2f36a736886c085fa355f59d082abeb851de4b428ada7a48899ce171a",
+        "binary_sha256": null,
+        "report_sha256": "3e992d4c68afe14c49117bc4f7f9e97c51cd3769d18f925f7e6e84a66ce5cf88",
+        "reason": null,
+        "cases": [
+          {
+            "id": "posthoc:duplicate-pk-values",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:duplicate-pk-values-list",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:duplicate-scalar-validation",
+            "passed": true,
+            "error": null
+          }
+        ]
+      },
+      {
+        "id": "django-r2-ordinary",
+        "target": "django",
+        "kind": "measured-candidate",
+        "arm": "ordinary",
+        "repetition": 2,
+        "candidate": "c33cf11bbd2a10c0d5ea02309d1a35b984abf5b5cd0b5b54f39e8aa094fa9356",
+        "status": "observed",
+        "passed": true,
+        "failed_cases": [],
+        "producer_sha256": "79443cd2f36a736886c085fa355f59d082abeb851de4b428ada7a48899ce171a",
+        "binary_sha256": null,
+        "report_sha256": "2509e48a5b387ddafb29ede8d11930d90e806857e24e807d94b36a78980923a1",
+        "reason": null,
+        "cases": [
+          {
+            "id": "posthoc:duplicate-pk-values",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:duplicate-pk-values-list",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:duplicate-scalar-validation",
+            "passed": true,
+            "error": null
+          }
+        ]
+      },
+      {
+        "id": "django-r3-ordinary",
+        "target": "django",
+        "kind": "measured-candidate",
+        "arm": "ordinary",
+        "repetition": 3,
+        "candidate": "dfa2f11fd4219d9f8b5382ab4b4243763baa0c614563595615639ecb7e4c22f4",
+        "status": "observed",
+        "passed": true,
+        "failed_cases": [],
+        "producer_sha256": "79443cd2f36a736886c085fa355f59d082abeb851de4b428ada7a48899ce171a",
+        "binary_sha256": null,
+        "report_sha256": "7b0b0f8998881b2539280de4e13ddb12c62eee33b2a3fa21b6d19180d559f5a2",
+        "reason": null,
+        "cases": [
+          {
+            "id": "posthoc:duplicate-pk-values",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:duplicate-pk-values-list",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:duplicate-scalar-validation",
+            "passed": true,
+            "error": null
+          }
+        ]
+      },
+      {
+        "id": "django-r3-flightcheck",
+        "target": "django",
+        "kind": "measured-candidate",
+        "arm": "flightcheck",
+        "repetition": 3,
+        "candidate": "25ad8133d96beb52d3abd63003d8e68f3d9304bf1a67e056e99adfd01221fb0e",
+        "status": "observed",
+        "passed": true,
+        "failed_cases": [],
+        "producer_sha256": "79443cd2f36a736886c085fa355f59d082abeb851de4b428ada7a48899ce171a",
+        "binary_sha256": null,
+        "report_sha256": "b3bd08d75e5c516b31e16c6684f33d99eeb4db92666285a6ce4777e988ecdbda",
+        "reason": null,
+        "cases": [
+          {
+            "id": "posthoc:duplicate-pk-values",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:duplicate-pk-values-list",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:duplicate-scalar-validation",
+            "passed": true,
+            "error": null
+          }
+        ]
+      },
+      {
+        "id": "ripgrep-r3-flightcheck",
+        "target": "ripgrep",
+        "kind": "measured-candidate",
+        "arm": "flightcheck",
+        "repetition": 3,
+        "candidate": null,
+        "status": "unavailable",
+        "passed": null,
+        "failed_cases": null,
+        "producer_sha256": null,
+        "binary_sha256": null,
+        "report_sha256": null,
+        "reason": "No first eligible approval; not an approved-candidate escape"
+      },
+      {
+        "id": "ripgrep-r3-ordinary",
+        "target": "ripgrep",
+        "kind": "measured-candidate",
+        "arm": "ordinary",
+        "repetition": 3,
+        "candidate": "70af87e74eb700466fa23554a9d094eba03e9dd14abb07ee49d788d1cf7a8abb",
+        "status": "observed",
+        "passed": false,
+        "failed_cases": [
+          "posthoc:null-data-stdin-open",
+          "posthoc:parallel-lf-stdin-open",
+          "posthoc:parallel-null-data-stdin-open"
+        ],
+        "producer_sha256": "2faca1a5bce72898b62e56ffa985964c2ad5d7bab35434f2116983488f977a00",
+        "binary_sha256": "678d578412a1d73572e193594ffb3f054ed5fc9c2d3c505f7dc3b01e1abf04ee",
+        "report_sha256": "0664732af237f1f9dc82335e2ef686f5a00406fa7765545d101dcd2a0092aef2",
+        "reason": null,
+        "cases": [
+          {
+            "id": "posthoc:null-data-stdin-open",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:parallel-lf-stdin-open",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:parallel-null-data-stdin-open",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:explicit-utf8-short-line",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:explicit-windows1252-short-line",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-auto-le",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-explicit-le",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-auto-be",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-explicit-be",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:binary-explicit-utf8",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:binary-bom-window",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:binary-utf16-preprocessor",
+            "passed": true,
+            "error": null
+          }
+        ]
+      },
+      {
+        "id": "ripgrep-control-baseline",
+        "target": "ripgrep",
+        "kind": "control",
+        "arm": null,
+        "repetition": null,
+        "candidate": "bcc3d6a024d35e3712a42f681ffbe2825d70766a45dbc45e09882474772af209",
+        "status": "observed",
+        "passed": false,
+        "failed_cases": [
+          "posthoc:null-data-stdin-open",
+          "posthoc:parallel-lf-stdin-open",
+          "posthoc:parallel-null-data-stdin-open",
+          "posthoc:explicit-utf8-short-line",
+          "posthoc:explicit-windows1252-short-line",
+          "posthoc:bom-compatibility-auto-le",
+          "posthoc:bom-compatibility-explicit-le",
+          "posthoc:bom-compatibility-auto-be",
+          "posthoc:bom-compatibility-explicit-be"
+        ],
+        "producer_sha256": "2faca1a5bce72898b62e56ffa985964c2ad5d7bab35434f2116983488f977a00",
+        "binary_sha256": "8532e3d7ee8f819cb9582a0899dabf8b63f48f61c7b9479821fa3600243a3e6b",
+        "report_sha256": "ef25b12ba451a8e3e072ce7bc9416fc4c775a73b3894e85cc4485c1621c25d16",
+        "reason": null,
+        "cases": [
+          {
+            "id": "posthoc:null-data-stdin-open",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:parallel-lf-stdin-open",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:parallel-null-data-stdin-open",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:explicit-utf8-short-line",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:explicit-windows1252-short-line",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:bom-compatibility-auto-le",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:bom-compatibility-explicit-le",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:bom-compatibility-auto-be",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:bom-compatibility-explicit-be",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:binary-explicit-utf8",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:binary-bom-window",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:binary-utf16-preprocessor",
+            "passed": true,
+            "error": null
+          }
+        ]
+      },
+      {
+        "id": "ripgrep-control-reference",
+        "target": "ripgrep",
+        "kind": "control",
+        "arm": null,
+        "repetition": null,
+        "candidate": "bd5183096073a645a0466212cd7b607bde802be8d11d680d4eb7d759d7c17053",
+        "status": "observed",
+        "passed": false,
+        "failed_cases": [
+          "posthoc:null-data-stdin-open",
+          "posthoc:parallel-lf-stdin-open",
+          "posthoc:parallel-null-data-stdin-open",
+          "posthoc:binary-utf16-preprocessor"
+        ],
+        "producer_sha256": "2faca1a5bce72898b62e56ffa985964c2ad5d7bab35434f2116983488f977a00",
+        "binary_sha256": "2d4197ed024f21ae2b46c8c0facfa4ce734b14ced2a470d599410eee0d08d83b",
+        "report_sha256": "8b9f881868c52cb91ed448f683bb0b710bfd38753e9be3037188c3b649fa4496",
+        "reason": null,
+        "cases": [
+          {
+            "id": "posthoc:null-data-stdin-open",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:parallel-lf-stdin-open",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:parallel-null-data-stdin-open",
+            "passed": false,
+            "error": "AssertionError: Complete expected record was not emitted within two seconds while stdin remained open"
+          },
+          {
+            "id": "posthoc:explicit-utf8-short-line",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:explicit-windows1252-short-line",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-auto-le",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-explicit-le",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-auto-be",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:bom-compatibility-explicit-be",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:binary-explicit-utf8",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:binary-bom-window",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:binary-utf16-preprocessor",
+            "passed": false,
+            "error": "At least one mode changed the fixed original binary-filtering or text-control result"
+          }
+        ]
+      },
+      {
+        "id": "django-control-baseline",
+        "target": "django",
+        "kind": "control",
+        "arm": null,
+        "repetition": null,
+        "candidate": "cf8cc28f1e1afe1993e8bfe13e5b8f0431e318b2daaeb6558c3df380f89f3ad4",
+        "status": "observed",
+        "passed": false,
+        "failed_cases": [
+          "posthoc:duplicate-scalar-validation"
+        ],
+        "producer_sha256": "79443cd2f36a736886c085fa355f59d082abeb851de4b428ada7a48899ce171a",
+        "binary_sha256": null,
+        "report_sha256": "3854d0bc61bcd24e41a8eb340c0afd5ca3630e981a9d0153c3f538091df3f41c",
+        "reason": null,
+        "cases": [
+          {
+            "id": "posthoc:duplicate-pk-values",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:duplicate-pk-values-list",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:duplicate-scalar-validation",
+            "passed": false,
+            "error": "AssertionError: Repeated scalar selection was not rejected by ValueError during lookup construction"
+          }
+        ]
+      },
+      {
+        "id": "django-control-reference",
+        "target": "django",
+        "kind": "control",
+        "arm": null,
+        "repetition": null,
+        "candidate": "e1ee6aa954d2aa063f92da60ff8133622733373ccbb8c3f64025f3a6ec1a5dc6",
+        "status": "observed",
+        "passed": true,
+        "failed_cases": [],
+        "producer_sha256": "79443cd2f36a736886c085fa355f59d082abeb851de4b428ada7a48899ce171a",
+        "binary_sha256": null,
+        "report_sha256": "d68d8e009f24fe4f9429c343dce9b9c2dcad4f895da755ae70abeb3fd7c95498",
+        "reason": null,
+        "cases": [
+          {
+            "id": "posthoc:duplicate-pk-values",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:duplicate-pk-values-list",
+            "passed": true,
+            "error": null
+          },
+          {
+            "id": "posthoc:duplicate-scalar-validation",
+            "passed": true,
+            "error": null
+          }
+        ]
+      }
+    ],
+    "original_measured_records_unchanged": {
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/results.json": "e90cc40db151a95bcde9bc8be03918d0a5a8bd6bd7bd1275e1cac58d995a0e0d",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/django-r1-ordinary/result.json": "486c90c111662339636fc4869893221c51343be631b357036bb7eee82ef982e9",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/django-r1-flightcheck/result.json": "b6b594c373e17cbdd9b18d7dffe2ded311b838988c4fc1d17479d8cb8efcf339",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/ripgrep-r1-flightcheck/result.json": "1d399d194f8d05f8040a0fb90e3c48525e76df006c34436553bc2e9c8e71a534",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/ripgrep-r1-ordinary/result.json": "8a30dccf0bceaa0ee054992ed8cc05351c000d10f67752f14588457c357e6ad9",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/fmt-r1-ordinary/result.json": "80dc923dbe6d6d16358e5eab8fd89cea1f1ece0b95041f16285fa3e08c45538e",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/fmt-r1-flightcheck/result.json": "87091bcffa23cf9d158629f22df5dd39840445ff1374f6e2c6d9b8e30857876e",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/jsoup-r1-flightcheck/result.json": "9fb10cd2d8cd6fffc8db27dd71275786ecf398344e788e50f7fd08c5336a53de",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/jsoup-r1-ordinary/result.json": "948fb03dc367834993d2a9887ecf168338585a8e6ca8fe2f719b9842240d5c06",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/ripgrep-r2-ordinary/result.json": "0401557cddfce8f9bc321053dc5df32c079ed364b0a56377462791a015d03b81",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/ripgrep-r2-flightcheck/result.json": "21006486f831fcbf9082ac910702e39d3015826461b69de69a92aa395fa81eba",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/fmt-r2-flightcheck/result.json": "4bfb9ca9f3ac3b9ab05246a01cce194f9f2b14fba2371a347f8b653bbedfc09e",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/fmt-r2-ordinary/result.json": "bf2fe4982332adf864288ef708fce37b8b452512b2f8e607a907cb5e5c44b682",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/jsoup-r2-ordinary/result.json": "cc1deac904be7f752b59a2b5686b22f6fbf45bf8303482449ecfa67d9b5b5be0",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/jsoup-r2-flightcheck/result.json": "fefa9693bb363c013615307cbb644d5e2490388cb935b5eb2ae2054998f5395c",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/django-r2-flightcheck/result.json": "670dfe2dbc61571cd6b9465e36e1aa1b15067e8ad738cbaa85099b003406a2e6",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/django-r2-ordinary/result.json": "b8c78cd4fd92dcdb4a072ad79e4a81fe228aafbfbb1e5b3ab9e726caade74b24",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/fmt-r3-ordinary/result.json": "aeaa0c101f59f483f0de851317bca17a3ebd04e00c7f3bda94b73dc5c871330d",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/fmt-r3-flightcheck/result.json": "c7702ec4cf2ec19f2c745480b3796bd6bc4618564cba73abd2b05e6f2cdaca5a",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/jsoup-r3-flightcheck/result.json": "42c84990ea33698b97ff0fb652e61ba1813de5b1b60bf109f4bc5602155afd13",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/jsoup-r3-ordinary/result.json": "4b0ba426bc119dea0b56aef6f8418961aac781b6a29456e0e11d232e3b7146b9",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/django-r3-ordinary/result.json": "b2a7e64abd2fc6a69ed242bdfd97932f6238f6c2bd7250a61a08314a6962b7f4",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/django-r3-flightcheck/result.json": "9153e3c643472bcc39a4e0e3ffab8a0d6f329360402382fb393a1960d27cce71",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/ripgrep-r3-flightcheck/result.json": "afcb92bc620d47d4a81e4ab619da8782816a08cbd191ad599c136cbaf29075c9",
+      "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/ripgrep-r3-ordinary/result.json": "6f87ea6a962c50af05a11a2a24ce50f61987deebf34f0c11015f452a55502e91"
+    },
+    "assay_correction": {
+      "schema": "flightcheck.exploratory-assay-correction/1",
+      "prepared_at": 1794481568.9196732,
+      "superseded_plan_sha256": "b2ec753f4ed9b89c012ff142f218b2907bb11e84a528d0f02b3713a459b4b339",
+      "superseded_summary": "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/posthoc/summary.json",
+      "superseded_summary_sha256": "88a27e0597cef0ba5c09bce4acea74a1ca4c73aa9b6cd8e3d2f46f1f8fc96021",
+      "invalid_prior_case_ids": [
+        "posthoc:bom-content-auto-le",
+        "posthoc:bom-content-explicit-le",
+        "posthoc:bom-content-auto-be",
+        "posthoc:bom-content-explicit-be"
+      ],
+      "reason": "The original decoder and block-buffered controls remove a second leading BOM. Requiring its preservation contradicted baseline behavior and the final reviewer explicitly withdrew that original finding. V2 failures of these four assertions are assay errors, not candidate defects. All V2 outputs remain unchanged. V3 checks compatibility: first line x LF, next U+FEFF x LF, including before-EOF timing and closed-input control. Other cases are unchanged and reapplied uniformly.",
+      "withdrawn_finding": {
+        "run": "ripgrep-r2-ordinary",
+        "id": "EVIDENCE_BOM_CONTENT_LOSS",
+        "review": "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/runs/ripgrep-r2-ordinary/reviews/evidence-2.json",
+        "review_sha256": "1676fc3044fa0a8cc58464977ce81e70b02af1db44a8261bf5f7cac81b45982c"
+      },
+      "baseline_control": {
+        "report": "/Users/jeff/FlightCheck-private-archive/paired-authoritative-20261111/posthoc/ripgrep-control-baseline/reports/result.json",
+        "sha256": "90de901c0a55cf53d63e8f165a8342f320a85f6cbee0d1b1a753a9983dd243d9"
+      }
+    },
+    "assay_correction_sha256": "7af8ddeae6fa24fc0dee1c69a8e2d0e4c91f3b521e69fc147e7c86c40d9e7d51"
+  }
+}

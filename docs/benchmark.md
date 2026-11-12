@@ -4,6 +4,8 @@ The benchmark answers two questions. Can FlightCheck run and retain evidence fro
 
 ## Latest benchmark results
 
+[24-attempt paired benchmark: FlightCheck and ordinary Codex](benchmark-paired-20261111.md) — four pins, three repetitions per condition, with timings, repair iterations, retained incomplete outcomes, and defects found after final approval.
+
 ## Historical benchmark results
 
 [Historical benchmark results](benchmark-history.md)
