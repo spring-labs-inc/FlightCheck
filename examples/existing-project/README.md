@@ -15,7 +15,10 @@ This directory mirrors the files you can add to your own repository. Open your p
 | [`requirements.dev.txt`](requirements.dev.txt) | Optional dependency example for projects that choose pytest. Use your existing development manifest and lockfile conventions. |
 | [`capture_check.py`](scripts/capture_check.py) | Optional output recorder and automatic pass reuse for native checks. Configure a gate identifier and a project-owned fingerprint probe to enable reuse. |
 | [`proof.py`](scripts/proof.py) | Acceptance contracts, retained reviewer requests, and regression-proof validation used by `handoff.py`. |
-| [`handoff.py`](scripts/handoff.py) | Use the recorder receipts to summarize resumed work and validate acceptance proof, reviewer obligations, and the final review packet. Copy its adjacent `proof.py` module too. |
+| [`recovery.py`](scripts/recovery.py) | Plan missing or stale prerequisites from the complete retained obligation history. |
+| [`behavior.py`](scripts/behavior.py) | Validate observable cases, independent challenge proposals, and qualified baseline or mutation controls. |
+| [`disposition.py`](scripts/disposition.py) | Retain independently acknowledged refutations without deleting original claims. |
+| [`handoff.py`](scripts/handoff.py) | Summarize resumed work and validate acceptance proof, reviewer obligations, and review packets. Copy all six adjacent Python files together. |
 
 Codex loads project instructions based on the working directory and active overrides. Skill discovery, project trust, and approval policy are separate. Review the effective project settings on the client that will run the workflow. The examples require no global configuration, plugin, hook, external package, or new CI service. [Project instructions](https://learn.chatgpt.com/docs/agent-configuration/agents-md) · [Skills](https://learn.chatgpt.com/docs/build-skills) · [Hooks](https://learn.chatgpt.com/docs/hooks) · [Command rules](https://learn.chatgpt.com/docs/agent-configuration/rules)
 

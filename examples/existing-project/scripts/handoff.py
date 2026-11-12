@@ -11,6 +11,10 @@ from pathlib import Path
 
 from capture_check import digest, evidence_directory, fingerprint, latest_run, matches_pass
 from proof import acceptance_status, contract_status, freeze, obligations_status, record_review, verdict_status
+from recovery import plan as recovery_plan
+from behavior import challenge_brief, record_plan, status as behavior_status
+from disposition import review_packet as disposition_packet
+from proof import ledger
 
 COVERAGE_OUTCOMES = ("passed", "skipped", "expected_failures", "failed")
 EARLY_CODE_CRITERIA = (
@@ -220,18 +224,26 @@ def code_review_packet(task, root):
     if contract_error:
         return dict(packet, action="blocked", blockers=["acceptance contract"], reason=contract_error)
     packet.update({key: task[key] for key in ("scope", "acceptance") if key in task})
-    cheap = [gate_status(root, gate, candidate, final=True)
-             for gate in configured_gates(task.get("gates", [])) if gate.get("phase") == "cheap"]
+    all_checks = [gate_status(root, gate, candidate, final=True)
+                  for gate in configured_gates(task.get("gates", []))]
+    by_gate = {check["id"]: check for check in all_checks}
+    cheap = [by_gate[gate["id"]] for gate in task.get("gates", []) if gate.get("phase") == "cheap"]
+    recovery = recovery_plan(task, root, all_checks, "code")
+    packet["recovery"] = recovery
+    packet["behavior_evidence"] = recovery["behavior_evidence"]
+    if recovery["state"] == "infrastructure_error":
+        return dict(packet, action="blocked", blockers=recovery["blockers"])
     if cheap:
         packet["cheap_checks"] = cheap
         blockers = [check["id"] for check in cheap if check["status"] not in ("passed", "reused")]
         if blockers:
             return dict(packet, action="blocked", blockers=blockers)
-    all_checks = [gate_status(root, gate, candidate, final=True) for gate in configured_gates(task.get("gates", []))]
     obligations = obligations_status(task, root, all_checks, code=True)
     packet["review_obligations"] = obligations
     if obligations["blockers"]:
         return dict(packet, action="blocked", blockers=obligations["blockers"])
+    if recovery["state"] != "ready":
+        return dict(packet, action="blocked", blockers=recovery["blockers"] or ["recovery prerequisites"])
     prior = task.get("early_review")
     if (not isinstance(prior, dict) or prior.get("scope_unchanged") is not True
             or prior.get("verdict") != "REVISE"):
@@ -276,6 +288,10 @@ def build_packet(task, root, final):
     obligations = obligations_status(task, root, checks)
     blockers.extend(acceptance["blockers"] + obligations["blockers"])
     packet.update(acceptance_evidence=acceptance, review_obligations=obligations)
+    behavior = ({"cases": [], "blockers": []} if acceptance.get("reason")
+                else behavior_status(task, root, checks))
+    packet["behavior_evidence"] = behavior
+    blockers.extend(behavior["blockers"])
     if final:
         diff = evidence_path(root, task["diff"])
         packet.update(diff={"path": str(diff), "sha256": digest(diff)},
@@ -316,27 +332,36 @@ def preflight(task, root, amendment=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("preflight", "resume", "review", "code-review", "checks", "brief", "requests", "verdict"))
+    parser.add_argument("mode", choices=("preflight", "resume", "review", "code-review", "checks", "brief", "requests", "verdict", "next-action", "challenge-brief", "challenges", "disposition-review"))
     parser.add_argument("--task", type=Path, required=True)
     parser.add_argument("--evidence-dir", type=Path)
     parser.add_argument("--review", type=Path, help="Actual native reviewer output for requests/verdict")
     parser.add_argument("--amend-contract", help="Evidence-root-relative owner scope decision; preflight only")
+    parser.add_argument("--target", choices=("code", "final"), default="code",
+                        help="Review whose dependencies next-action should reconcile")
     args = parser.parse_args()
-    if args.mode != "brief" and args.evidence_dir is None:
+    if args.mode not in ("brief", "challenge-brief") and args.evidence_dir is None:
         parser.error("--evidence-dir is required for receipt and review commands")
     final = args.mode == "review"
-    if args.mode in ("requests", "verdict") and args.review is None:
-        parser.error("--review is required for requests/verdict")
+    if args.mode in ("requests", "verdict", "challenges") and args.review is None:
+        parser.error("--review is required for requests/verdict/challenges")
     if args.amend_contract and args.mode != "preflight":
         parser.error("--amend-contract is only available during preflight")
     try:
         task = read_json(args.task)
         if args.mode == "brief":
             packet = implementation_brief(task)
+        elif args.mode == "challenge-brief":
+            packet = challenge_brief(task)
         else:
             root = evidence_directory(args.evidence_dir, Path.cwd(), create=args.mode == "preflight")
             if args.mode == "preflight":
                 packet = preflight(task, root, args.amend_contract)
+            elif args.mode == "challenges":
+                _, error = contract_status(task, root)
+                if error:
+                    raise ValueError(error)
+                packet = record_plan(task, root, args.review)
             elif args.mode in ("requests", "verdict"):
                 review = record_review(task, root, args.review)
                 final_packet = build_packet(task, root, final=True)
@@ -344,6 +369,17 @@ def main():
                           else {"candidate": task["candidate"], **final_packet["review_obligations"]})
             elif args.mode == "checks":
                 packet = check_plan(task, root)
+            elif args.mode == "next-action":
+                checks = [gate_status(root, gate, task["candidate"], final=True)
+                          for gate in configured_gates(task["gates"])]
+                packet = recovery_plan(task, root, checks, args.target)
+            elif args.mode == "disposition-review":
+                _, error = contract_status(task, root)
+                if error:
+                    raise ValueError(error)
+                checks = [gate_status(root, gate, task["candidate"], final=True)
+                          for gate in configured_gates(task["gates"])]
+                packet = disposition_packet(task, root, checks, ledger(root))
             elif args.mode == "code-review":
                 packet = code_review_packet(task, root)
             else:

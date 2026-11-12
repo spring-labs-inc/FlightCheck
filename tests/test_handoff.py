@@ -39,7 +39,7 @@ class HandoffTests(unittest.TestCase):
         self.gate = {"id": "policy", "request": self.request}
         self.task = {
             "candidate": "A", "saved_candidate": "A", "preview": None, "gates": [self.gate],
-            "diff": "candidate.diff", "acceptance": [{"id": "policy", "description": "Policy passes",
+            "diff": "candidate.diff", "acceptance": [{"id": "policy", "kind": "policy", "description": "Policy passes",
                 "proofs": [{"kind": "check", "gate": "policy", "assertion": "The native policy command rejects violations"}]}],
             "delivery": "local only",
         }
@@ -234,6 +234,7 @@ class HandoffTests(unittest.TestCase):
             "(Path(os.environ['FLIGHTCHECK_REPORT_DIR']) / 'coverage.json').write_bytes(Path('coverage.json').read_bytes())"]
         self.gate["coverage"] = {"artifact": report.name, "baseline": "baseline.json",
                                  "baseline_sha256": hashlib.sha256(raw).hexdigest()}
+        self.task["acceptance"][0]["proofs"][0]["tests"] = ["required"]
         report.write_text(json.dumps(dict(baseline, passed=["required", "added"])))
         self.amend_fixture()
         self.assertEqual(self.record().returncode, 0)
@@ -293,6 +294,7 @@ class HandoffTests(unittest.TestCase):
                 "(out/'spec.py').write_bytes(Path('spec.py').read_bytes()); sys.exit(int(bad))"])
         self.gate["coverage"] = {"artifact": "behavior.json", "baseline": "behavior-baseline.json",
                                  "baseline_sha256": hashlib.sha256(raw).hexdigest()}
+        self.task["acceptance"][0]["proofs"][0]["tests"] = ["case"]
         self.amend_fixture()
 
     def test_preflight_freezes_criteria_and_checks_the_real_evidence_round_trip(self):
