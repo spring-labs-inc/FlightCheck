@@ -73,6 +73,8 @@ def criteria(task):
                 nonempty(proof["assertion"])
             else:
                 raise ValueError("Unknown acceptance verification method")
+    from behavior import acceptance_cases
+    acceptance_cases(task)
     return items
 
 
@@ -108,17 +110,22 @@ def preserves_gates(previous, current):
 
 def freeze(task, root, amendment=None):
     """Do not silently erase or weaken an earlier task contract on resume."""
+    path = root / "acceptance-contract.json"
+    previous = read(path) if path.exists() else None
+    baseline = task.get("baseline_candidate", (previous or {}).get("baseline_candidate", task["candidate"]))
+    nonempty(baseline)
+    if previous is not None and "baseline_candidate" not in previous and "baseline_candidate" not in task:
+        raise ValueError("Legacy flight needs its retained original baseline_candidate for explicit contract migration")
     contract = {"acceptance": criteria(task), "required_gates": sorted(g["id"] for g in task["gates"]),
-                "gates": gate_contracts(task)}
+                "gates": gate_contracts(task), "baseline_candidate": baseline}
     for item in contract["acceptance"]:
         for proof in item["proofs"]:
             if proof["kind"] == "check" and proof["gate"] not in contract["required_gates"]:
                 raise ValueError("Acceptance proof names an unconfigured required gate")
-    path = root / "acceptance-contract.json"
-    if path.exists():
-        previous = read(path)
+    if previous is not None:
         changed = (previous["acceptance"] != contract["acceptance"]
-                   or not preserves_gates(previous, contract["gates"]))
+                   or not preserves_gates(previous, contract["gates"])
+                   or previous.get("baseline_candidate") != baseline)
         if changed:
             if amendment is None:
                 raise ValueError("Frozen scope changed; record the owner's scope instruction with --amend-contract")
@@ -139,7 +146,10 @@ def contract_status(task, root):
         items = criteria(task)
         contract = read(root / "acceptance-contract.json")
         valid = (contract["acceptance"] == items
-                 and preserves_gates(contract, gate_contracts(task)))
+                 and preserves_gates(contract, gate_contracts(task))
+                 and isinstance(contract.get("baseline_candidate"), str)
+                 and bool(contract["baseline_candidate"].strip())
+                 and task.get("baseline_candidate", contract["baseline_candidate"]) == contract["baseline_candidate"])
         if not valid:
             raise ValueError("Frozen acceptance or required gates changed")
         return items, None
@@ -211,6 +221,9 @@ def _record_review(task, root, path):
     """Retain native reviewer output and append obligations; omission cannot clear them."""
     raw = path.read_bytes()
     review = json.loads(raw)
+    _, contract_error = contract_status(task, root)
+    if contract_error:
+        raise ValueError(contract_error)
     # Missing arrays are an incomplete review, never an implicit zero finding.
     if not isinstance(review, dict):
         raise ValueError("Native reviewer output must be a complete object")
@@ -224,6 +237,8 @@ def _record_review(task, root, path):
             raise ValueError("Native review is incomplete")
     if review["candidate"] != task["candidate"] or review["role"] not in ("CODE", "EVIDENCE"):
         raise ValueError("Reviewer role or candidate does not match")
+    if review.get("phase") not in (None, "code", "final", "disposition"):
+        raise ValueError("Unknown native review phase")
     known = {c["id"] for c in criteria(task)}
     state = ledger(root)
     source = hashlib.sha256(raw).hexdigest()
@@ -248,12 +263,21 @@ def _record_review(task, root, path):
     for group, items in additions.items():
         for item in items:
             old = state[group].get(item["id"])
+            kind = "test-request" if group == "requests" else "functional-finding"
+            if kind + ":" + item["id"] in state.get("withdrawals", {}):
+                raise ValueError("A recurrent claim needs a new identity; withdrawn history cannot be silently reopened")
             if old and old["spec"] != item:
                 raise ValueError("An earlier review obligation cannot be overwritten")
             if not old:
                 state[group][item["id"]] = {"spec": item, "candidate": review["candidate"],
                                              "role": review["role"], "review_sha256": source,
                                              "recorded_at": time.time()}
+    from disposition import acknowledge
+    withdrawals, revisions = acknowledge(task, root, state, review, source)
+    if withdrawals:
+        state.setdefault("withdrawals", {}).update(withdrawals)
+    if revisions:
+        state.setdefault("withdrawal_history", []).extend(revisions)
     directory = root / "reviews"
     directory.mkdir(mode=0o700, exist_ok=True)
     retained = directory / (source + ".json")
@@ -297,11 +321,19 @@ def report_tests(path, outcome):
 
 
 def obligations_status(task, root, checks, code=False):
+    from disposition import verified as withdrawn, pending as refutation, key as withdrawal_key
     state = ledger(root)
     by_gate = {g["id"]: g for g in checks}
     blockers, rows, exceptions = [], [], []
     for key, request in state["requests"].items():
         if code and request["role"] != "CODE":
+            continue
+        if withdrawal_key("test-request", key) in state.get("withdrawals", {}):
+            valid = withdrawn(task, root, state, "test-request", key)
+            rows.append({"id": key, "kind": "test-request", "spec": request["spec"],
+                         "verified": valid, "withdrawn": valid, "withdrawal_invalid": not valid})
+            if not valid:
+                blockers.append("withdrawal-evidence:test-request:" + key)
             continue
         valid = False
         try:
@@ -312,11 +344,19 @@ def obligations_status(task, root, checks, code=False):
                      and nonempty(proof["assertion"]) and passed_tests(check, proof["tests"]))
         except (OSError, KeyError, TypeError, ValueError):
             pass
-        rows.append({"id": key, "kind": "test-request", "spec": request["spec"], "verified": bool(valid)})
+        rows.append({"id": key, "kind": "test-request", "spec": request["spec"], "verified": bool(valid),
+                     "refutation": refutation(task, root, state, "test-request", key)})
         if not valid:
             blockers.append("test-request:" + key)
     for key, finding in state["findings"].items():
         if code and finding["role"] != "CODE":
+            continue
+        if withdrawal_key("functional-finding", key) in state.get("withdrawals", {}):
+            valid = withdrawn(task, root, state, "functional-finding", key)
+            rows.append({"id": key, "kind": "functional-finding", "verified": valid,
+                         "withdrawn": valid, "withdrawal_invalid": not valid})
+            if not valid:
+                blockers.append("withdrawal-evidence:functional-finding:" + key)
             continue
         valid = False
         try:
@@ -341,7 +381,8 @@ def obligations_status(task, root, checks, code=False):
                      and tests <= report_tests(after_report, "passed"))
         except (OSError, KeyError, TypeError, ValueError):
             pass
-        rows.append({"id": key, "kind": "functional-finding", "verified": bool(valid)})
+        rows.append({"id": key, "kind": "functional-finding", "verified": bool(valid),
+                     "refutation": refutation(task, root, state, "functional-finding", key)})
         if not valid:
             blockers.append("regression:" + key)
     return {"obligations": rows, "blockers": blockers, "owner_exceptions": exceptions}
@@ -351,6 +392,8 @@ def verdict_status(task, root, packet, review):
     blockers = list(packet["blockers"])
     if review.get("role") != "EVIDENCE" or review.get("candidate") != task["candidate"]:
         blockers.append("current independent EVIDENCE review")
+    if review.get("phase") in ("code", "disposition"):
+        blockers.append("full independent final review")
     expected_ids = {c["id"] for c in criteria(task)}
     assessments = review.get("criteria", [])
     if (not isinstance(assessments, list) or len(assessments) != len(expected_ids)
@@ -361,6 +404,8 @@ def verdict_status(task, root, packet, review):
         blockers.append("reviewer acceptance assessment")
     if not isinstance(review.get("challenge"), str) or not review["challenge"].strip():
         blockers.append("independent boundary challenge assessment")
+    from behavior import assessment_blockers
+    blockers.extend(assessment_blockers(review, packet["behavior_evidence"]))
     severities = {f["severity"] for f in review.get("findings", [])}
     exceptions = packet["review_obligations"].get("owner_exceptions", [])
     if exceptions:

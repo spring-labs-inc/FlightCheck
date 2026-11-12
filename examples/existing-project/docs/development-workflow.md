@@ -96,7 +96,7 @@ Use the resulting plan at the applicable stage. Carry a current verified receipt
 
 ## Resume summary and final packet
 
-Use [`handoff.py`](../scripts/handoff.py) and its adjacent [`proof.py`](../scripts/proof.py) module next to the recorder. The project adapter writes a task JSON file for the current checkout before either command. Use the same required gate definitions for recording and validation.
+Keep all six adjacent Python files from [`scripts/`](../scripts) together. The project adapter writes a task JSON file for the current checkout before either command. Use the same required gate definitions for recording and validation.
 
 ```sh
 python3 scripts/handoff.py resume --task "$task_json" --evidence-dir "$evidence_dir"
@@ -177,3 +177,54 @@ python3 scripts/handoff.py verdict --task "$task_json" --evidence-dir "$evidence
 ```
 
 The final command retains actual review output, checks every criterion's independent assessment, outstanding requests/regressions, current candidate and prerequisites, and severity/verdict consistency. Exit 1 keeps approval pending. Observations additionally require a current owner decision referenced by `observation_approval`, bound to the returned `observations_sha256`. Existing authorized decisions may be recorded; never manufacture acceptance. Metadata validation cannot decide whether an assertion is meaningful: the separate reviewer must read the actual tests, source, and original evidence and reject incomplete or circular proof.
+
+## Observable cases and independent challenges
+
+For each check-backed behavioral criterion, supply `kind: "behavior"` and a nonempty `cases` matrix. Native-coverage criteria default to behavior. Existing assertion-only checks without native coverage retain policy semantics; explicitly declare behavior for product requirements and configure their native witnesses. Use `kind: "policy"` only for requirements such as whitespace or metadata validation, never to reclassify a product behavior. Independent review must reject misclassification. Every proof attached to a gate with native coverage must name exact `tests`, including policy proofs. Give each behavior case this shape:
+
+```json
+{"id":"invalid-input","dimension":"invalid boundary","input":"A caller submits an invalid value","observable":"Public return value and caller state","expected":"An error without changing caller state","expectation":{"kind":"regression","reference":"Owner's invalid-input requirement"},"gate":"behavior","tests":["test_api.ApiTests.test_invalid_input"]}
+```
+
+Choose dimensions from the contract: alternate callers, empty and invalid values, equivalent representations, repeated operations, partial failure, and observation while an operation remains open. A check that observes only the completed result cannot prove a requirement about progress during execution. The reviewer judges those assertions, not just their labels or counts.
+
+During Plan, give a separate read-only reviewer only the scope and descriptions from `handoff.py challenge-brief --task "$task_json"`, before the implementer's narrative or proposed test choices. Retain its actual proposal using `handoff.py challenges --task "$task_json" --evidence-dir "$evidence_dir" --review "$proposal"`. The proposal contains `role`, exact `scope_sha256`, `coverage` inspected, and `cases`; each case has the fields above except `gate`/`tests`, plus its `criterion` ID. The controller binds `challenge_checks[case_id] = {"gate":"behavior","tests":["exact.native.identity"]}` and executes the witnesses after the proposal. Discussion alone does not satisfy a challenge.
+
+Proposal originals remain retained. Appending same-scope cases is allowed; omission never removes them and replacing an ID's specification is rejected. A changed scope needs an explicitly prepared new flight retaining the old flight's evidence, rather than rewriting its challenge history. Final native review JSON additionally needs `case_assessments` with `{id, sufficient, reason}` for every acceptance and challenge case. Missing, duplicate, insufficient, or unknown assessments block approval. CODE may assess cases while later controls remain pending; final review requires complete verified evidence.
+
+## Qualifying expected outcomes
+
+Freeze the original product identity as `baseline_candidate` during preflight (defaults to the initial candidate). Later task edits cannot relabel a repaired source as the baseline. Explicitly migrate older contracts using the owner amendment procedure and the actual original product identity; retain the old contract. For each case, supply `case_controls[case_id]`:
+
+```json
+{"receipt":"check-original/run.json","candidate":"original-product-identity","source":"baseline","report":"coverage.json","spec":"test-fixture-manifest.json"}
+```
+
+Both control and current witness must be actual controller receipts, with the identical retained test/fixture `spec` digest and exact test identities. Fingerprints must bind the actual product and test overlay, runtime, and relevant configuration. Use a disposable original-product snapshot with the same newly added tests when needed; preserve separate product and overlay identities. An assertion or a synthesized outcome report is not a control run.
+
+| Expectation kind | Required control | Current witness |
+| --- | --- | --- |
+| `regression` | Frozen baseline fails the exact tests with a nonzero exit | Passes those tests |
+| `compatibility` | Frozen baseline passes those tests with a zero exit | Passes those tests |
+| `specification` | A documented baseline or mutation fails those tests with a nonzero exit | Passes those tests |
+
+Use specification controls to establish sensitivity when no old product embodies the intended feature. Record why the mutation violates the public contract. Do not weaken compatibility expectations to make a failing old implementation count as a valid control. The independent reviewer must reject circular or incorrect expected outcomes even when mechanically valid metadata exists.
+
+## Recovering proof after repairs
+
+```sh
+python3 scripts/handoff.py next-action --task "$task_json" --evidence-dir "$evidence_dir" --target code
+python3 scripts/handoff.py next-action --task "$task_json" --evidence-dir "$evidence_dir" --target final
+```
+
+Run this shared planner after every repair and process restart, before the applicable review. It reads the entire persisted obligation ledger and verifies current receipts. An earlier APPROVE with empty requests never discards earlier obligations. The CODE target requires cheap gates and historical CODE obligations, leaving unrelated later gates pending; the final target includes all required gates, cases, and obligations.
+
+Execute `run` and `reuse` actions through the trusted recorder; `configure_proof` maps a retained obligation to exact checks, `reproduce` refreshes original-product proof with the same current fixtures, `qualify_control` supplies the required control, and `repair_proof` fixes inadequate assertions or identities. `repair` returns a real current failure to implementation. `wait` reconciles the newest active attempt. `repair_evidence` restores damaged provenance without erasing the original attempt. Ask the planner again after each action. These states guide recovery within the existing nine stages; they do not relax review guards or define new stages. The adapter owns execution and continuation; planner output alone does not run checks or guarantee that a controller will resume them.
+
+## Audited claim withdrawals
+
+A false expectation needs a refutation, not a fabricated failing test or silently deleted request. Add `withdrawal_proposals["functional-finding:ID"]` (or `test-request:ID` / `challenge-case:ID`) containing the original review or plan's `original_sha256`, current brief's `scope_sha256`, concrete `assertion` and documentary `reference`, plus `receipt`, `report`, `spec`, and exact `tests`. Counterevidence must be an actual passing controller run on the claim's original product, executed after the claim. An independent challenge uses the frozen original baseline. Owner acceptance cases cannot be withdrawn through this mechanism.
+
+`handoff.py disposition-review` creates a bounded review packet once cheap checks and counterevidence are qualified. The independent reviewer returns `phase: "disposition"` and explicit `withdrawals: [{"kind":"functional-finding","id":"ID","proposal_sha256":"exact-proposal-hash","reason":"Why the original claim is false"}]`; record that actual output with `requests`. Each related request must be acknowledged separately. Omission or a later APPROVE cannot withdraw anything. A bounded disposition approval never replaces full final review.
+
+The ledger preserves original specifications, raw reviewer output, counterevidence, and acknowledgment. Replaying an identical acknowledgment is idempotent. A changed refutation needs a new acknowledgment with `supersedes` equal to the canonical SHA-256 of the previous withdrawal record; history retains that record. Damaged or wrong-source evidence reopens the blocker. Repairs, withdrawals, and genuine owner exceptions remain distinguishable.
