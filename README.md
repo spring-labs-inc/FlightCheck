@@ -34,13 +34,13 @@ Before copying workflow files, read the [licensing and adoption guide](docs/lice
 
 ## Get started
 
-Open your existing project in your AI coding tool and give it access to the [example project](examples/existing-project/README.md). Use this prompt to adapt FlightCheck to your project:
+Open your existing project in your AI coding tool and paste this prompt. The [complete installation guide](setup/README.md) describes each step and its expected result.
 
-> Review the FlightCheck example project and my repository's current instructions, test commands, permissions, and delivery rules. Propose the smallest project-local diff. Adapt the workflow and reviewer files to my tools, preserve my existing policy, and verify the setup. Ask me to resolve any permission or delivery decisions that are missing.
+> Install FlightCheck from https://github.com/spring-labs-inc/FlightCheck into this existing project. Clone the source outside this checkout, resolve and record its full commit ID, and use that clean pinned revision. Follow `setup/README.md` and the complete manifest in `setup/manifest.json`; the shared adoption files are under `examples/existing-project/`. Inspect my existing instructions, checks, interpreter, default branch, and permissions first. Preserve that policy and batch only unresolved owner decisions. Preview and apply the project-local installer for my coding tool, including all shared evidence tools, its agent adapter, and the browser status card. Do not silently substitute a documentation-only installation. Run installed verification and fresh-session discovery/reviewer/browser probes; report any remaining blocker honestly. Keep changes uncommitted unless I authorize delivery.
 
 Your tool must support repository instructions, running project checks, and separate reviewers with [enforced read-only access](examples/existing-project/docs/development-workflow.md#independent-review). Evidence tooling requires Python 3 on a POSIX host.
 
-The bundled integration targets Codex. Claude Code setup and verification are pending in [#14](https://github.com/spring-labs-inc/FlightCheck/issues/14).
+The installer supplies Codex and Claude Code adapters. Native Claude end-to-end qualification remains pending in [#14](https://github.com/spring-labs-inc/FlightCheck/issues/14).
 
 [Verify the setup](examples/existing-project/README.md#verify-the-adoption) on one small task before using it for larger changes. Explicitly select the workflow using your tool's entry point.
 
@@ -64,7 +64,7 @@ The bundled integration targets Codex. Claude Code setup and verification are pe
 
 | Guide | Use |
 | --- | --- |
-| [Setup](examples/existing-project/README.md) | Install the files, configure your project, and verify adoption. |
+| [Setup](setup/README.md) | Install the complete manifest, configure your project, and verify adoption. |
 | [Workflow](examples/existing-project/docs/development-workflow.md) | Follow the checks, reviews, repair, and delivery rules. |
 | [Status card](docs/status-card.md) | Publish and view task progress and the current verdict. |
 | [Benchmarks](docs/benchmark.md) | Read results and reproduce the pinned trials. |
