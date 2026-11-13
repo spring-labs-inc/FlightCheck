@@ -235,9 +235,9 @@ def desired_files(source, manifest, agent, config):
         sources[destination] = {"source": name, "source_sha256": sha(data)}
     status = ("# FlightCheck status\n\nStart or resume a selected flight from the project root:\n\n```sh\n"
               + "FLIGHTCHECK_STATE_DIR=" + shlex.quote(str(Path(config["evidence_dir"]) / "status-card")) + " "
-              + shlex.quote(config["python"]) + " -B .flightcheck/status-card/reply.py prepare --task TASK_ID --title \"Task title\"\n```\n\n"
+              + shlex.quote(config["python"]) + " -B .flightcheck/status-card/reply.py prepare --task TASK_ID --title \"Task title\" --details /private/flight-details.json\n```\n\n"
               + "The command returns JSON with footer and guidance, publishes outside the checkout and verifies the task page and current candidate. Keep the prepared task URL stable on resume. Auto execution detection uses SSH/container hints; override --execution when needed. Remote mode reports unavailable browser routing until an approved loopback forward is recorded with --user-url; never bind beyond loopback. TUI users can open this live card in a regular web browser while continuing in the terminal. For remote sessions, arrange approved localhost forwarding; do not claim the browser rendered just because the checkout host returned HTTP 200.\n\n"
-              + "Use --details with current stages, checks and known issue/PR links. Record only real receipts and actual verdicts for the current candidate. Before every controller reply (start, update, approval, blocker, repair, resume and end), run prepare and then reply.py check with --task, --phase and --reply-file pointing to the exact private draft. Put the returned footer last, with any actual current verdict above it. Proactively tell TUI users to open the card in their regular browser. Native reviewer replies stay raw JSON; never run controller lifecycle commands or hooks in reviewer contexts.\n\n"
+              + "Initialize --details with all nine stages (one current), check_plan and current pending check rows. Include known issue/PR links, or links_unavailable reasons when they do not exist. An empty check_plan requires checks_unavailable. Missing sections make prepare/check fail with actionable completeness diagnostics; HTTP availability alone does not mean a ready flight. See the installed controller status instructions for the full JSON example. Record only real receipts and actual verdicts for the current candidate. Before every controller reply (start, update, approval, blocker, repair, resume and end), run prepare and then reply.py check with --task, --phase and --reply-file pointing to the exact private draft. Put the returned footer last, with any actual current verdict above it. Proactively tell TUI users to open the card in their regular browser. Native reviewer replies stay raw JSON; never run controller lifecycle commands or hooks in reviewer contexts.\n\n"
               + "Run Python scripts by path with -B, not -I. Verify new client definitions in a fresh session; inspect effective tools, required evidence access and active hooks. File installation does not prove a reviewer boundary.\n")
     result[".flightcheck/docs/status.md"] = ("file", status.encode())
     result[CONFIG] = ("file", encoded(config))
@@ -375,7 +375,7 @@ def runtime_checks(root, config, revision, scratch):
     publisher = root / ".flightcheck/status-card/task_status.py"
     base = [python, "-B", str(publisher), "--file", str(folder / "status.json"),
             "--task", "setup-check", "--title", "FlightCheck setup check",
-            "--candidate", revision, "--details", str(details)]
+            "--candidate", revision, "--mode", "minimal", "--details", str(details)]
     run(base, root)
     process = subprocess.Popen([python, "-B", str(root / ".flightcheck/status-card/serve.py"),
                                 "--port", "0", "--task-status", str(folder / "status.json")],
@@ -399,6 +399,8 @@ def runtime_checks(root, config, revision, scratch):
             connection.request("GET", route.path + "status.json")
             response = connection.getresponse()
             snapshot = json.loads(response.read())
+            if snapshot.get("mode") != "minimal" or snapshot.get("completeness", {}).get("ready") is not False:
+                raise SetupError("Runtime probe must remain a labeled minimal snapshot, not a ready flight")
             if response.status != 200 or snapshot.get("candidate") != revision or snapshot.get("task") != "setup-check" or len(snapshot.get("stages", {})) != 9:
                 raise SetupError("Card snapshot did not match verification task/candidate/stages")
         finally:

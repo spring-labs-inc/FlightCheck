@@ -66,10 +66,12 @@ def route_record(previous, task, host_url, execution, supplied):
 def observation(record, candidate, publication, verdict="Pending"):
     url = record.get("user_url") or record.get("host_url")
     remote_pending = record["execution"] == "remote" and not record.get("user_url")
+    ready = bool(publication and publication.get("completeness", {}).get("ready"))
     result = {"task": record["task"], "candidate": candidate,
-              "status": "published" if publication and not remote_pending else "unavailable",
+              "status": "published" if ready and not remote_pending else "incomplete" if publication and not ready else "unavailable",
               "publication": "verified" if publication else "unavailable",
-              "verdict": verdict if publication else "Pending",
+              "verdict": verdict if ready else "Pending",
+              "completeness": publication.get("completeness") if publication else None,
               "execution": record["execution"], "host_url": record.get("host_url"),
               "user_url": record.get("user_url"), "footer": footer(url),
               "browser_reachability": "unobserved", "browser_rendering": "unobserved"}
@@ -86,6 +88,10 @@ def observation(record, candidate, publication, verdict="Pending"):
     if not publication:
         result["guidance"] = ("Card publication unavailable; run prepare to restore the same listener. "
                               "Keep the known task link while reporting this blocker; browser reachability and rendering remain unobserved.")
+    elif not ready:
+        result["guidance"] = ("Incomplete active-flight card; prepare again with complete --details. "
+                              + " ".join(publication["completeness"]["issues"])
+                              + " Keep the known link; the browser shows its existing unavailable state.")
     return result
 
 
@@ -111,7 +117,7 @@ def prepare(checkout, state, args):
             maintainer.write_json(directory / "reply-route.json", record)
             current = maintainer.candidate(checkout)
             live = published_card(args.task, endpoint["port"], current)
-            result = observation(record, current, bool(live), live["verdict"] if live else "Pending")
+            result = observation(record, current, live, live["verdict"] if live else "Pending")
         except (OSError, ValueError, subprocess.SubprocessError) as error:
             result = observation(record, maintainer.candidate(checkout), False)
             result["error"] = str(error)
@@ -136,7 +142,7 @@ def check(checkout, state, args):
         raise ValueError("Use the prepared task's exact browser URL")
     current = maintainer.candidate(checkout)
     published = published_card(args.task, endpoint.get("port"), current)
-    result = observation(record, current, bool(published), published["verdict"] if published else "Pending")
+    result = observation(record, current, published, published["verdict"] if published else "Pending")
     if not args.reply_file:
         raise ValueError("check requires --reply-file with the exact controller reply")
     text = args.reply_file.read_text(encoding="utf-8")

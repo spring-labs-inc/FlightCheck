@@ -10,6 +10,8 @@ from http.client import HTTPConnection
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from card_fixture import complete
+
 CARD = Path(__file__).resolve().parents[1] / "status-card"
 
 
@@ -53,6 +55,13 @@ class TaskStatusTests(unittest.TestCase):
             connection.close()
 
     def test_stable_task_route_publishes_only_current_verdict(self):
+        details = self.snapshot.with_name("complete.json")
+        def active_publish(*args):
+            identity = args[args.index("--candidate") + 1] if "--candidate" in args else "initial"
+            details.write_text(json.dumps(complete(identity, "Final Verdict")))
+            return original_publish("--mode", "flight", "--candidate", identity, "--details", str(details), *args)
+        original_publish = self.publish
+        self.publish = active_publish
         self.assertEqual(self.publish(), "")
         url = self.start("--task-status", str(self.snapshot))
         self.assertTrue(url.endswith("/task/test-task/"))

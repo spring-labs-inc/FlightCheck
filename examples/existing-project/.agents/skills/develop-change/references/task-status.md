@@ -9,9 +9,29 @@ Before the first TUI reply, proactively tell the user: "Open the live FlightChec
 Use the installed `.flightcheck/docs/status.md` for the configured interpreter, state directory and command paths. In the FlightCheck source checkout, the portable commands are:
 
 ```sh
-python3 -B status-card/reply.py prepare --task TASK_ID --title "Task title"
+python3 -B status-card/reply.py prepare --task TASK_ID --title "Task title" --details /private/flight-details.json
 python3 -B status-card/reply.py check --task TASK_ID --phase update --reply-file /private/reply.txt
 ```
+
+Initialize the private details file before the first reply. Declare all nine stages, one honest current stage, `check_plan`, and one current pending observation per applicable check (empty counts until real results exist). Include known issue/PR links or explicit `links_unavailable` reasons; do not invent work links. An empty check plan requires a `checks_unavailable` reason. Publishing a new nonempty `check_plan` removes the previous no-checks reason unless the update explicitly supplies a reason too; that contradictory combination remains incomplete. A planned unavailable check needs its own `reason`. See the complete [details schema](https://github.com/spring-labs-inc/FlightCheck/blob/main/docs/status-card.md#publish-work-links-and-evidence) in the upstream repository; installed projects use the schema below.
+
+```json
+{
+  "stages": {
+    "Plan": "current", "Implement": "pending", "Cheap Tests": "pending",
+    "Interactive UI Approval": "pending", "Independent Code Review": "pending",
+    "Authoritative Gates": "pending", "Skeptical Evidence Review": "pending",
+    "Final Verdict": "pending", "PR & Merge": "pending"
+  },
+  "check_plan": ["Project checks"],
+  "checks": [{"name": "Project checks", "state": "pending", "candidate": "CURRENT_CANDIDATE",
+              "observed_at": "2026-01-01T00:00:00Z", "counts": {}}],
+  "links": [],
+  "links_unavailable": {"issue": "No tracked issue for this task.", "pr": "No PR yet."}
+}
+```
+
+Use the actual current candidate and observation time, agreed gate names and known links. Later updates may omit unchanged sections. On candidate changes refresh the stage map and check observations explicitly. A title-only card is incomplete: active-flight HTTP returns 503, the existing browser view shows Snapshot unavailable, and prepare/check fail with actionable completeness diagnostics while retaining the URL. An observed listener is not readiness. Same-candidate changed check/CI observations clear old verdicts too. Low-level `--mode minimal` is only a labeled transport fixture and never active-flight readiness.
 
 `prepare` publishes and verifies the checkout-host task page and current task/candidate snapshot, restoring a stopped listener on the recorded port. It returns JSON with `footer`, browser `guidance`, publication state and separate unobserved browser reachability/rendering. Put the exact planned controller reply in a private file; `check` verifies its footer and current publication before sending. A zero exit means this explicit check passed, not that the client intercepted a message.
 

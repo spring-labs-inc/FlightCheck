@@ -120,6 +120,8 @@ def observation(row, states):
 
 def check(row):
     result = observation(row, CHECK_STATES)
+    if row.get("reason") is not None:
+        result["reason"] = short_text(row["reason"])
     counts = row.get("counts", {})
     if not isinstance(counts, dict) or any(
         key not in COUNT_NAMES or type(value) is not int or value < 0
@@ -183,11 +185,30 @@ def newest_first(items):
 
 def normalize_details(data):
     result = {}
+    if "check_plan" in data:
+        plan = data["check_plan"]
+        if not isinstance(plan, list) or any(not isinstance(name, str) for name in plan):
+            raise ValueError("check_plan must list applicable check names")
+        result["check_plan"] = [short_text(name) for name in plan]
+        if len(set(plan)) != len(plan):
+            raise ValueError("check_plan names must be unique")
+    if "checks_unavailable" in data:
+        result["checks_unavailable"] = short_text(data["checks_unavailable"])
+    if "links_unavailable" in data:
+        missing = data["links_unavailable"]
+        if not isinstance(missing, dict) or missing.keys() - {"issue", "pr"}:
+            raise ValueError("links_unavailable must explain missing issue/PR links")
+        result["links_unavailable"] = {kind: short_text(reason) for kind, reason in missing.items()}
     for key in ("branch", "worktree"):
         if data.get(key) is not None:
             result[key] = short_text(data[key])
     if "stages" in data:
         result["stages"] = stages(data["stages"])
+        declared = data.get("stages_declared", list(data["stages"]))
+        if not isinstance(declared, list) or any(name not in STAGE_NAMES for name in declared):
+            raise ValueError("Expected declared FlightCheck stages")
+        # A retained declaration cannot fill a stage removed from the snapshot.
+        result["stages_declared"] = [name for name in declared if name in data["stages"]]
     if "stage_updated_at" in data:
         times = data["stage_updated_at"]
         if not isinstance(times, dict) or times.keys() - set(STAGE_NAMES):
@@ -210,6 +231,7 @@ def update_details(previous, details, candidate):
     """Apply explicit section updates and append only new, recorded events."""
     if not isinstance(details, dict) or details.keys() - {
         "branch", "worktree", "links", "checks", "ci", "events", "stages", "stage_updated_at", "tracked_flights",
+        "check_plan", "checks_unavailable", "links_unavailable",
     }:
         raise ValueError("Expected a details object with supported task status fields")
     update = normalize_details(details)
@@ -218,6 +240,8 @@ def update_details(previous, details, candidate):
         result.pop("branch", None)
         result.pop("worktree", None)
     result.update(update)
+    if update.get("check_plan") and "checks_unavailable" not in update:
+        result.pop("checks_unavailable", None)
     now = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
     if "stages" in update or "stage_updated_at" in update:
         times = {**previous.get("stage_updated_at", {}), **update.get("stage_updated_at", {})}
@@ -228,6 +252,7 @@ def update_details(previous, details, candidate):
         result["stage_updated_at"] = times
     if previous.get("candidate") != candidate and "stages" not in update:
         result.pop("stages", None)
+        result.pop("stages_declared", None)
         result.pop("stage_updated_at", None)
     identities = {"links": ("kind", "url"), "checks": ("name", "candidate"),
                   "ci": ("kind", "name", "candidate", "commit", "attempt")}

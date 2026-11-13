@@ -11,9 +11,11 @@ task_dir="$(mktemp -d)"
 task_id=example-task
 task_url="http://127.0.0.1:8767/task/$task_id/"
 python3 -B status-card/task_status.py --file "$task_dir/status.json" \
-  --task "$task_id" --title "Example task" --url "$task_url"
+  --task "$task_id" --title "Example task" --mode minimal --url "$task_url"
 python3 -B status-card/serve.py --port 8767 --task-status "$task_dir/status.json"
 ```
+
+This low-level example is explicitly `minimal`: it verifies transport, never a ready active flight or a verdict. Its task page uses the existing unavailable presentation. Use `--mode flight --candidate CURRENT --details /private/flight-details.json` for an active low-level publication; maintainer and portable controller commands always select flight mode.
 
 In a durable setup, use an owner-only directory that survives the chat session and keep the loopback listener running while the card is needed. Re-run the publisher with the same file and task ID when the candidate or review changes. Supply `--candidate` with the current identity. Supply `--verdict` and `--verdict-candidate` together only after the verdict is recorded. The publisher replaces the snapshot atomically. The task page polls the read-only endpoint and suppresses the verdict when the task, candidate binding, or connection cannot be verified.
 
@@ -23,7 +25,7 @@ The shared [controller status instructions](../examples/existing-project/.agents
 
 ### Publish work links and evidence
 
-Pass `--details /private/path/details.json` to the same publisher command. Use only the sections being updated. For example, a synthetic update for `--candidate candidate-2` could contain:
+Pass `--details /private/path/details.json` to the same publisher command. Initialize every required section first; later updates may supply only changed sections. For example, a synthetic update for `--candidate candidate-2` could contain:
 
 ```json
 {
@@ -33,7 +35,11 @@ Pass `--details /private/path/details.json` to the same publisher command. Use o
     "Implement": "completed",
     "Cheap Tests": "completed",
     "Interactive UI Approval": "skipped",
-    "Independent Code Review": "current"
+    "Independent Code Review": "current",
+    "Authoritative Gates": "pending",
+    "Skeptical Evidence Review": "pending",
+    "Final Verdict": "pending",
+    "PR & Merge": "pending"
   },
   "stage_updated_at": {
     "Independent Code Review": "2026-01-01T12:09:00Z"
@@ -46,6 +52,8 @@ Pass `--details /private/path/details.json` to the same publisher command. Use o
   "tracked_flights": {
     "setup-followup": {"candidate": "followup-1", "stage_candidate": "followup-1", "stage": "Implement"}
   },
+  "check_plan": ["Project tests"],
+  "links_unavailable": {},
   "checks": [
     {"name": "Project tests", "candidate": "candidate-2", "state": "passed", "observed_at": "2026-01-01T12:10:00Z", "counts": {"passed": 37, "skipped": 2}}
   ],
@@ -59,7 +67,7 @@ Pass `--details /private/path/details.json` to the same publisher command. Use o
 ```
 
 - **Checkout** appears below Candidate. Supply either `"branch"` with the full branch name or `"worktree"` with the linked worktree's display name. Either field replaces the previous checkout label. Use `"branch": null` to clear it. Omit both fields to keep the previous label. Keep filesystem paths in the private workflow record.
-- **Stages** follow the nine names and fixed order defined in the [README](../README.md). Use the states `completed`, `current`, `skipped`, and `pending`, with at most one current stage. Unlisted stages default to pending. A completed stage after the current stage resets to pending, including when reading older snapshots or returning to an earlier stage. Publish the new stage map when the workflow advances or returns for repair. State changes record their publication time in `stage_updated_at`. Supply that map explicitly when an original observation time is available. Unchanged stages keep their timestamps on resume. The card clears stages and timestamps on a candidate change unless the update supplies a new stage map.
+- **Stages** follow the nine names and fixed order defined in the [README](../README.md). Use the states `completed`, `current`, `skipped`, and `pending`, with at most one current stage. Active flights must declare all nine stages and one current stage, or mark a terminal flight completed/skipped with Final Verdict completed. Legacy/minimal maps may default unlisted stages to pending. A completed stage after the current stage resets to pending, including when reading older snapshots or returning to an earlier stage. Publish the new stage map when the workflow advances or returns for repair. State changes record their publication time in `stage_updated_at`. Supply that map explicitly when an original observation time is available. Unchanged stages keep their timestamps on resume. The card clears stages and timestamps on a candidate change unless the update supplies a new stage map.
 - **Links** come from the agreed scope and recorded PR. Use a short reference such as `#12` for the label. Provide a title and a brief description when available. Selecting an item expands its details on the card. The `>` button opens the destination in a new tab or window. Use HTTPS destinations without credentials or query parameters. Include the tracker's `updated_at` and `created_at` timestamps with timezones when available. All link types appear together in recent activity order, with each item's kind identified beside it.
 - **Linked issue stages** require an explicit `flight` on the issue link. Use the flight's task ID. For the displayed flight, the stage comes from its current candidate and stage map. For another flight, publish its observed candidate, recorded stage, and the candidate that stage applies to in `tracked_flights`. Refresh this map from the workflow records when tracked flights advance or change candidates. If no stage applies to the new candidate, publish only its candidate or omit that flight from the replacement map. The card shows a shared label when several linked issues use the same flight. The main stages always come from the displayed task.
 - **Checks** summarize the latest observation per check group from the project's native evidence. Publish starts and outcomes as they occur. For the example capture script, use the `run.json` candidate, start or finish time, status and exit code. Add counts only when the tool reports them. A newer failure, interruption, or incomplete attempt takes the place of an earlier pass. Use `pending`, `running`, `passed`, `failed`, `interrupted`, or `unavailable`.
@@ -69,6 +77,22 @@ Pass `--details /private/path/details.json` to the same publisher command. Use o
 Each supplied `links`, `checks`, or `ci` list or `tracked_flights` map replaces that section in full. An empty list or map clears it. Omitted sections carry forward. A check or CI row from another candidate shows as stale, and rows carried through a candidate change stay stale until the workflow publishes current evidence. Use `"stale": true` if the workflow invalidates a row for the same candidate. Only the active workflow writes the snapshot, including when several checks produce evidence concurrently. Keep commands, raw logs, credentials, and private paths in the underlying evidence store.
 
 Local checks, CI observations, iteration history, and work links show the latest activity first. Records use their most recent `observed_at`, `updated_at`, or `created_at` value. When a check, CI result, or work link changes without a newer observation or an explicit modification time, the publisher records the update time. Unchanged republication keeps the prior time. Timestamp ties keep their existing order. Undated legacy records follow dated records. Workflow stages always retain the README sequence. The synthetic example's gate list also uses activity timestamps when supplied.
+
+### Completeness and readiness
+
+A task title and HTTP 200 do not establish a complete flight. `completeness` is derived at publication and on each read. A ready active flight has a candidate, all nine explicitly declared stages, an honest current stage (or completed terminal flight), a `check_plan`, one nonstale current observation per planned check, and known issue/PR links or explicit reasons in `links_unavailable`. Do not invent a PR or create an issue just to fill the card.
+
+Before tests run, use check state `pending`, the current candidate and observation time, and empty `counts`. Use `unavailable` with a `reason` when a planned check cannot run. If no checks apply, declare `"check_plan": []` and a `checks_unavailable` reason. Publishing a new nonempty `check_plan` removes the previous no-checks reason unless the update explicitly supplies a reason too; that contradictory combination remains incomplete. If an issue or PR does not exist, use, for example, `"links_unavailable": {"pr": "Local review; no PR yet."}` alongside the known issue link. Replace the reason when the real link exists.
+
+Incomplete flight snapshots return HTTP 503 with actionable JSON diagnostics. The existing browser view hides details and shows **Snapshot unavailable**; `prepare`/`check` fail with `status: incomplete`, preserve the task URL and explain the missing sections. The maintainer command retains its single-line footer on stdout and prints diagnostics to stderr; its transport check alone is not approval. The native Stop guard also requires completeness. Explicit low-level minimal snapshots return 200 with `snapshot: minimal` and `ready: false`; they cannot establish flight readiness or a verdict.
+
+A candidate edit invalidates carried stages and checks until refreshed. A same-candidate change to check/CI observations also clears the verdict; only a newly recorded verdict can bind the new observations. Listener repair/restart preserves these rules. Completeness verifies structure and freshness, not whether the supplied narrative or results are true: publish only actual evidence.
+
+### Loopback request boundary
+
+The server binds only `127.0.0.1`. Snapshot and asset reads require one valid loopback Host (`127.0.0.1`, `localhost`, or `[::1]`, with an optional valid port). An Origin, when present, must be a single loopback HTTP origin without a path. Foreign/malformed/duplicate authorities, foreign/null origins and absolute-form request targets are rejected. Forwarding may change the loopback port or Host; forwarded headers cannot authorize a foreign Host. No CORS grant is added. This closes the adopter journal's forged-Host read without publishing the raw journal. The policy follows HTTP's [Host authority](https://www.rfc-editor.org/rfc/rfc9110.html#section-7.2) and Fetch's [Origin header](https://fetch.spec.whatwg.org/#origin-header) boundaries.
+
+This is not authentication against local processes or other local users. Keep snapshots private, publish only curated short labels, and retain raw evidence elsewhere. Optional project-specific deny-pattern/content filters are a separate data-boundary policy, not a replacement for Host/Origin checks. No tunnel or public listener is configured automatically.
 
 ### Rehearse on desktop
 
@@ -84,7 +108,7 @@ The [root instructions](../AGENTS.md) select FlightCheck for implementation in t
 python3 -B status-card/maintainer.py card --task example-change --title "Example change"
 ```
 
-Run the command before an implementation reply and use its output as the reply's last paragraph. The command fingerprints the current checkout, publishes the private snapshot, and verifies the task endpoint. It gets the checkout label from Git. A named branch in the primary checkout shows **Branch** with its full name. A linked worktree shows **Worktree** with its directory name. A detached HEAD in the primary checkout hides the row. On resume the command reuses the recorded port and restores a stopped listener if that port is available. Pass `--summary` and `--details` to update the curated card content. Supply `--verdict` and `--verdict-candidate` together after a verdict for that candidate has been recorded.
+At activation, add `--details /private/flight-details.json` using the schema above, with pending check observations for the current candidate. Run the command before an implementation reply and use its output as the reply's last paragraph. The command fingerprints the current checkout, publishes the private snapshot, and verifies the task endpoint. It gets the checkout label from Git. A named branch in the primary checkout shows **Branch** with its full name. A linked worktree shows **Worktree** with its directory name. A detached HEAD in the primary checkout hides the row. On resume the command reuses the recorded port and restores a stopped listener if that port is available. Pass `--summary` and `--details` to update the curated card content. Supply `--verdict` and `--verdict-candidate` together after a verdict for that candidate has been recorded.
 
 The default state directory is `$XDG_STATE_HOME/flightcheck` or `~/.local/state/flightcheck`. If the session restricts that path, set `FLIGHTCHECK_STATE_DIR` to the same absolute, owner-only directory outside the checkout for Codex and its hooks. Use a host that permits IPv4 loopback binds. The listener runs in the background while the card is needed. The maintainer command replaces an older managed listener that omits current card metadata and reuses its port. Its startup log is in the private task directory.
 
