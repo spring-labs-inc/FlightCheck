@@ -1,12 +1,26 @@
 # Adopt FlightCheck in an existing repository
 
-This directory mirrors the files you can add to your own repository. Open your project in Codex and review the examples before merging them into the corresponding paths. Keep existing instructions, nested overrides, rules, hooks, and dependency files. Resolve overlaps by editing the relevant entries in your project.
+This directory mirrors the files you can add to your existing project. Review the examples before merging them into the corresponding paths. Keep existing instructions, nested overrides, permissions, rules, hooks, and dependency files.
 
 ## License when adopting
 
 These example files are covered by the repository's [PolyForm Noncommercial 1.0.0 license](../../LICENSE). Before copying them, read the [licensing and adoption guide](../../docs/licensing.md). Carry the license text or its canonical URL and any supplied `Required Notice:` lines with copied or adapted FlightCheck material. Keep your project's own license in place and identify the FlightCheck-derived files or portions separately.
 
 Use outside the license's permissions requires separate authorization from the licensor, including commercial workflow use that is not covered by its stated organizational permissions. Contact [jeff@springfinance.io](mailto:jeff@springfinance.io). Copying the examples does not itself grant commercial permission.
+
+## Install and configure
+
+Use Git and a coding tool that can read repository instructions, run project checks, and launch separate reviewers with [enforced read-only access](docs/development-workflow.md#independent-review). The bundled skill and reviewer definitions target Codex; Claude Code setup and verification are pending in [#14](https://github.com/spring-labs-inc/FlightCheck/issues/14).
+
+1. Merge the workflow entry into your `AGENTS.md`. Add the skill, workflow guide, and two reviewer role files at the paths below. Preserve your project's existing policy.
+2. Fill in the workflow guide's [project setup table](docs/development-workflow.md#project-setup): exact checks, test isolation, preview method, private evidence location, and delivery policy. Your project supplies the commands and runtimes for checks, previews, and any required CI.
+3. Start a fresh session in the target checkout and [verify adoption](#verify-the-adoption) on a small, explicitly selected task.
+
+For receipt-backed checks and handoffs, use Python 3 on a POSIX host. Copy all six files in [`scripts/`](scripts): `capture_check.py`, `handoff.py`, `proof.py`, `recovery.py`, `behavior.py`, and `disposition.py`. Keep them adjacent. They use the Python standard library; the recorder uses POSIX process controls and `fcntl` locking.
+
+Configure the [task JSON](docs/development-workflow.md#resume-summary-and-final-packet), a [private evidence directory outside the checkout](docs/development-workflow.md#capture-native-check-output), and a [project-owned fingerprint command for each recorded gate](docs/development-workflow.md#reuse-a-result). If you enable coverage verification, use the documented [coverage report and frozen baseline format](docs/development-workflow.md#verify-native-test-coverage).
+
+### Files to merge
 
 | Example | When to apply it |
 | --- | --- |
@@ -26,13 +40,16 @@ Use outside the license's permissions requires separate authorization from the l
 | [`disposition.py`](scripts/disposition.py) | Retain independently acknowledged refutations without deleting original claims. |
 | [`handoff.py`](scripts/handoff.py) | Summarize resumed work and validate acceptance proof, reviewer obligations, and review packets. Copy all six adjacent Python files together. |
 
-Codex loads project instructions based on the working directory and active overrides. Skill discovery, project trust, and approval policy are separate. Review the effective project settings on the client that will run the workflow. The examples require no global configuration, plugin, hook, external package, or new CI service. [Project instructions](https://learn.chatgpt.com/docs/agent-configuration/agents-md) · [Skills](https://learn.chatgpt.com/docs/build-skills) · [Hooks](https://learn.chatgpt.com/docs/hooks) · [Command rules](https://learn.chatgpt.com/docs/agent-configuration/rules)
-
 ## Verify the adoption
 
 1. Review the diff for unrelated policy or permission changes. Include the skill directory and any new files when inspecting the candidate.
-2. From a fresh Codex session at the target checkout, confirm the active instruction path and skill. Ask an ordinary question and confirm that it stays outside the workflow.
-3. Select a small task with `$develop-change`. Run the configured checks on that candidate and verify that the final reviewer and any configured early reviewer can inspect it with read-only access. Rehearse verdict routing without provider writes until your project has a recorded delivery grant.
-4. If you adopt the optional rules, probe matching and nearby nonmatching commands with `codex execpolicy check --rules .codex/rules/github-reads.rules -- <command tokens>`. The probe evaluates the rule without running the command. Review the result alongside user and managed rules.
+2. From a fresh session at the target checkout, confirm the active instruction path and skill. Ask an ordinary question and confirm that it stays outside the workflow.
+3. Explicitly select a small task using your tool's entry point (`$develop-change` in the bundled Codex setup). Run the configured checks on that candidate and verify that the final reviewer and any configured early reviewer can inspect it with read-only access. Rehearse verdict routing without provider writes until your project has a recorded delivery grant.
 
 Projects using other languages should use their own package manager, checks, and test isolation. A project with no preview or visual checks can record those as inapplicable for nonvisual work. A project that requires CI must wait for its checks on the actual candidate. A project with no CI requirement can record that fact and rely on its required local checks and reviews.
+
+## Codex integration
+
+Codex loads project instructions based on the working directory and active overrides. Skill discovery, project trust, and approval policy are separate. Review the effective project settings on the client that will run the workflow. The examples require no global configuration, plugin, hook, external package, or new CI service. [Project instructions](https://learn.chatgpt.com/docs/agent-configuration/agents-md) · [Skills](https://learn.chatgpt.com/docs/build-skills) · [Hooks](https://learn.chatgpt.com/docs/hooks) · [Command rules](https://learn.chatgpt.com/docs/agent-configuration/rules)
+
+If you adopt the optional GitHub CLI rule, use an authenticated `gh` and adapt its repository. Probe matching and nearby nonmatching commands with `codex execpolicy check --rules .codex/rules/github-reads.rules -- <command tokens>`. The probe evaluates the rule without running the command. Review the result alongside user and managed rules.
