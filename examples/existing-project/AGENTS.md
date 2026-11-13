@@ -6,4 +6,6 @@ In a project that adopts this example, use the [selected development workflow](d
 
 Start a selected stage from its prepared brief or review packet when available. Consult the relevant workflow guide section for any applicable decision or constraint the stage input leaves open.
 
+In every selected flight, start or restore the browser status card and follow the [controller status instructions](.agents/skills/develop-change/references/task-status.md). Put the same task link last in every controller reply, with any current verdict above it. Proactively offer terminal users the regular browser. Ordinary chat and raw reviewer JSON remain outside this rule.
+
 For selected owner-facing UI changes, complete the cheap checks and pause for approval of the exact interactive HTML preview before any applicable early CODE review or expensive checks, unless the owner explicitly waives the preview pause. Run deterministic checks automatically within the project's permissions. Keep review findings, owner decisions, and landing authority tied to the current candidate.

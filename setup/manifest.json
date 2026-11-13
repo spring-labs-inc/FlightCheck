@@ -23,6 +23,7 @@
     ["status-card/task_details.py", ".flightcheck/status-card/task_details.py", "shared"],
     ["status-card/task_status.py", ".flightcheck/status-card/task_status.py", "shared"],
     ["status-card/maintainer.py", ".flightcheck/status-card/maintainer.py", "shared"],
+    ["status-card/reply.py", ".flightcheck/status-card/reply.py", "shared"],
     ["status-card/task_tab.py", ".flightcheck/status-card/task_tab.py", "codex"],
     ["examples/existing-project/.agents/skills/develop-change/SKILL.md", ".agents/skills/develop-change/SKILL.md", "codex"],
     ["examples/existing-project/.agents/skills/develop-change/references/task-status.md", ".agents/skills/develop-change/references/task-status.md", "codex"],

@@ -99,11 +99,11 @@ Installation and HTTP tests do not prove that a client loaded its instructions, 
 
 1. Ask an ordinary question; it must stay outside a flight. Select a small task through `$develop-change` (Codex) or `/develop-change` (Claude), or verify the explicitly approved default-for-coding route.
 2. Probe each reviewer with synthetic canaries: required packet/evidence reads must work and writes, secrets, native check execution and provider tools must be unavailable. Inspect active hook sources too. Preserve existing settings; request only the narrow missing evidence access the project requires. Keep review pending if the boundary cannot be enforced.
-3. Follow `.flightcheck/docs/status.md` to start a real task card. A TUI can keep using the terminal while the user opens the printed card URL in a browser. For SSH/remote checkouts, use approved localhost forwarding; do not expose the listener to the network.
+3. Follow `.flightcheck/docs/status.md` to prepare a real task card before each controller reply and check the exact draft with `.flightcheck/status-card/reply.py check --task TASK_ID --phase update --reply-file /private/reply.txt`. Test all phases, including approval pauses, blockers and repair/resume. Ordinary chat and raw reviewer JSON must remain unchanged. Do not claim a Stop hook intercepts intermediate or interrupted replies without an observed native capability test. A TUI can keep using the terminal while the user opens the printed card URL in a browser. For SSH/remote checkouts, use approved localhost forwarding; do not expose the listener to the network.
 4. Record host HTTP publication and browser reachability/rendering separately. Keep one task URL on resume. Test a stopped listener and a changed candidate; an old verdict must become Pending.
 5. Rehearse the documented handoff path before provider writes. Label any mock reviewer output as a plumbing test; it does not establish real approval.
 
-Record tested client/runtime versions, observed capabilities and outstanding blockers with the setup. Full native Claude end-to-end qualification is tracked in #14; installing the adapter alone does not complete it. Per-reply footer enforcement and card-completeness policy are tracked separately in #54 and #55.
+Record tested client/runtime versions, observed capabilities and outstanding blockers with the setup. Full native Claude end-to-end qualification is tracked in #14; installing the adapter alone does not complete it. The portable per-reply guard and TUI browser guidance are included; native event interception still needs a live capability probe. Card-completeness policy remains #55.
 
 ## Troubleshooting
 

@@ -13,10 +13,11 @@ import sys
 import tempfile
 import time
 from http.client import HTTPConnection, HTTPException
+from html.parser import HTMLParser
 from pathlib import Path
 
 from task_details import task_id
-from task_status import VERDICTS, chat_status, normalize, publish, read_task, task_path
+from task_status import VERDICTS, chat_status, normalize, publish, read_task, task_path, validate_task_url
 
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 
@@ -104,7 +105,17 @@ def card_url(task, port):
     return f"http://127.0.0.1:{port}{task_path(task)}"
 
 
-def current_card(task, port, expected_candidate):
+def prepared_card_url(directory, task, port):
+    url = card_url(task, port)
+    route = read_json(directory / "reply-route.json")
+    if route:
+        if not isinstance(route, dict) or route.get("task") != task or route.get("host_url") != url:
+            raise ValueError("Reconcile the prepared task route with its publication endpoint")
+        url = route.get("user_url") or url
+    return validate_task_url(url, task)
+
+
+def fetch_card(task, port, expected_candidate):
     connection = HTTPConnection("127.0.0.1", port, timeout=0.75)
     try:
         connection.request("GET", task_path(task) + "status.json")
@@ -116,12 +127,29 @@ def current_card(task, port, expected_candidate):
             isinstance(status, dict) and status.get("snapshot") == "live" and status.get("task") == task
             and status.get("publicationPort") == port and status.get("candidate") == expected_candidate
         ):
-            return status
+            connection.request("GET", task_path(task))
+            page = connection.getresponse()
+            if page.status == 200 and b"FlightCheck" in page.read(256 * 1024):
+                return status
     except (OSError, ValueError, HTTPException):
         return None
     finally:
         connection.close()
     return None
+
+
+def current_card(task, port, expected_candidate):
+    # Per-read socket timeouts can be extended by trickled bytes. Bound the
+    # whole read-only probe; it cannot start listeners or modify private state.
+    try:
+        result = subprocess.run(
+            [sys.executable, "-B", str(Path(__file__).resolve()), "probe", "--task", task,
+             "--port", str(port), "--candidate", expected_candidate],
+            capture_output=True, text=True, timeout=2,
+        )
+        return json.loads(result.stdout) if result.returncode == 0 else None
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
 
 
 def card_matches(status, data):
@@ -166,10 +194,19 @@ def start_listener(snapshot, data, port):
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=log, start_new_session=True,
         )
     try:
-        line = process.stdout.readline() if select.select([process.stdout], [], [], 5)[0] else b""
+        line = b""
+        deadline = time.monotonic() + 5
+        while b"\n" not in line and len(line) < 4096:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or not select.select([process.stdout], [], [], remaining)[0]:
+                break
+            chunk = os.read(process.stdout.fileno(), 4096 - len(line))
+            if not chunk:
+                break
+            line += chunk
         prefix = b"FlightCheck status card at http://127.0.0.1:"
         actual, _, _ = line[len(prefix):].partition(b"/")
-        if not line.startswith(prefix) or not actual.isdigit():
+        if b"\n" not in line or not line.startswith(prefix) or not actual.isdigit():
             raise ValueError("Card listener could not start. Check listener.log in the task directory")
         actual_port = int(actual)
         status = current_card(data["task"], actual_port, data["candidate"])
@@ -178,7 +215,11 @@ def start_listener(snapshot, data, port):
         return {"port": actual_port, "pid": process.pid}
     except BaseException:
         process.terminate()
-        process.wait(timeout=5)
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
         raise
     finally:
         process.stdout.close()
@@ -223,7 +264,31 @@ def show_card(checkout, state, args):
         if record:
             record.update(task=args.task, checkout=str(checkout))
             write_json(record_path, record)
-    return chat_status(data, card_url(args.task, port), "start")
+    return chat_status(data, prepared_card_url(directory, args.task, port), "start")
+
+
+class FooterHTML(HTMLParser):
+    """Conservatively keep a footer outside comments and HTML containers."""
+
+    VOID = frozenset(("area", "base", "br", "col", "embed", "hr", "img", "input",
+                      "link", "meta", "param", "source", "track", "wbr"))
+
+    def __init__(self):
+        super().__init__(convert_charrefs=False)
+        self.open_tags = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag not in self.VOID:
+            self.open_tags.append(tag)
+
+    def handle_endtag(self, tag):
+        if tag in self.open_tags:
+            position = len(self.open_tags) - 1 - self.open_tags[::-1].index(tag)
+            del self.open_tags[position:]
+
+    def handle_startendtag(self, tag, attrs):
+        # HTML ignores the slash on non-void tags such as <pre/> and <details/>.
+        self.handle_starttag(tag, attrs)
 
 
 def has_footer(reply, footer):
@@ -231,6 +296,7 @@ def has_footer(reply, footer):
     if not lines or lines[-1] != footer or (len(lines) > 1 and lines[-2].strip()):
         return False
     fence = ""
+    outside = []
     for line in lines[:-1]:
         match = FENCE.match(line)
         if match:
@@ -239,7 +305,18 @@ def has_footer(reply, footer):
                 fence = marker
             elif marker.startswith(fence) and not suffix.strip():
                 fence = ""
-    return not fence
+        elif not fence:
+            outside.append(line)
+    if fence:
+        return False
+    prefix = "\n".join(outside)
+    # Backtick spans and autolinks display literal text rather than HTML.
+    prefix = re.sub(r"(?<![\\`])(`+)(?!`)(.*?)(?<!`)\1(?!`)", "", prefix, flags=re.S)
+    prefix = re.sub(r"<(?:https?://|mailto:)[^<>\s]+>", "", prefix)
+    html = FooterHTML()
+    html.feed(prefix)
+    incomplete = re.match(r"<(?:!--|/?[A-Za-z]|![A-Za-z]|\?)", html.rawdata.lstrip())
+    return not html.open_tags and not incomplete
 
 
 def check_turn(checkout, state, event):
@@ -262,7 +339,7 @@ def check_turn(checkout, state, event):
     if task:
         port = read_json(task_dir(state, task) / "endpoint.json").get("port")
         if port and current_card(task, port, current):
-            footer = chat_status({"task": task}, card_url(task, port), "start")
+            footer = chat_status({"task": task}, prepared_card_url(task_dir(state, task), task, port), "start")
             if has_footer(event.get("last_assistant_message") or "", footer):
                 return {}
 
@@ -287,9 +364,15 @@ def main():
     card.add_argument("--verdict-candidate")
     card.add_argument("--session", default=os.environ.get("CODEX_THREAD_ID"))
     commands.add_parser("hook")
+    probe = commands.add_parser("probe", help="Bounded read-only checkout-host publication probe")
+    probe.add_argument("--task", type=task_id, required=True)
+    probe.add_argument("--port", type=int, required=True)
+    probe.add_argument("--candidate", required=True)
     args = parser.parse_args()
     try:
-        if args.command == "hook":
+        if args.command == "probe":
+            print(json.dumps(fetch_card(args.task, args.port, args.candidate)))
+        elif args.command == "hook":
             event = json.load(sys.stdin)
             checkout = git_path(event["cwd"], "--show-toplevel")
             print(json.dumps(check_turn(checkout, state_dir(checkout), event)))

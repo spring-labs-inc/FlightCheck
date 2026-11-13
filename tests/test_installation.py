@@ -259,6 +259,55 @@ class InstallationTests(unittest.TestCase):
         self.assertEqual((self.target / "AGENTS.md").read_bytes(), self.owner_agents)
         self.assertFalse((self.target / "new-file.md").exists())
 
+    def test_installed_card_reply_adapters(self):
+        self.cli("apply")
+        for name in ("AGENTS.md", "CLAUDE.md"):
+            text = (self.target / name).read_text()
+            self.assertIn("before every controller reply", text)
+            self.assertIn("TUI users", text)
+            self.assertIn("raw reviewer JSON", text)
+        for client in (".agents", ".claude"):
+            folder = self.target / client / "skills/develop-change"
+            self.assertIn("every user-facing controller reply", (folder / "SKILL.md").read_text())
+            reference = (folder / "references/task-status.md").read_text()
+            self.assertIn(".flightcheck/status-card/reply.py prepare", reference)
+            self.assertIn(".flightcheck/status-card/reply.py check", reference)
+            self.assertNotIn(".flightcheck/.flightcheck/", reference)
+            self.assertIn("Before the first TUI reply", reference)
+            self.assertIn("intermediate or interrupted", reference)
+        for role in ("code", "evidence"):
+            native = (self.target / (".claude/agents/workflow-" + role + "-reviewer.md")).read_text()
+            self.assertIn("without a status footer", native)
+            self.assertIn("hooks must be disabled", native)
+        settings = (self.target / ".claude/settings.json").read_text()
+        self.assertEqual(json.loads(settings)["hooks"], {})
+        self.assertEqual(json.loads(settings)["permissions"]["allow"], ["Read(existing/**)"])
+        self.assertFalse((self.target / ".codex/hooks.json").exists())
+        entry = self.target / ".flightcheck/status-card/reply.py"
+        env = dict(self.env, FLIGHTCHECK_STATE_DIR=str(self.root / "card state"))
+        listeners = set()
+        try:
+            prepared = subprocess.run([sys.executable, "-B", str(entry), "prepare", "--task", "first-flight", "--execution", "local"],
+                                      cwd=self.target, env=env, capture_output=True, text=True, timeout=20)
+            self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
+            value = json.loads(prepared.stdout)
+            for p in (self.root / "card state").glob("*/tasks/*/endpoint.json"):
+                listeners.add(json.loads(p.read_text())["pid"])
+            self.assertIn("regular browser", value["guidance"])
+            self.assertIn(value["user_url"], value["guidance"])
+            reply = self.root / "first-reply.txt"
+            reply.write_text("Open the card in your browser.\n\n" + value["footer"])
+            checked = subprocess.run([sys.executable, "-B", str(entry), "check", "--task", "first-flight",
+                                      "--phase", "start", "--reply-file", str(reply), "--execution", "local"],
+                                     cwd=self.target, env=env, capture_output=True, text=True, timeout=20)
+            self.assertEqual(checked.returncode, 0, checked.stdout + checked.stderr)
+        finally:
+            for pid in listeners:
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+
     def test_verification_deadline_reaps_stalled_listeners(self):
         pid_file = self.root / "listener.pid"
         common = ("import os,socket,time\nfrom pathlib import Path\n"
