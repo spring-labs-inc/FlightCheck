@@ -4,9 +4,11 @@ This directory mirrors the files you can add to your existing project. Review th
 
 ## License when adopting
 
-These example files are covered by the repository's [PolyForm Noncommercial 1.0.0 license](../../LICENSE). Before copying them, read the [licensing and adoption guide](../../docs/licensing.md). Carry the license text or its canonical URL and any supplied `Required Notice:` lines with copied or adapted FlightCheck material. Keep your project's own license in place and identify the FlightCheck-derived files or portions separately.
+These example files are covered by the repository's [Functional Source License 1.1, MIT Future License (FSL-1.1-MIT)](../../LICENSE). Internal organizational use, including commercial work, is free. Each version becomes available under MIT two years after it is first published under FSL; newer releases do not reset that version's clock.
 
-Use outside the license's permissions requires separate authorization from the licensor, including commercial workflow use that is not covered by its stated organizational permissions. Contact [jeff@springfinance.io](mailto:jeff@springfinance.io). Copying the examples does not itself grant commercial permission.
+Before copying them, read the [licensing and adoption guide](../../docs/licensing.md). Carry the applicable license text or a link to it, preserve copyright notices, and identify the FlightCheck-derived files or portions separately. Keep your project's own license in place for independently created application code.
+
+Competing commercial offerings, as defined in the license, require separate permission during the applicable two-year period. Contact [jeff@springfinance.io](mailto:jeff@springfinance.io) for additional permissions. An inquiry does not grant permission. No account, subscription, or license key is required for FSL-permitted use.
 
 ## Install and configure
 

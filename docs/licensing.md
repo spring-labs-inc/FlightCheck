@@ -1,40 +1,40 @@
 # Licensing and adoption
 
-FlightCheck is source available under [PolyForm Noncommercial 1.0.0](../LICENSE). The license text defines the permissions and conditions; this guide explains how to carry those terms when adopting the workflow.
+FlightCheck is source available under the [Functional Source License 1.1, MIT Future License (FSL-1.1-MIT)](../LICENSE), with future open-source availability under MIT. The license text defines the permissions and conditions; this guide explains how they apply when adopting the workflow.
 
-## Free use and commercial inquiries
+## Free use and additional permissions
 
-The license permits any noncommercial purpose and describes permitted personal uses. It also permits use by charitable organizations, educational institutions, public research organizations, public safety or health organizations, environmental protection organizations, and government institutions, regardless of their funding source or resulting funding obligations. Organizational use alone does not mean payment is required.
+Personal and internal organizational use, including commercial work, is free under FSL. You can copy and adapt FlightCheck for your team's internal development workflow without buying seats or asking for commercial-use permission. No account, subscription, or license key is required for permitted use. Subscriptions remain deferred.
 
-Uses outside those permissions require separate authorization from the licensor. Contact [jeff@springfinance.io](mailto:jeff@springfinance.io) with your intended use. An inquiry does not grant a license. Any additional permission must be expressly agreed, including its scope, covered users, term, and any fee.
+FSL permits purposes other than a Competing Use. Its definition covers making FlightCheck available to others in a commercial product or service that substitutes for FlightCheck, substitutes for another product or service the licensor offers using FlightCheck at the time that version is made available, or offers the same or substantially similar functionality. The license expressly permits professional services provided to a licensee using the software in accordance with its terms. Ordinary commercial work is not itself a Competing Use.
 
-Subscriptions and automated licensing are deferred. No account, checkout, license key, or subscription is required for use permitted by the source license. There is no automatic commercial trial or blanket permission for commercial use.
+For permission beyond FSL's grant during the applicable two-year period, contact [jeff@springfinance.io](mailto:jeff@springfinance.io) with your intended use. An inquiry does not grant a license. Any additional authorization and any fee must be expressly agreed, including its scope and term. Email inquiries do not require a subscription service or account.
+
+## Each version becomes available under MIT
+
+FSL grants an irrevocable additional MIT license effective on the second anniversary of the date each version is first made available under FSL. The two years run separately for each version; publishing a newer version does not restart an older version's clock. On or after that anniversary, you may use that version under MIT, including for competing commercial offerings, while complying with MIT's notice requirements. A newly published FSL version is source available; it is not already licensed under MIT.
+
+Use the version's public Git publication or release record to establish when it was first made available under FSL. A later package or release date does not postpone an earlier public Git publication date.
+
+Previously published PolyForm versions remain available under their existing grants. This change does not rewrite history or retroactively withdraw those permissions. When copying an older version, check the license that accompanies that version.
 
 ## Copying workflow files into your project
 
-The [adoption example](../examples/existing-project/README.md) includes instructions, templates, reviewer configuration, and supporting scripts that you can copy and adapt for purposes permitted by their license.
+The [adoption example](../examples/existing-project/README.md) includes instructions, templates, reviewer configuration, and supporting scripts you can copy and adapt for purposes permitted by their license.
 
-When you copy or adapt FlightCheck material:
+When copying or adapting FlightCheck material under FSL:
 
-1. Give recipients the license text or the canonical license URL: <https://polyformproject.org/licenses/noncommercial/1.0.0>.
-2. Preserve any plain-text lines beginning with `Required Notice:` supplied with that material, as required by the license.
-3. Identify the copied files or FlightCheck-derived portions and where their license can be found. For example, store a copy of FlightCheck's license at `LICENSES/FlightCheck.txt` and reference it from your project documentation. When merging instructions into an existing file, identify the derived portion and its terms there.
-4. Keep your project's own license in place. Do not replace the application's root license with FlightCheck's license merely because you adopted the workflow.
+1. Include the applicable license text or a link to it when redistributing copies, modifications or derivatives. A copy of the version's license is preferable to a link to a changing default branch.
+2. Preserve copyright notices provided in or with the material. The approved FlightCheck notice is `Copyright 2026 Jeff Maddocks`.
+3. For clarity, identify the copied files or FlightCheck-derived portions and where their terms can be found. For example, store that version's license at `LICENSES/FlightCheck.txt` and reference it from your project documentation. When merging instructions into an existing file, identify the derived portion and its terms there.
+4. Keep your project's own license in place for independently created application code. Do not replace the application's root license merely because you adopted the workflow.
 
-Include this licensing information when redistributing an adopted project containing FlightCheck material. Removing a copied file's original location does not remove its applicable terms. Private modifications may remain private; the license does not require every modification to be submitted upstream.
-
-This guidance does not add a permissive adoption exception. Commercial workflow use outside the source license's permissions still needs separate authorization, including when the workflow is copied into a private repository.
+FSL applies to copies, modifications and derivatives until you choose the applicable future MIT license after its effective date. Private modifications may remain private; FSL does not require every change to be submitted upstream. Once using a version under MIT, preserve the MIT copyright and permission notice in copies or substantial portions as required by MIT.
 
 ## Your application and outputs
 
-Using FlightCheck does not place independently created application code or other work under FlightCheck's license or impose FlightCheck royalties on it. You may license and sell that independently created work under your own terms. Copied or adapted FlightCheck material remains subject to its applicable terms; separately licensed third-party material retains its own terms.
-
-## Standard license references and notices
-
-The Distribution License and Changes and New Works License links point to sections within the same [LICENSE](../LICENSE). They do not require separate license documents.
-
-The Yoyodyne copyright line in the license is explicitly an example of a `Required Notice:`. It is part of the unchanged standard text, not FlightCheck's copyright holder or a placeholder to replace. Any separately supplied actual notices should accompany the files they cover.
+Using FlightCheck does not place independently created application code or other work under FlightCheck's license or impose FlightCheck royalties on it. You may license and sell independently created work under your own terms. Copied or adapted FlightCheck material remains subject to its applicable terms; separately licensed third-party material retains its own terms. FSL does not grant general rights to the licensor's trademarks.
 
 ## Contributions
 
-Outside code contributions are currently deferred. See [CONTRIBUTING.md](../CONTRIBUTING.md) for the current bug-report and contribution policy.
+Outside code contributions are currently deferred. Collaborator access does not establish contribution or commercial relicensing rights. See [CONTRIBUTING.md](../CONTRIBUTING.md) for the current bug-report and contribution policy.

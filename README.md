@@ -28,7 +28,7 @@ FlightCheck is a lightweight set of repository instructions that guides AI-assis
 
 ## License and commercial use
 
-FlightCheck is source available under [PolyForm Noncommercial 1.0.0](LICENSE). The license permits noncommercial uses and use by its specified organizations. Uses outside those permissions require separate authorization from the licensor; contact [jeff@springfinance.io](mailto:jeff@springfinance.io). An inquiry does not grant permission. Subscriptions are deferred.
+FlightCheck is available under the [Functional Source License 1.1, with MIT as its future license (FSL-1.1-MIT)](LICENSE). Personal and internal organizational use—including commercial work—is free. No account, subscription, or license key is required. Competing commercial offerings require separate permission during the applicable two-year period. Each version becomes available under MIT two years after publication. For additional permissions, contact [jeff@springfinance.io](mailto:jeff@springfinance.io). Subscriptions remain deferred.
 
 Before copying workflow files, read the [licensing and adoption guide](docs/licensing.md). Outside code contributions are currently deferred; [bug reports and feature requests are welcome](CONTRIBUTING.md).
 
