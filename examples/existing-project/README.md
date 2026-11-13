@@ -1,6 +1,6 @@
 # Adopt FlightCheck in an existing repository
 
-This directory mirrors the files you can add to your existing project. Review the examples before merging them into the corresponding paths. Keep existing instructions, nested overrides, permissions, rules, hooks, and dependency files.
+This directory contains the shared adoption sources. Use the [complete installation flow](../../setup/README.md) to install the standard workflow, evidence tools, browser status card and selected client adapter together. Keep existing instructions, nested overrides, permissions, rules, hooks, and dependency files.
 
 ## License when adopting
 
@@ -12,17 +12,19 @@ Competing commercial offerings, as defined in the license, require separate perm
 
 ## Install and configure
 
-Use Git and a coding tool that can read repository instructions, run project checks, and launch separate reviewers with [enforced read-only access](docs/development-workflow.md#independent-review). The bundled skill and reviewer definitions target Codex; Claude Code setup and verification are pending in [#14](https://github.com/spring-labs-inc/FlightCheck/issues/14).
+Use Git, Python 3.9+ on POSIX, and a coding tool that can read repository instructions, run project checks, and launch separate reviewers with [enforced read-only access](docs/development-workflow.md#independent-review). The installer provides Codex files and generates Claude-native files from the same canonical reviewer instructions. Native Claude end-to-end qualification remains pending in [#14](https://github.com/spring-labs-inc/FlightCheck/issues/14).
 
-1. Merge the workflow entry into your `AGENTS.md`. Add the skill, workflow guide, and two reviewer role files at the paths below. Preserve your project's existing policy.
-2. Fill in the workflow guide's [project setup table](docs/development-workflow.md#project-setup): exact checks, test isolation, preview method, private evidence location, and delivery policy. Your project supplies the commands and runtimes for checks, previews, and any required CI.
-3. Start a fresh session in the target checkout and [verify adoption](#verify-the-adoption) on a small, explicitly selected task.
+1. Obtain a clean pinned source and run the installer's `inspect` step. Read existing project policy and resolve only missing configuration decisions together.
+2. Follow the [configuration, plan and apply steps](../../setup/README.md#3-resolve-the-project-choices-together). The default activation is opt-in and the default delivery grant permits no provider writes. Default-for-coding needs an explicit owner decision. Your project supplies its actual checks, isolation, evidence and any required CI.
+3. Run the installed verifier and then start a fresh client session for [adoption verification](#verify-the-adoption). Successful file/HTTP checks alone do not establish a working reviewer boundary or browser rendering.
 
-For receipt-backed checks and handoffs, use Python 3 on a POSIX host. Copy all six files in [`scripts/`](scripts): `capture_check.py`, `handoff.py`, `proof.py`, `recovery.py`, `behavior.py`, and `disposition.py`. Keep them adjacent. They use the Python standard library; the recorder uses POSIX process controls and `fcntl` locking.
+The standard installation includes all six files in [`scripts/`](scripts): `capture_check.py`, `handoff.py`, `proof.py`, `recovery.py`, `behavior.py`, and `disposition.py`, kept adjacent under `.flightcheck/scripts/`. They use the Python standard library; the recorder uses POSIX process controls and `fcntl` locking. The complete source-to-destination list, including card dependencies, is in the [installation manifest](../../setup/manifest.json).
 
 Configure the [task JSON](docs/development-workflow.md#resume-summary-and-final-packet), a [private evidence directory outside the checkout](docs/development-workflow.md#capture-native-check-output), and a [project-owned fingerprint command for each recorded gate](docs/development-workflow.md#reuse-a-result). If you enable coverage verification, use the documented [coverage report and frozen baseline format](docs/development-workflow.md#verify-native-test-coverage).
 
-### Files to merge
+### Shared source files
+
+The installer preserves original source/installed hashes and license provenance in `.flightcheck/installation.json`. It appends marked instructions to the selected client's existing policy file rather than replacing it. The following table explains the source material; use the manifest for installed paths and complete component verification.
 
 | Example | When to apply it |
 | --- | --- |
@@ -35,18 +37,20 @@ Configure the [task JSON](docs/development-workflow.md#resume-summary-and-final-
 | [`hooks.json`](.codex/hooks.json) | Optional example with an empty handler map. Keep it empty or omit it unless you have a specific event and reviewed handler. Other active hook sources can still run. |
 | [`github-reads.rules`](.codex/rules/github-reads.rules) | Optional GitHub CLI rule example. Replace the example repository only if you want this exact read to require an approval prompt when evaluated for outside-sandbox execution. |
 | [`requirements.dev.txt`](requirements.dev.txt) | Optional dependency example for projects that choose pytest. Use your existing development manifest and lockfile conventions. |
-| [`capture_check.py`](scripts/capture_check.py) | Optional output recorder and automatic pass reuse for native checks. Configure a gate identifier and a project-owned fingerprint probe to enable reuse. |
+| [`capture_check.py`](scripts/capture_check.py) | Standard output recorder and automatic pass reuse for native checks. Configure a gate identifier and a project-owned fingerprint probe to enable reuse. |
 | [`proof.py`](scripts/proof.py) | Acceptance contracts, retained reviewer requests, and regression-proof validation used by `handoff.py`. |
 | [`recovery.py`](scripts/recovery.py) | Plan missing or stale prerequisites from the complete retained obligation history. |
 | [`behavior.py`](scripts/behavior.py) | Validate observable cases, independent challenge proposals, and qualified baseline or mutation controls. |
 | [`disposition.py`](scripts/disposition.py) | Retain independently acknowledged refutations without deleting original claims. |
 | [`handoff.py`](scripts/handoff.py) | Summarize resumed work and validate acceptance proof, reviewer obligations, and review packets. Copy all six adjacent Python files together. |
+| [Status card](../../status-card/) | Standard browser card and portable publisher/server, installed with their sibling dependencies. See the [setup guide](../../setup/README.md#6-verify-the-client-in-a-fresh-session) for terminal/browser and remote verification. |
 
 ## Verify the adoption
 
 1. Review the diff for unrelated policy or permission changes. Include the skill directory and any new files when inspecting the candidate.
 2. From a fresh session at the target checkout, confirm the active instruction path and skill. Ask an ordinary question and confirm that it stays outside the workflow.
 3. Explicitly select a small task using your tool's entry point (`$develop-change` in the bundled Codex setup). Run the configured checks on that candidate and verify that the final reviewer and any configured early reviewer can inspect it with read-only access. Rehearse verdict routing without provider writes until your project has a recorded delivery grant.
+4. Verify the real task card using the installed `.flightcheck/docs/status.md`. Record HTTP publication and browser rendering separately; terminal users can open the same live card in a regular browser. Keep unsupported capabilities explicit rather than silently omitting the card.
 
 Projects using other languages should use their own package manager, checks, and test isolation. A project with no preview or visual checks can record those as inapplicable for nonvisual work. A project that requires CI must wait for its checks on the actual candidate. A project with no CI requirement can record that fact and rely on its required local checks and reviews.
 
