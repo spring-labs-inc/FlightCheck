@@ -18,6 +18,9 @@ from unittest.mock import patch
 PRODUCT = Path(os.environ.get("FLIGHTCHECK_PRODUCT_ROOT", Path(__file__).resolve().parents[1]))
 
 
+from card_fixture import initialized_details
+
+
 class InstallationTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -287,7 +290,9 @@ class InstallationTests(unittest.TestCase):
         env = dict(self.env, FLIGHTCHECK_STATE_DIR=str(self.root / "card state"))
         listeners = set()
         try:
-            prepared = subprocess.run([sys.executable, "-B", str(entry), "prepare", "--task", "first-flight", "--execution", "local"],
+            details_args = initialized_details(self.target, self.root / "first-details.json", [],
+                                               card_path=".flightcheck/status-card")
+            prepared = subprocess.run([sys.executable, "-B", str(entry), "prepare", "--task", "first-flight", "--execution", "local", *details_args],
                                       cwd=self.target, env=env, capture_output=True, text=True, timeout=20)
             self.assertEqual(prepared.returncode, 0, prepared.stdout + prepared.stderr)
             value = json.loads(prepared.stdout)

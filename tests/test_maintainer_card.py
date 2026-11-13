@@ -13,6 +13,8 @@ from http.client import HTTPConnection
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from card_fixture import initialized_details
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -52,6 +54,8 @@ class MaintainerCardTests(unittest.TestCase):
         ))
 
     def card(self, *args, checkout=None):
+        args = initialized_details(checkout or self.checkout, self.state.parent / "fixture-details.json", args,
+                                   "Final Verdict" if "--verdict" in args else "Plan")
         return subprocess.check_output(
             [sys.executable, "-B", "status-card/maintainer.py", "card",
              "--task", "test-change", "--title", "Synthetic implementation", *args],
@@ -202,7 +206,8 @@ class MaintainerCardTests(unittest.TestCase):
             "read_task = legacy_serve.read_task\n"
             "def legacy_read_task(path):\n"
             "    snapshot = read_task(path)\n"
-            "    snapshot.pop('stage_updated_at', None)\n"
+            "    if snapshot.get('stages', {}).get('Implement') == 'current':\n"
+            "        snapshot.pop('stage_updated_at', None)\n"
             "    return snapshot\n"
             "legacy_serve.read_task = legacy_read_task\n"
             "legacy_serve.main()\n"
@@ -231,7 +236,7 @@ class MaintainerCardTests(unittest.TestCase):
             "read_task = legacy_serve.read_task\n"
             "def legacy_read_task(path):\n"
             "    snapshot = read_task(path)\n"
-            "    if 'stages' in snapshot:\n"
+            "    if snapshot.get('stages', {}).get('Implement') == 'current':\n"
             "        snapshot['stages'] = dict(reversed(list(snapshot['stages'].items())))\n"
             "    return snapshot\n"
             "legacy_serve.read_task = legacy_read_task\n"

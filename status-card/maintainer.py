@@ -120,12 +120,13 @@ def fetch_card(task, port, expected_candidate):
     try:
         connection.request("GET", task_path(task) + "status.json")
         response = connection.getresponse()
-        if response.status != 200:
+        if response.status not in (200, 503):
             return None
         status = json.loads(response.read(1024 * 1024))
         if (
             isinstance(status, dict) and status.get("snapshot") == "live" and status.get("task") == task
             and status.get("publicationPort") == port and status.get("candidate") == expected_candidate
+            and (response.status == 200 or status.get("completeness", {}).get("ready") is False)
         ):
             connection.request("GET", task_path(task))
             page = connection.getresponse()
@@ -153,7 +154,9 @@ def current_card(task, port, expected_candidate):
 
 
 def card_matches(status, data):
-    fields = ("branch", "worktree", "stages", "stage_updated_at", "links", "checks", "ci", "history")
+    fields = ("branch", "worktree", "stages", "stages_declared", "stage_updated_at", "links", "checks", "ci", "history",
+              "mode", "completeness", "check_plan", "checks_unavailable", "links_unavailable",
+              "verdict", "verdict_candidate", "verdict_evidence")
     return (all(status.get(key) == data.get(key) for key in fields)
             and list(status.get("stages", {})) == list(data.get("stages", {})))
 
@@ -233,20 +236,22 @@ def show_card(checkout, state, args):
         fcntl.flock(lock, fcntl.LOCK_EX)
         previous = read_task(snapshot) if snapshot.exists() else {}
         current = candidate(checkout)
-        data = normalize({
+        data = {
+            "mode": "flight",
             "task": args.task, "title": args.title,
             "summary": args.summary if args.summary is not None else previous.get("summary", ""),
             "candidate": current,
             "verdict": args.verdict or previous.get("verdict"),
             "verdict_candidate": args.verdict_candidate if args.verdict else previous.get("verdict_candidate"),
-        })
+            "verdict_evidence": previous.get("verdict_evidence"),
+        }
         details = json.loads(args.details.read_text(encoding="utf-8")) if args.details else {}
         if not isinstance(details, dict):
             raise ValueError("Expected a details object")
         details.pop("branch", None)
         details.pop("worktree", None)
         details.update(checkout_details(checkout))
-        publish(snapshot, data, details)
+        publish(snapshot, data, details, record_verdict=bool(args.verdict))
         endpoint = read_json(endpoint_file)
         port = endpoint.get("port", 0)
         status = current_card(args.task, port, current) if port else None
@@ -264,6 +269,8 @@ def show_card(checkout, state, args):
         if record:
             record.update(task=args.task, checkout=str(checkout))
             write_json(record_path, record)
+    if not data["completeness"]["ready"]:
+        print("FlightCheck incomplete: " + " ".join(data["completeness"]["issues"]), file=sys.stderr)
     return chat_status(data, prepared_card_url(directory, args.task, port), "start")
 
 
@@ -338,7 +345,8 @@ def check_turn(checkout, state, event):
         return {}
     if task:
         port = read_json(task_dir(state, task) / "endpoint.json").get("port")
-        if port and current_card(task, port, current):
+        status = current_card(task, port, current) if port else None
+        if status and status.get("completeness", {}).get("ready"):
             footer = chat_status({"task": task}, prepared_card_url(task_dir(state, task), task, port), "start")
             if has_footer(event.get("last_assistant_message") or "", footer):
                 return {}
@@ -346,6 +354,8 @@ def check_turn(checkout, state, event):
     reason = (
         "This turn contains FlightCheck implementation work. Run the maintainer card command "
         "for the current task and put its exact clickable link on the last line of your reply."
+        " Initialize complete --details (nine stages, check_plan/current observations, known or unavailable issue/PR links); "
+        "HTTP availability alone is not flight readiness."
     )
     if event.get("stop_hook_active"):
         return {"systemMessage": "FlightCheck could not verify the implementation footer after a retry."}

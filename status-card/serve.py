@@ -22,7 +22,37 @@ CSP = (
 
 
 class StatusHandler(BaseHTTPRequestHandler):
+    def allowed_request(self):
+        """Reject rebinding origins; forwarding may use another loopback port."""
+        def loopback(value, origin=False):
+            if not value or any(char.isspace() or ord(char) < 32 for char in value):
+                return False
+            try:
+                route = urlsplit(value if origin else "http://" + value)
+                port = route.port
+                host = route.hostname
+                authority = "[::1]" if host == "::1" else host
+                if port is not None:
+                    authority += f":{port}"
+                return (route.scheme == "http" and host in ("127.0.0.1", "localhost", "::1")
+                        and route.netloc == authority and port != 0
+                        and not route.path and not route.query and not route.fragment)
+            except (ValueError, TypeError):
+                return False
+        hosts = self.headers.get_all("Host", [])
+        origins = self.headers.get_all("Origin", [])
+        target = self.requestline.split()[1]
+        if (not target.startswith("/") or target.startswith("//")
+                or len(hosts) != 1 or not loopback(hosts[0])
+                or (origins and (len(origins) != 1 or not loopback(origins[0], origin=True)))):
+            self.reply(403, b"Use a loopback Host and, when supplied, a loopback HTTP Origin.\n",
+                       "text/plain; charset=utf-8")
+            return False
+        return True
+
     def do_GET(self):
+        if not self.allowed_request():
+            return
         path = urlsplit(self.path).path
         if self.server.task_route:
             route = self.server.task_route
@@ -57,11 +87,12 @@ class StatusHandler(BaseHTTPRequestHandler):
             return
         snapshot["issue_stages"] = issue_stages(snapshot)
         snapshot.pop("tracked_flights", None)
-        self.json_status(snapshot)
+        status = 503 if snapshot["mode"] == "flight" and not snapshot["completeness"]["ready"] else 200
+        self.json_status(snapshot, status)
 
-    def json_status(self, snapshot):
+    def json_status(self, snapshot, status=200):
         body = json.dumps({**snapshot, "publicationPort": self.server.server_port}).encode()
-        self.reply(200, body, "application/json; charset=utf-8")
+        self.reply(status, body, "application/json; charset=utf-8")
 
     def do_POST(self):
         self.reply(405, b"Read-only endpoint.\n", "text/plain; charset=utf-8")

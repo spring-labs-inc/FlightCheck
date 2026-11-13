@@ -15,6 +15,8 @@ import unittest
 from unittest.mock import patch
 from urllib.parse import urlsplit
 
+from card_fixture import initialized_details
+
 PRODUCT = Path(os.environ.get("FLIGHTCHECK_PRODUCT_ROOT", Path(__file__).resolve().parents[1]))
 
 
@@ -53,6 +55,9 @@ class ReplyTests(unittest.TestCase):
                 pass
 
     def api(self, command, *args, expected=0, env=None, cwd=None):
+        if command == "prepare" and "--context" not in args:
+            args = initialized_details(self.checkout, self.root / "fixture-details.json", args,
+                                       "Final Verdict" if "--verdict" in args else "Plan")
         result = subprocess.run([sys.executable, "-B", str(self.checkout / "status-card/reply.py"),
                                  command, "--task", "test-change", *args],
                                 cwd=cwd or self.checkout, env=env or self.env,
