@@ -1,6 +1,35 @@
-# Status in interactive Codex
+# Browser status throughout a selected flight
 
-Use the status card only within a selected workflow. On first activation with a configured publisher, allocate a task ID, private snapshot, and available loopback port. Record them with the workflow, start the configured listener, and reuse the same task route on resume. Publish a short task title and summary, the current candidate identity, and a verdict recorded for that exact candidate. On any candidate change or unresolved review, publish `Pending` immediately.
+Use the standard browser card in every selected workflow, including Codex desktop/CLI and Claude TUI. On activation, allocate a task ID, private snapshot and available loopback port. Record them, start the listener and reuse the same task URL on resume. Publish the current candidate and only its actual verdict. On a candidate change or unresolved review, publish `Pending` immediately.
+
+Before the first TUI reply, proactively tell the user: "Open the live FlightCheck card in your regular browser using the status link below; you can continue working in the terminal." Do not wait for a request to install or render it. Browser controls are optional; a text/ASCII replacement is unnecessary.
+
+## Prepare and check every controller reply
+
+Use the installed `.flightcheck/docs/status.md` for the configured interpreter, state directory and command paths. In the FlightCheck source checkout, the portable commands are:
+
+```sh
+python3 -B status-card/reply.py prepare --task TASK_ID --title "Task title"
+python3 -B status-card/reply.py check --task TASK_ID --phase update --reply-file /private/reply.txt
+```
+
+`prepare` publishes and verifies the checkout-host task page and current task/candidate snapshot, restoring a stopped listener on the recorded port. It returns JSON with `footer`, browser `guidance`, publication state and separate unobserved browser reachability/rendering. Put the exact planned controller reply in a private file; `check` verifies its footer and current publication before sending. A zero exit means this explicit check passed, not that the client intercepted a message.
+
+Use this sequence for **every user-facing controller reply**: start, progress/update, approval pause, blocker, repair, resume and final handoff. The `--phase` names are `start`, `update`, `approval`, `blocker`, `repair`, `resume`, and `end`; they share the same final-footer requirement. Put any actual current verdict above the link. Keep the footer in its own last paragraph, outside code fences. `--chat-phase start`, `update`, and `end` on the low-level publisher also keep the link last; only `end` adds a current verdict above it.
+
+If publication or routing fails, report the concrete unavailable state and repair guidance with the known task link; if no URL was established, use the returned plain status label. A nonzero guard result never means live/ready. Keep the same route; do not silently allocate another port, omit the status, or broaden the bind address.
+
+Ordinary chat and raw reviewer JSON are excluded. `reply.py --context ordinary` and `--context reviewer` bypass before reading a draft, invoking Git/services or writing state. These commands return a separate diagnostic; they never rewrite the caller's reply. Do not append the diagnostic or a footer to native reviewer JSON. Reviewers must not run the controller commands or hooks at all; establish the enforced read-only and hook-disabled boundary separately.
+
+## Local and remote browser routes
+
+`--execution auto` uses common SSH/container markers as hints; use `--execution local` or `remote` when the environment is ambiguous. On a remote checkout, host HTTP success alone leaves the browser route unavailable. Arrange an approved loopback forward or use the client's supported preview forwarding, then pass its exact browser-facing loopback task URL with `--user-url http://127.0.0.1:LOCAL_PORT/task/TASK_ID/`. The listener remains on `127.0.0.1`; never bind it to a public interface. Preserve the prepared browser URL on every reply and resume. A changed execution context needs preparation again; a conflicting established URL needs explicit reconciliation.
+
+The remote command prints an SSH forwarding example with placeholders; it does not connect or grant permission. The check validates the declared route, not whether the user's machine actually reached it. Record host HTTP, client forwarding/reachability, and browser rendering as distinct observations. Only report rendering after desktop inspection or an owner observation.
+
+## Client capabilities and hooks
+
+The portable guard is an explicit controller pre-send check, usable without modifying client permissions or settings. It does not intercept streaming, intermediate or interrupted messages automatically. The existing Codex Stop guard checks only the event it receives. A Stop hook alone is not proof of coverage for progress, permission pauses, interruptions or reviewer isolation. Do not enable new hooks by default or translate client hook schemas mechanically. If a client offers a message adapter, probe its actual event coverage and keep executable hooks disabled in read-only reviewers before claiming enforcement. Full native client qualification remains in #14.
 
 ## Publish work links and evidence
 
@@ -16,7 +45,7 @@ For a linked issue with a recorded flight association, include that flight's tas
 
 Append iteration events for actual repair returns, check reruns, and independent review outcomes. Reuse IDs from the underlying records so a resume or retry cannot duplicate history. Keep earlier events and record new attempts separately. The active workflow publishes updates from parallel checks through the same task snapshot. Keep raw evidence and secrets private. Treat all card content as informational.
 
-## Open or reuse the card
+## Optional embedded-browser integration
 
 On activation and resume, check publication on the checkout host. Verify that the task page and its `status.json` respond with the expected task. Restore a stopped listener using the recorded local URL and port if available and permitted. A successful host request verifies publication.
 
@@ -27,14 +56,10 @@ When the desktop browser controls are available, inspect the current chat's buil
 | The matching card is visible | Leave it in place. Reload that tab only if its route needs recovery. |
 | A matching tab exists and is hidden or inactive | Reveal or select the existing tab using the desktop controls. |
 | Tab inventory is available and the card is absent | Open the recorded loopback URL visibly in the built-in browser. |
-| Inventory or required controls are unavailable | Refer the owner to the status link in the opening reply. |
+| Inventory or required controls are unavailable | Proactively offer the regular browser through the footer in every controller reply. |
 
 An existing matching tab with unknown visibility also uses the fallback. Ask the owner to select it. Recheck the inventory before opening a new tab when navigation is still settling.
 
 Check the displayed task, route diagnostic, and `Snapshot rendered` separately. On a forwarded connection reset, restore the checkout-host listener first, then reload the existing tab. If the client needs a fresh forward, use its supported navigation or direct the owner to the opening link. Avoid creating duplicate tabs when the original tab still exists. Report browser verification only from the desktop view or an owner's observation.
 
-## Opening and closing replies
-
-Put the status line at the top of the opening workflow reply when the owner first invokes FlightCheck for a flight. Put the closing status block at the bottom of the reply that ends that flight. Use the same task URL at both boundaries. Leave the status block out of intermediate updates, approval pauses, repairs, resumes of the same flight, and ordinary chat.
-
-Use the publisher's `--chat-phase start` or `--chat-phase end` output, or format the line as `FlightCheck: [&lt; status /&gt;](TASK_URL)`. When no task URL is usable, leave the label as plain text. At the end, put `Verdict: <actual verdict>` on its own line below the status line if the current candidate has a recorded verdict. Leave that line out when the verdict is pending. Keep publishing snapshot updates without `--chat-phase` between the two replies.
+The portable reply rule above applies whether embedded controls are available or not. A desktop tab is an optional presentation of the same task snapshot.

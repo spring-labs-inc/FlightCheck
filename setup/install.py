@@ -175,6 +175,7 @@ def render(data, source_name, destination, config):
     if not destination.endswith((".md", ".toml")):
         return data
     text = data.decode()
+    text = re.sub(r"(?<![\w./-])status-card/reply\.py", ".flightcheck/status-card/reply.py", text)
     for name in SCRIPTS:
         text = text.replace("scripts/" + name + ".py", ".flightcheck/scripts/" + name + ".py")
     text = text.replace("../../../docs/development-workflow.md", "../../../.flightcheck/docs/development-workflow.md")
@@ -209,13 +210,14 @@ def instruction_block(agent, config):
             + " Ordinary questions and reviews use their normal entry points.\n"
             + "Start with `.flightcheck/project.json` and `.flightcheck/docs/development-workflow.md`; the entry point is `" + entry + "`.\n"
             + "Preserve this project's existing policy and execution boundaries. Never infer provider-write authority from a passing verdict.\n"
-            + "The standard status card is installed: follow `.flightcheck/docs/status.md`. Keep private evidence outside the checkout.\n"
+            + "The standard status card is installed: follow `.flightcheck/docs/status.md` before every controller reply. Put its exact task link last, with any actual verdict above it. Proactively tell TUI users to open it in their regular browser. Ordinary chat and raw reviewer JSON are excluded. Keep private evidence outside the checkout.\n"
             + "FlightCheck-derived material is covered by `.flightcheck/LICENSE`; its pinned source and file hashes are recorded in `.flightcheck/installation.json`.\n"
             + END + "\n").encode()
 
 
 def block_from(data):
     text = data.decode()
+    text = text.replace("status-card/reply.py", ".flightcheck/status-card/reply.py")
     if text.count(BEGIN) != 1 or text.count(END) != 1 or text.index(BEGIN) > text.index(END):
         raise SetupError("Missing or ambiguous managed FlightCheck instruction block")
     start, end = text.index(BEGIN), text.index(END) + len(END)
@@ -233,9 +235,9 @@ def desired_files(source, manifest, agent, config):
         sources[destination] = {"source": name, "source_sha256": sha(data)}
     status = ("# FlightCheck status\n\nStart or resume a selected flight from the project root:\n\n```sh\n"
               + "FLIGHTCHECK_STATE_DIR=" + shlex.quote(str(Path(config["evidence_dir"]) / "status-card")) + " "
-              + shlex.quote(config["python"]) + " -B .flightcheck/status-card/maintainer.py card --task TASK_ID --title \"Task title\"\n```\n\n"
-              + "The command publishes outside the checkout and verifies the listener. Keep the printed task URL stable on resume. TUI users can open this live card in a regular web browser while continuing in the terminal. For remote sessions, arrange approved localhost forwarding; do not claim the browser rendered just because the checkout host returned HTTP 200.\n\n"
-              + "Use --details with current stages, checks and known issue/PR links. Record only real receipts and actual verdicts for the current candidate. Use the emitted status link in the opening and closing controller replies. Native reviewer replies stay raw JSON.\n\n"
+              + shlex.quote(config["python"]) + " -B .flightcheck/status-card/reply.py prepare --task TASK_ID --title \"Task title\"\n```\n\n"
+              + "The command returns JSON with footer and guidance, publishes outside the checkout and verifies the task page and current candidate. Keep the prepared task URL stable on resume. Auto execution detection uses SSH/container hints; override --execution when needed. Remote mode reports unavailable browser routing until an approved loopback forward is recorded with --user-url; never bind beyond loopback. TUI users can open this live card in a regular web browser while continuing in the terminal. For remote sessions, arrange approved localhost forwarding; do not claim the browser rendered just because the checkout host returned HTTP 200.\n\n"
+              + "Use --details with current stages, checks and known issue/PR links. Record only real receipts and actual verdicts for the current candidate. Before every controller reply (start, update, approval, blocker, repair, resume and end), run prepare and then reply.py check with --task, --phase and --reply-file pointing to the exact private draft. Put the returned footer last, with any actual current verdict above it. Proactively tell TUI users to open the card in their regular browser. Native reviewer replies stay raw JSON; never run controller lifecycle commands or hooks in reviewer contexts.\n\n"
               + "Run Python scripts by path with -B, not -I. Verify new client definitions in a fresh session; inspect effective tools, required evidence access and active hooks. File installation does not prove a reviewer boundary.\n")
     result[".flightcheck/docs/status.md"] = ("file", status.encode())
     result[CONFIG] = ("file", encoded(config))
@@ -365,7 +367,7 @@ def runtime_probe(root, config, revision):
 
 def runtime_checks(root, config, revision, scratch):
     python = config["python"]
-    for entry in ("scripts/handoff.py", "scripts/capture_check.py", "status-card/maintainer.py"):
+    for entry in ("scripts/handoff.py", "scripts/capture_check.py", "status-card/maintainer.py", "status-card/reply.py"):
         run([python, "-B", str(root / ".flightcheck" / entry), "--help"], root)
     folder = Path(scratch)
     details = folder / "details.json"
