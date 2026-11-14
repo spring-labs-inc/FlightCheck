@@ -41,6 +41,8 @@ Use the project instructions and the relevant stage input. For a fresh implement
 
 Give the CODE reviewer the validated CODE packet, including the task scope and acceptance criteria, with original evidence available when needed. Give the final reviewer the validated final packet. Open the applicable guide section when a stage input leaves a decision or requirement unresolved. Load status-card instructions for interactive tasks with a configured card.
 
+See the [small first-flight guide](first-flight.md) for supplied pytest reports/fingerprints, portable runtime tests, controller capture and safe candidate refresh. Complete setup and mutating hooks before freezing. Run applicable CODE review first, then authoritative checks, then a separate EVIDENCE review.
+
 ## Evidence and reuse
 
 For each check, record the run and candidate identity, exact command, coverage and skips, environment identity, relevant inputs before and after, exit status, and path and digest of original output. Include dependencies, linked files, test data, and report-producing runtimes where the check uses them.
