@@ -95,6 +95,8 @@ Expected: `status: ready_for_client_probe`. Verification checks the entire requi
 
 ## 6. Verify the client in a fresh session
 
+For Claude, follow the [contributor/setup and real-trial guide](https://github.com/spring-labs-inc/FlightCheck/blob/main/docs/claude-code.md) and retain its support/qualification record.
+
 Installation and HTTP tests do not prove that a client loaded its instructions, restricted reviewer tools or rendered the card. Start a fresh Claude/Codex session in the target checkout, especially after creating the first agent definitions. Use the installed client's discovery tools to inspect effective instructions, skill and role availability.
 
 1. Ask an ordinary question; it must stay outside a flight. Select a small task through `$develop-change` (Codex) or `/develop-change` (Claude), or verify the explicitly approved default-for-coding route.
