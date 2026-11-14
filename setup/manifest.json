@@ -40,6 +40,16 @@
     ["examples/existing-project/examples/evidence-bootstrap/product.py", ".flightcheck/examples/evidence-bootstrap/product.py", "shared"],
     ["examples/existing-project/examples/evidence-bootstrap/original/product.py", ".flightcheck/examples/evidence-bootstrap/original/product.py", "shared"],
     ["examples/existing-project/examples/evidence-bootstrap/test_contract.py", ".flightcheck/examples/evidence-bootstrap/test_contract.py", "shared"],
-    ["examples/existing-project/examples/evidence-bootstrap/README.md", ".flightcheck/examples/evidence-bootstrap/README.md", "shared"]
+    ["examples/existing-project/examples/evidence-bootstrap/README.md", ".flightcheck/examples/evidence-bootstrap/README.md", "shared"],
+    ["examples/existing-project/scripts/evidence_inputs.py", ".flightcheck/scripts/evidence_inputs.py", "shared"],
+    ["examples/existing-project/scripts/fingerprint.py", ".flightcheck/scripts/fingerprint.py", "shared"],
+    ["examples/existing-project/scripts/pytest_report.py", ".flightcheck/scripts/pytest_report.py", "shared"],
+    ["examples/existing-project/scripts/capture_review.py", ".flightcheck/scripts/capture_review.py", "shared"],
+    ["examples/existing-project/tests/test_capture_check.py", ".flightcheck/tests/test_capture_check.py", "shared"],
+    ["examples/existing-project/tests/test_handoff.py", ".flightcheck/tests/test_handoff.py", "shared"],
+    ["examples/existing-project/tests/test_workflow_contract.py", ".flightcheck/tests/test_workflow_contract.py", "shared"],
+    ["examples/existing-project/examples/first-flight/prepare.py", ".flightcheck/examples/first-flight/prepare.py", "shared"],
+    ["examples/existing-project/examples/first-flight/test_existing.py", ".flightcheck/examples/first-flight/test_existing.py", "shared"],
+    ["examples/existing-project/docs/first-flight.md", ".flightcheck/docs/first-flight.md", "shared"]
   ]
 }

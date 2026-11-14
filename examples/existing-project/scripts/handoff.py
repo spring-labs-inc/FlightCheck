@@ -9,7 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from capture_check import digest, evidence_directory, fingerprint, latest_run, matches_pass
+from capture_check import digest, evidence_directory, fingerprint, latest_run, matches_pass, write_json
 from proof import acceptance_status, contract_status, freeze, obligations_status, record_review, verdict_status
 from recovery import plan as recovery_plan
 from behavior import challenge_brief, proposal_packet, record_plan, status as behavior_status
@@ -326,15 +326,18 @@ def preflight(task, root, amendment=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("preflight", "resume", "review", "code-review", "checks", "brief", "requests", "verdict", "next-action", "challenge-brief", "challenges", "challenge-review", "disposition-review", "schema"))
+    parser.add_argument("mode", choices=("preflight", "resume", "review", "code-review", "checks", "brief", "requests", "verdict", "next-action", "challenge-brief", "challenges", "challenge-review", "disposition-review", "schema", "refresh"))
     parser.add_argument("--task", type=Path)
     parser.add_argument("--kind", choices=("challenge", "review", "coverage"), help="Machine-readable JSON Schema to export")
+    parser.add_argument("--candidate", help="New candidate identity for refresh only; frozen requirements stay unchanged")
     parser.add_argument("--evidence-dir", type=Path)
     parser.add_argument("--review", type=Path, help="Actual native reviewer output for requests/verdict")
     parser.add_argument("--amend-contract", help="Evidence-root-relative owner scope decision; preflight only")
     parser.add_argument("--target", choices=("code", "final"), default="code",
                         help="Review whose dependencies next-action should reconcile")
     args = parser.parse_args()
+    if args.candidate is not None and args.mode != "refresh":
+        parser.error("--candidate is only available during refresh")
     if args.mode != "schema" and args.task is None:
         parser.error("--task is required except for schema export")
     if args.mode not in ("brief", "challenge-brief", "schema") and args.evidence_dir is None:
@@ -359,6 +362,21 @@ def main():
             root = evidence_directory(args.evidence_dir, Path.cwd(), create=args.mode == "preflight")
             if args.mode == "preflight":
                 packet = preflight(task, root, args.amend_contract)
+            elif args.mode == "refresh":
+                _, error = contract_status(task, root)
+                if error:
+                    raise ValueError(error)
+                if not args.candidate or not args.candidate.strip():
+                    raise ValueError("refresh requires --candidate with the newly observed identity")
+                if root not in args.task.resolve().parents or args.task.is_symlink():
+                    raise ValueError("refresh requires the task file inside its private evidence root")
+                before = task["candidate"]
+                task["candidate"] = args.candidate
+                # Keep saved_candidate, baselines, acceptance, gates, witnesses,
+                # expected outcomes and every retained obligation untouched.
+                write_json(args.task, task)
+                packet = {"candidate": args.candidate, "previous_candidate": before,
+                          "status": "refreshed", "next": "Run resume and next-action; old proofs/verdicts are not refreshed by this command"}
             elif args.mode == "challenges":
                 _, error = contract_status(task, root)
                 if error:

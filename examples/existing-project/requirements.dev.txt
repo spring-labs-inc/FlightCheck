@@ -1,3 +1,3 @@
 # Optional Python example. Use the consumer project's dependency and lock files.
 # Add this only if the project uses pytest for its selected checks.
-pytest
+pytest==9.2.0
