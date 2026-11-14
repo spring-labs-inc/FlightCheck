@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "qualification": "partial",
+  "claude_version": "2.1.311",
+  "observations": [
+    "Claude Code 2.1.311 authenticated with claude.ai; native requests reported claude-sonnet-4-6.",
+    "Contributor and installed-adopter discovery probes found develop-change and both reviewer roles.",
+    "Interactive contributor /context displayed CLAUDE.md and AGENTS.md; /hooks displayed disabled.",
+    "Separate native CODE/EVIDENCE boundary probes read synthetic evidence and received actual secret-canary denials with Read/Grep/Glob only.",
+    "The strict controller Bash probe failed even pwd: sandbox-exec: sandbox_apply: Operation not permitted (exit 71). No unsandboxed retry was used."
+  ],
+  "accepted_report": null,
+  "native_requirements": {
+    "discovery": {
+      "state": "verified",
+      "evidence": "claude-trial-report.md#observed-native-probes"
+    },
+    "tui_status": {
+      "state": "pending",
+      "evidence": null
+    },
+    "review_boundary": {
+      "state": "verified",
+      "evidence": "claude-trial-report.md#observed-native-probes"
+    },
+    "real_flight": {
+      "state": "blocked",
+      "evidence": "claude-trial-report.md#remaining-qualification"
+    },
+    "repair_resume": {
+      "state": "blocked",
+      "evidence": "claude-trial-report.md#remaining-qualification"
+    },
+    "failure_controls": {
+      "state": "pending",
+      "evidence": null
+    },
+    "accepted_report": {
+      "state": "pending",
+      "evidence": null
+    }
+  }
+}

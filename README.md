@@ -40,7 +40,7 @@ Open your existing project in your AI coding tool and paste this prompt. The [co
 
 Your tool must support repository instructions, running project checks, and separate reviewers with [enforced read-only access](examples/existing-project/docs/development-workflow.md#independent-review). Evidence tooling requires Python 3 on a POSIX host.
 
-The installer supplies Codex and Claude Code adapters. Native Claude end-to-end qualification remains pending in [#14](https://github.com/spring-labs-inc/FlightCheck/issues/14).
+The installer supplies Codex and Claude Code adapters. Use the [Claude setup and trial guide](docs/claude-code.md) for contributor discovery, review boundaries and a real adoption trial. Native Claude end-to-end qualification remains pending in [#14](https://github.com/spring-labs-inc/FlightCheck/issues/14).
 
 [Verify the setup](examples/existing-project/README.md#verify-the-adoption) on one small task before using it for larger changes. Explicitly select the workflow using your tool's entry point.
 

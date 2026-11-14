@@ -54,6 +54,10 @@ The installer preserves original source/installed hashes and license provenance 
 
 Projects using other languages should use their own package manager, checks, and test isolation. A project with no preview or visual checks can record those as inapplicable for nonvisual work. A project that requires CI must wait for its checks on the actual candidate. A project with no CI requirement can record that fact and rely on its required local checks and reviews.
 
+## Claude integration
+
+Use the [Claude contributor/setup and trial guide](../../docs/claude-code.md). The source-layout `.claude/` wrappers reference shared policy; the complete installer generates destination-specific skills and reviewer Markdown with explicit adopter selection. Verify loaded instructions and effective tools/hooks in a fresh native session before claiming support.
+
 ## Codex integration
 
 Codex loads project instructions based on the working directory and active overrides. Skill discovery, project trust, and approval policy are separate. Review the effective project settings on the client that will run the workflow. The examples require no global configuration, plugin, hook, external package, or new CI service. [Project instructions](https://learn.chatgpt.com/docs/agent-configuration/agents-md) · [Skills](https://learn.chatgpt.com/docs/build-skills) · [Hooks](https://learn.chatgpt.com/docs/hooks) · [Command rules](https://learn.chatgpt.com/docs/agent-configuration/rules)
