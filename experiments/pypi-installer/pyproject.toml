@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flightcheck-distribution-prototype"
+version = "0.0.0.dev58"
+description = "Unpublished, sandbox-only FlightCheck distribution experiment"
+requires-python = ">=3.9"
+license = "FSL-1.1-MIT"
+license-files = ["LICENSE"]
+authors = [{name = "Jeff Maddocks"}]
+classifiers = [
+  "Development Status :: 1 - Planning",
+  "Operating System :: POSIX",
+  "Programming Language :: Python :: 3",
+]
+
+[project.urls]
+Source = "https://github.com/spring-labs-inc/FlightCheck"
+Issues = "https://github.com/spring-labs-inc/FlightCheck/issues/58"
+
+[project.scripts]
+flightcheck-prototype = "flightcheck_prototype.cli:main"
+
+[tool.setuptools]
+packages = ["flightcheck_prototype"]
+include-package-data = false
