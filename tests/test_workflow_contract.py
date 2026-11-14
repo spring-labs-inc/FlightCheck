@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "examples/existing-project/scripts"
+SCRIPTS = Path(os.environ.get("FLIGHTCHECK_PRODUCT_ROOT", Path(__file__).resolve().parents[1])) / "examples/existing-project/scripts"
 OUTCOMES = ("passed", "skipped", "expected_failures", "failed")
 
 
@@ -392,7 +392,11 @@ class ChallengePlanTests(FlightFixture):
         self.task.update(diff="private implementation", findings=["success narrative"],
                          decisions=["prior verdict"], worker_handoff="worker notes")
         brief = self.ctl("challenge-brief")
-        self.assertEqual(set(brief), {"scope", "acceptance", "scope_sha256"})
+        fields = {"scope", "acceptance", "scope_sha256"}
+        if "schemas" in brief:
+            fields.update(("schemas", "examples", "schema_guide", "grounding", "proposal_status"))
+            self.assertEqual(brief["schemas"]["challenge"]["properties"]["cases"]["type"], "array")
+        self.assertEqual(set(brief), fields)
         self.assertEqual(brief["acceptance"], [{"id": "operation",
                                                "description": self.task["acceptance"][0]["description"]}])
         self.assertNotIn("private implementation", json.dumps(brief))

@@ -156,6 +156,56 @@ Preflight creates the private directory when missing, freezes the acceptance cri
 
 On resume, run preflight with the same task root. Missing, legacy prose-only, changed, or dropped acceptance/gates block review. To implement an actual owner scope change, record a private owner decision containing the current candidate, `authority`, `accepted`, `source`, `reason`, and `previous_contract_sha256` for the existing contract; pass its relative path with `--amend-contract`. This archives the old contract. An already authorized instruction can supply the decision without asking the owner again. Keeping a gate ID does not authorize changing its definition or removing coverage. Added gates strengthen the contract and need no waiver. Ownership may move to the controller and per-run reuse references may change without weakening the frozen definitions. Migrate older tasks explicitly rather than silently treating old prose as verified proof.
 
+## Adoption configuration before freezing
+
+Preflight validates configured inputs before writing a new acceptance contract. For each gate with `coverage`, its `baseline` must resolve to an existing file inside the private evidence root, including through symlinks; `baseline_sha256` must be its actual 64-character lowercase SHA-256. The baseline must contain exactly the four outcome arrays (`passed`, `skipped`, `expected_failures`, `failed`) with unique nonempty native IDs across all outcomes. An empty four-array baseline is valid for a new project. A bootstrap label never exempts an invalid supplied baseline. Gates without native coverage do not need a coverage baseline.
+
+Native behavior cases need an existing gate ID, exact `tests` identities, isolated reports and a distinct retained test/fixture specification artifact. Declare it alongside the coverage artifact:
+
+```json
+"coverage": {
+  "artifact": "coverage.json", "spec": "spec.json",
+  "baseline": "baseline.json", "baseline_sha256": "ACTUAL_SHA256_OF_BASELINE_BYTES"
+}
+```
+
+Both names must appear in `request.artifacts`; `isolated_reports` must be true. For compatibility, an existing gate with exactly one artifact besides its native coverage report may keep that unambiguous artifact as its implicit spec. With several possible spec artifacts, set `coverage.spec` explicitly. Report-only policy callers remain supported; genuine behavior still needs cases and spec controls. Legacy malformed configurations now fail with a named field and guide pointer; repair configuration before freezing, retaining any established contract and using the owner amendment procedure when its definitions actually change.
+
+Configuration validation does not require future runs, challenge bindings not yet proposed, or omitted qualification controls to exist. Those remain pending evidence obligations. An explicitly supplied binding must be structurally valid; it is not a passing native result. A failed new configuration does not leave an invalid newly frozen contract or overwrite an earlier contract.
+
+## Native response schemas
+
+Export the machine-readable JSON Schema without a task or evidence directory:
+
+```sh
+python3 -B scripts/handoff.py schema --kind challenge
+python3 -B scripts/handoff.py schema --kind review
+python3 -B scripts/handoff.py schema --kind coverage
+```
+
+Implementation and scope-only challenge briefs include these field types and illustrative response examples. Replace placeholders with actual scope/candidate IDs, inspected evidence and assessments; example JSON is not a reviewer verdict. The stdlib validator implements the schema keywords used by these exports. It validates structure, not whether the expectation or assertion is true. Existing optional review fields remain compatible; final verdict validation still requires all applicable semantic assessments, phase and evidence. Empty assessment arrays or challenge explanations cannot authorize final approval.
+
+Malformed challenge/review input reports a path such as `challenge.cases[0].expected` or `review.test_requests[0].expected` and the relevant workflow guide. Exact original bytes, including invalid JSON, are retained under private `responses/<sha256>.json` before parsing. Accepted responses also keep their established `challenges/` or `reviews/` provenance and append-only obligation ledgers. A schema error cannot silently rewrite the response or clear an obligation.
+
+A challenge is a proposed counterexample, not automatically an established product requirement. Before registration, request early semantic grounding review with:
+
+```sh
+python3 -B scripts/handoff.py challenge-review --task "$task_json" \
+  --evidence-dir "$evidence_dir" --review "$proposal"
+```
+
+The read-only packet includes the exact proposal hash, owner scope/criteria, registered case IDs and instructions to judge each expectation against its cited requirement. It requires no product runs and makes no semantic decision automatically. Revise ungrounded unregistered proposals with the independent reviewer before registering the actual proposal via `challenges`. Preserve the originals. Once registered, a case is a binding evidence obligation; relabeling it as proposed, omitting it or producing an optimistic review cannot remove it. Use qualified original-product counterevidence and the existing audited disposition/withdrawal process. Owner acceptance cannot be withdrawn through that process.
+
+## Bootstrap and additive flights
+
+The executable [adoption example](../examples/evidence-bootstrap/README.md) prepares a small new behavior, empty native baseline and explicit report/spec bindings before the first freeze. It records a real failing original-product control and a passing proposed implementation under unchanged test fixtures; it does not invent independent reviews. Installation includes the example under `.flightcheck/examples/evidence-bootstrap/`.
+
+For an existing project, retain a coverage baseline for existing IDs and outcomes; new expected IDs belong to the witness, not a fabricated historical baseline. Keep original product identity separate from a new test overlay and fingerprint both. Use the same tests/fixtures/spec artifact for control and current native runs. Compatibility requires the original product to pass; regression requires it to fail; a specification control may use a documented original product or deliberate mutation that fails the stated contract. No count-only report establishes sensitivity.
+
+Record actual additive behavior acceptance and gate/spec declarations before freezing whenever the scope is already known. A new required gate can be added without weakening the frozen gates; preflight retains the prior contract and leaves the added run pending. A genuine scope change uses the owner's actual instruction and explicit amendment, preserving prior contracts, challenges and obligations. Never relabel behavior as policy or erase native safeguards to bypass bootstrap setup.
+
+The recorder's gate pointer `gate-ID.json` contains the active `check-*` directory name. That directory contains `run.json`, `output.log`, positional retained `artifact-N` files and a fresh invocation-local `reports/` directory. Logical artifact names and SHA-256 digests live in `run.json`; never assume `gate-ID.json` is the receipt or glob an older report. Failed controls and interrupted attempts remain retained. Full layout and replay commands appear in the example.
+
 ## Reviewer-requested tests and functional repairs
 
 A read-only reviewer challenges the proposed evidence against boundaries, invalid inputs, alternate callers, and compatibility controls relevant to this project. When a suspected failure is reproducible, return a concrete test request instead of running it. Native review JSON must contain `candidate`, `role` (`CODE` or `EVIDENCE`), `verdict`, `coverage` inspected, `criteria` assessments, `challenge`, `findings`, and `test_requests`. Each criterion assessment is `{"id":"behavior","sufficient":true,"reason":"Why the actual assertions prove this requirement"}`. `challenge` explains independently considered counterexamples and adequacy; it is not a test-count summary. Each finding has `id`, `kind` (`functional`, `process`, or `nit`), `severity`, `reference`, and `impact`. Each request has `id`, `criterion`, `input`, `expected`, and `reason`. Empty arrays explicitly mean zero findings/requests. Keep incomplete reviews pending.

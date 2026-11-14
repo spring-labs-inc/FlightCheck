@@ -110,6 +110,8 @@ def preserves_gates(previous, current):
 
 def freeze(task, root, amendment=None):
     """Do not silently erase or weaken an earlier task contract on resume."""
+    from configuration import validate_config
+    validate_config(task, root)
     path = root / "acceptance-contract.json"
     previous = read(path) if path.exists() else None
     baseline = task.get("baseline_candidate", (previous or {}).get("baseline_candidate", task["candidate"]))
@@ -219,8 +221,8 @@ def record_review(task, root, path):
 
 def _record_review(task, root, path):
     """Retain native reviewer output and append obligations; omission cannot clear them."""
-    raw = path.read_bytes()
-    review = json.loads(raw)
+    from handoff_schema import response
+    raw, review, _ = response(root, path, "review")
     _, contract_error = contract_status(task, root)
     if contract_error:
         raise ValueError(contract_error)

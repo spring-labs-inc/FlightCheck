@@ -12,9 +12,10 @@ from pathlib import Path
 from capture_check import digest, evidence_directory, fingerprint, latest_run, matches_pass
 from proof import acceptance_status, contract_status, freeze, obligations_status, record_review, verdict_status
 from recovery import plan as recovery_plan
-from behavior import challenge_brief, record_plan, status as behavior_status
+from behavior import challenge_brief, proposal_packet, record_plan, status as behavior_status
 from disposition import review_packet as disposition_packet
 from proof import ledger
+from handoff_schema import brief_fields, coverage as coverage_shape, schema
 
 COVERAGE_OUTCOMES = ("passed", "skipped", "expected_failures", "failed")
 EARLY_CODE_CRITERIA = (
@@ -44,17 +45,7 @@ def coverage_report(path, expected_digest):
     if hashlib.sha256(raw).hexdigest() != expected_digest:
         raise ValueError("Coverage report digest does not match")
     report = json.loads(raw)
-    if not isinstance(report, dict) or set(report) != set(COVERAGE_OUTCOMES):
-        raise ValueError("Coverage report needs all four outcome lists")
-    identities = {}
-    for outcome, tests in report.items():
-        if not isinstance(tests, list):
-            raise ValueError("Coverage outcomes must contain lists of test identities")
-        for test in tests:
-            if not isinstance(test, str) or not test.strip() or test in identities:
-                raise ValueError("Coverage test identities must be unique and nonempty")
-            identities[test] = outcome
-    return identities
+    return coverage_shape(report, "coverage")
 
 
 def verified_coverage(root, run, receipt, request, contract):
@@ -208,6 +199,7 @@ def implementation_brief(task):
             check["invocation"] = gate["invocation"]
         checks.append(check)
     brief["checks"] = checks
+    brief.update(brief_fields())
     brief["early_code"] = EARLY_CODE_CRITERIA if task.get("early_code") is None else task["early_code"]
     if task.get("preview") is not None:
         brief["preview"] = task["preview"]
@@ -307,6 +299,8 @@ def build_packet(task, root, final):
 
 def preflight(task, root, amendment=None):
     """Exercise the actual recorder and verifier without running project tests."""
+    from configuration import validate_config
+    validate_config(task, root)
     configured_gates(task["gates"])
     contract = freeze(task, root, amendment)
     probe = root / "preflight"
@@ -332,22 +326,30 @@ def preflight(task, root, amendment=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("preflight", "resume", "review", "code-review", "checks", "brief", "requests", "verdict", "next-action", "challenge-brief", "challenges", "disposition-review"))
-    parser.add_argument("--task", type=Path, required=True)
+    parser.add_argument("mode", choices=("preflight", "resume", "review", "code-review", "checks", "brief", "requests", "verdict", "next-action", "challenge-brief", "challenges", "challenge-review", "disposition-review", "schema"))
+    parser.add_argument("--task", type=Path)
+    parser.add_argument("--kind", choices=("challenge", "review", "coverage"), help="Machine-readable JSON Schema to export")
     parser.add_argument("--evidence-dir", type=Path)
     parser.add_argument("--review", type=Path, help="Actual native reviewer output for requests/verdict")
     parser.add_argument("--amend-contract", help="Evidence-root-relative owner scope decision; preflight only")
     parser.add_argument("--target", choices=("code", "final"), default="code",
                         help="Review whose dependencies next-action should reconcile")
     args = parser.parse_args()
-    if args.mode not in ("brief", "challenge-brief") and args.evidence_dir is None:
+    if args.mode != "schema" and args.task is None:
+        parser.error("--task is required except for schema export")
+    if args.mode not in ("brief", "challenge-brief", "schema") and args.evidence_dir is None:
         parser.error("--evidence-dir is required for receipt and review commands")
     final = args.mode == "review"
-    if args.mode in ("requests", "verdict", "challenges") and args.review is None:
+    if args.mode in ("requests", "verdict", "challenges", "challenge-review") and args.review is None:
         parser.error("--review is required for requests/verdict/challenges")
     if args.amend_contract and args.mode != "preflight":
         parser.error("--amend-contract is only available during preflight")
     try:
+        if args.mode == "schema":
+            if args.kind is None:
+                parser.error("schema requires --kind challenge, review or coverage")
+            print(json.dumps(schema(args.kind), indent=2))
+            return 0
         task = read_json(args.task)
         if args.mode == "brief":
             packet = implementation_brief(task)
@@ -362,6 +364,8 @@ def main():
                 if error:
                     raise ValueError(error)
                 packet = record_plan(task, root, args.review)
+            elif args.mode == "challenge-review":
+                packet = proposal_packet(task, root, args.review)
             elif args.mode in ("requests", "verdict"):
                 review = record_review(task, root, args.review)
                 final_packet = build_packet(task, root, final=True)
