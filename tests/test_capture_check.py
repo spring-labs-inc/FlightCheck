@@ -11,7 +11,7 @@ import time
 import unittest
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parents[1] / "examples/existing-project/scripts/capture_check.py"
+SCRIPT = Path(os.environ.get("FLIGHTCHECK_PRODUCT_ROOT", Path(__file__).resolve().parents[1])) / "examples/existing-project/scripts/capture_check.py"
 
 
 class CaptureCheckTests(unittest.TestCase):

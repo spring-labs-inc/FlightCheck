@@ -9,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "examples/existing-project/scripts"
+SCRIPTS = Path(os.environ.get("FLIGHTCHECK_PRODUCT_ROOT", Path(__file__).resolve().parents[1])) / "examples/existing-project/scripts"
 
 
 class HandoffTests(unittest.TestCase):

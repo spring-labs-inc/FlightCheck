@@ -13,16 +13,18 @@ from pathlib import Path
 from capture_check import digest, write_json
 from proof import (PASS, identifier, inside, nonempty, passed_tests, read,
                    retained_artifact, report_tests, test_names)
+from handoff_schema import brief_fields, fail, response, schema, validate
 
 EXPECTATIONS = {"regression": "failed", "compatibility": "passed", "specification": "failed"}
 
 
-def case_spec(case, criteria, independent=False):
+def case_spec(case, criteria, independent=False, field="case"):
+    validate(case, schema("challenge")["properties"]["cases"]["items"], field)
     identifier(case["id"])
     for key in ("dimension", "input", "observable", "expected"):
         nonempty(case[key])
     if case["criterion"] not in criteria:
-        raise ValueError("Behavior case names an unknown acceptance criterion")
+        fail(field + ".criterion", "names an unknown acceptance criterion")
     expectation = case["expectation"]
     if expectation["kind"] not in EXPECTATIONS:
         raise ValueError("Expectation must be regression, compatibility or specification")
@@ -37,7 +39,7 @@ def acceptance_cases(task):
     known = {item["id"] for item in task["acceptance"]}
     gates = {gate["id"]: gate for gate in task["gates"]}
     result, seen = [], set()
-    for item in task["acceptance"]:
+    for item_index, item in enumerate(task["acceptance"]):
         native = [proof for proof in item["proofs"] if proof["kind"] == "check"]
         has_native = any("coverage" in gates.get(proof["gate"], {}) for proof in native)
         # Preserve assertion-only policy callers. Product behavior must explicitly
@@ -58,8 +60,9 @@ def acceptance_cases(task):
         cases = item.get("cases")
         if not isinstance(cases, list) or not cases:
             raise ValueError("Behavior acceptance needs explicit observable cases")
-        for raw in cases:
-            case = case_spec(dict(raw, criterion=item["id"]), known)
+        for case_index, raw in enumerate(cases):
+            case = case_spec(dict(raw, criterion=item["id"]), known,
+                             field=f"task.acceptance[{item_index}].cases[{case_index}]")
             if case["id"] in seen:
                 raise ValueError("Behavior case identities must be unique across the flight")
             seen.add(case["id"])
@@ -76,7 +79,9 @@ def challenge_brief(task):
              "acceptance": [{"id": item["id"], "description": item["description"]}
                             for item in task["acceptance"]]}
     raw = json.dumps(brief, sort_keys=True, separators=(",", ":")).encode()
-    return dict(brief, scope_sha256=hashlib.sha256(raw).hexdigest())
+    return dict(brief, scope_sha256=hashlib.sha256(raw).hexdigest(), **brief_fields(),
+                proposal_status="proposed counterexamples; not established product requirements",
+                grounding="Judge expectations against owner scope before registering; use challenge-review for early grounding review.")
 
 
 def challenge_ledger(root):
@@ -88,19 +93,18 @@ def record_plan(task, root, path):
     """Append actual reviewer proposals; omission never drops a required case."""
     with (root / "challenge-plan.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        raw = path.read_bytes()
-        proposal = json.loads(raw)
+        raw, proposal, _ = response(root, path, "challenge")
         scope = challenge_brief(task)["scope_sha256"]
         if proposal["role"] not in ("CODE", "EVIDENCE") or proposal["scope_sha256"] != scope:
-            raise ValueError("Independent challenge plan must match this task contract")
+            fail("challenge.scope_sha256", "independent challenge plan must match this task contract")
         nonempty(proposal["coverage"])
         if not isinstance(proposal["cases"], list) or not proposal["cases"]:
             raise ValueError("Independent challenge plan needs concrete cases")
         known = {item["id"] for item in task["acceptance"]}
         proposed, ids = [], set()
         reserved = {case["id"] for case in acceptance_cases(task)}
-        for case in proposal["cases"]:
-            case_spec(case, known, independent=True)
+        for index, case in enumerate(proposal["cases"]):
+            case_spec(case, known, independent=True, field=f"challenge.cases[{index}]")
             if case["id"] in ids or case["id"] in reserved:
                 raise ValueError("Challenge case identities must be unique")
             ids.add(case["id"])
@@ -130,9 +134,38 @@ def record_plan(task, root, path):
                 "plan_sha256": source}
 
 
+def proposal_packet(task, root, path):
+    """Early semantic review, without registering, removing or approving cases."""
+    _, proposal, sha = response(root, path, "challenge")
+    scope = challenge_brief(task)["scope_sha256"]
+    if proposal["scope_sha256"] != scope:
+        fail("challenge.scope_sha256", "does not match this task scope")
+    known = {item["id"] for item in task["acceptance"]}
+    seen = set()
+    for index, case in enumerate(proposal["cases"]):
+        case_spec(case, known, independent=True, field=f"challenge.cases[{index}]")
+        if case["id"] in seen:
+            fail(f"challenge.cases[{index}].id", "duplicate proposal identity")
+        seen.add(case["id"])
+    registered = challenge_ledger(root) or {"cases": {}}
+    return {"purpose": "challenge-grounding", "status": "proposal-only", "scope_sha256": scope,
+            "proposal_sha256": sha, "original_response": f"responses/{sha}.json",
+            "scope": task.get("scope", ""), "acceptance": challenge_brief(task)["acceptance"],
+            "proposal": proposal, "registered_cases": sorted(registered["cases"]),
+            "instructions": "Independently judge each expectation against owner requirements and cite its source. "
+                "Metadata validates structure, not semantic correctness. Revise ungrounded unregistered proposals before challenges. "
+                "This packet cannot register, remove or withdraw any case or authorize implementation/landing. "
+                "Already registered cases remain binding and require the existing qualified counterevidence and audited disposition process."}
+
+
 def qualified_control(task, root, case, check, mapping):
     """A control must discriminate the assertion under the same test fixtures."""
     control = mapping[case["id"]]
+    from configuration import spec_artifact
+    gate = next(gate for gate in task["gates"] if gate["id"] == case["gate"])
+    if (control["spec"] != spec_artifact(gate, "task.gates." + gate["id"])
+            or control["report"] != gate["coverage"]["artifact"]):
+        fail("task.case_controls." + case["id"], "report/spec must match the configured native witness artifacts")
     before, report = retained_artifact(root, control["receipt"], control["report"])
     after, _ = retained_artifact(root, str(Path(check["receipt"]).relative_to(root)),
                                 control["report"])
