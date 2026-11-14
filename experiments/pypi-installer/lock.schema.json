@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Unpublished FlightCheck prototype project lock (not the production format)",
+  "type": "object",
+  "required": ["schema", "prototype", "bundle", "manifest", "runtime"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": 1},
+    "prototype": {"const": true},
+    "bundle": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "manifest": {"type": "object"},
+    "runtime": {
+      "type": "object",
+      "required": ["executable", "sha256", "python"],
+      "additionalProperties": false,
+      "properties": {
+        "executable": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "python": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}
