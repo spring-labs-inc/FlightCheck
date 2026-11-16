@@ -286,7 +286,7 @@ def prepare(root, desired, previous):
     return operations
 
 
-def write_file(root, name, before, after):
+def write_file(root, name, before, after, temporary=None):
     path = safe_path(root, name)
     path.parent.mkdir(parents=True, exist_ok=True)
     safe_path(root, name)
@@ -294,10 +294,18 @@ def write_file(root, name, before, after):
     if actual != before:
         raise SetupError("Concurrent edit detected; preserved file: " + name)
     mode = stat.S_IMODE(path.stat().st_mode) if before is not None else 0o644
-    fd, pending = tempfile.mkstemp(prefix=".flightcheck-", dir=path.parent)
+    if temporary is None:
+        fd, pending = tempfile.mkstemp(prefix=".flightcheck-", dir=path.parent)
+    else:
+        pending = safe_path(root, temporary)
+        if pending.parent != path.parent:
+            raise SetupError("Temporary file must share the destination directory")
+        fd = os.open(pending, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     try:
         with os.fdopen(fd, "wb") as stream:
             stream.write(after)
+            stream.flush()
+            os.fsync(stream.fileno())
         os.chmod(pending, mode)
         if before is None:
             os.link(pending, path)
@@ -307,14 +315,19 @@ def write_file(root, name, before, after):
         Path(pending).unlink(missing_ok=True)
 
 
-def apply_plan(root, operations):
+def apply_plan(root, operations, rollback_on_error=True, temporary_paths=None):
     written = []
     try:
         for op in operations:
             if op["action"] != "unchanged":
-                write_file(root, op["path"], op["before"], op["after"])
+                if temporary_paths is None:
+                    write_file(root, op["path"], op["before"], op["after"])
+                else:
+                    write_file(root, op["path"], op["before"], op["after"], temporary=temporary_paths[op["path"]])
                 written.append(op)
     except BaseException:
+        if not rollback_on_error:
+            raise
         for op in reversed(written):
             path = safe_path(root, op["path"])
             if path.read_bytes() == op["after"]:
@@ -323,6 +336,26 @@ def apply_plan(root, operations):
                 else:
                     write_file(root, op["path"], op["after"], op["before"])
         raise
+
+
+def plan_installation(source, root, manifest, agent, supplied):
+    """Shared nonwriting plan API for the source and packaged terminal channels."""
+    identity = source_identity(source, manifest)
+    config = configuration(root, supplied)
+    desired, sources = desired_files(source, manifest, agent, config)
+    state = {"schema": 1, "agent": agent, "source": identity,
+             "files": {name: {"kind": kind, "sha256": sha(data), **sources.get(name, {})}
+                       for name, (kind, data) in desired.items()}}
+    previous = read_state(root)
+    if previous and previous["agent"] != agent:
+        raise SetupError("Agent selection changed; reconcile the prior installation explicitly")
+    operations = prepare(root, desired, previous)
+    old_state = safe_path(root, STATE).read_bytes() if previous else None
+    operations.append({"path": STATE, "before": old_state, "after": encoded(state),
+                       "action": "unchanged" if old_state == encoded(state) else "create" if old_state is None else "update"})
+    result = {"status": "planned", "source": identity, "agent": agent,
+              "operations": [{k: op[k] for k in ("path", "action")} for op in operations]}
+    return result, config, operations
 
 
 def interrupt_probe(signum, frame):
@@ -476,23 +509,10 @@ def main():
                 source = MANIFEST.parent.parent.resolve()
                 if source == root:
                     raise SetupError("Install into an adopter checkout, not the FlightCheck source checkout")
-                identity = source_identity(source, manifest)
                 if not args.config:
                     raise SetupError("Supply the reviewed project configuration with --config; inspect lists unresolved fields")
-                config = configuration(root, json.loads(args.config.read_text()))
-                desired, sources = desired_files(source, manifest, args.agent, config)
-                state = {"schema": 1, "agent": args.agent, "source": identity,
-                         "files": {name: {"kind": kind, "sha256": sha(data), **sources.get(name, {})}
-                                   for name, (kind, data) in desired.items()}}
-                previous = read_state(root)
-                if previous and previous["agent"] != args.agent:
-                    raise SetupError("Agent selection changed; reconcile the prior installation explicitly")
-                operations = prepare(root, desired, previous)
-                old_state = safe_path(root, STATE).read_bytes() if previous else None
-                operations.append({"path": STATE, "before": old_state, "after": encoded(state),
-                                   "action": "unchanged" if old_state == encoded(state) else "create" if old_state is None else "update"})
-                result = {"status": "planned", "source": identity, "agent": args.agent,
-                          "operations": [{k: op[k] for k in ("path", "action")} for op in operations]}
+                result, config, operations = plan_installation(
+                    source, root, manifest, args.agent, json.loads(args.config.read_text()))
                 if args.command == "apply":
                     apply_plan(root, operations)
                     result = verify(root, manifest)
