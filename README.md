@@ -22,8 +22,6 @@
 
 # FlightCheck
 
-<img align="right" width="380" src="docs/status-card-preview.png" alt="Synthetic FlightCheck task status card with an expanded issue, workflow stages, local checks, and CI observations">
-
 FlightCheck is a lightweight set of repository instructions that guides AI-assisted changes from request to landing.
 
 - **Follow a consistent workflow.** Each flight moves through planning, implementation, cheap checks, and UI approval when needed, followed by broader testing and skeptical review.
@@ -31,32 +29,16 @@ FlightCheck is a lightweight set of repository instructions that guides AI-assis
 - **Make delivery decisions explicit.** The final verdict determines whether the change lands under the project’s delivery rules, returns for repair, or needs a user decision.
 - **See where the work stands.** A live status card shows the current stage, check results, verdict, and linked issues.
 
-## License and commercial use
-
-FlightCheck is available under the [Functional Source License 1.1, with MIT as its future license (FSL-1.1-MIT)](LICENSE). Personal and internal organizational use—including commercial work—is free. No account, subscription, or license key is required. Competing commercial offerings require separate permission during the applicable two-year period. Each version becomes available under MIT two years after publication. For additional permissions, contact [jeff@springfinance.io](mailto:jeff@springfinance.io). Subscriptions remain deferred.
-
-Before copying workflow files, read the [licensing and adoption guide](docs/licensing.md). Outside code contributions are currently deferred; [bug reports and feature requests are welcome](CONTRIBUTING.md).
-
-## Get started
-
-Open your existing project in your AI coding tool and paste this prompt. The [complete installation guide](setup/README.md) describes each step and its expected result.
-
-> Install FlightCheck from https://github.com/spring-labs-inc/FlightCheck into this existing project. Clone the source outside this checkout, resolve and record its full commit ID, and use that clean pinned revision. Follow `setup/README.md` and the complete manifest in `setup/manifest.json`; the shared adoption files are under `examples/existing-project/`. Inspect my existing instructions, checks, interpreter, default branch, and permissions first. Preserve that policy and batch only unresolved owner decisions. Preview and apply the project-local installer for my coding tool, including all shared evidence tools, its agent adapter, and the browser status card. Do not silently substitute a documentation-only installation. Run installed verification and fresh-session discovery/reviewer/browser probes; report any remaining blocker honestly. Keep changes uncommitted unless I authorize delivery.
-
-Your tool must support repository instructions, running project checks, and separate reviewers with [enforced read-only access](examples/existing-project/docs/development-workflow.md#independent-review). Evidence tooling requires Python 3 on a POSIX host.
-
-The installer supplies Codex and Claude Code adapters. Use the [Claude setup and trial guide](docs/claude-code.md) for contributor discovery, review boundaries and a real adoption trial. Native Claude end-to-end qualification remains pending in [#14](https://github.com/spring-labs-inc/FlightCheck/issues/14).
-
-[Verify the setup](examples/existing-project/README.md#verify-the-adoption) on one small task before using it for larger changes. Explicitly select the workflow using your tool's entry point.
-
-<br clear="right">
+![Synthetic FlightCheck task status card with an expanded issue, workflow stages, local checks, and CI observations](docs/status-card-preview.png)
 
 ## The workflow
 
-1. Select a bounded task and agree on acceptance criteria. Work in a dedicated checkout and give each deterministic criterion a reproducible check.
-2. Implement the change and run the cheap checks. For owner-facing UI, then show interactive HTML with synthetic data and pause for approval of that surface. Show renders only on request.
-3. Apply the [early CODE review criteria](examples/existing-project/docs/development-workflow.md#decide-on-early-code-review) and record the reason for the decision. Then run the remaining required tests and visual checks within the project's permissions.
-4. Give one independent final reviewer the current candidate, acceptance criteria, and verified gate evidence. Route the final verdict below.
+1. Select a bounded task, agree on acceptance criteria, and define reproducible checks in a dedicated checkout.
+2. Implement the change and run the cheap checks. For owner-facing UI, review interactive HTML with synthetic data and record approval before broader testing.
+3. Apply the [early CODE review criteria](examples/existing-project/docs/development-workflow.md#decide-on-early-code-review). When early review is needed, supply the current change and check evidence. Then run the remaining required tests and visual checks.
+4. Hand the current change, acceptance criteria, and verified evidence to a separate final reviewer. Use the verdict below to determine the next step.
+
+Handoffs carry check receipts and original output between stages. Fingerprints tie each result to the code, command, coverage, and environment that produced it. Before review or reuse, FlightCheck verifies those records and identifies missing, changed, or failed evidence. Repairs renew the affected checks and reviews while preserving earlier results for inspection.
 
 | Verdict | Action |
 | --- | --- |
@@ -69,8 +51,25 @@ The installer supplies Codex and Claude Code adapters. Use the [Claude setup and
 
 | Guide | Use |
 | --- | --- |
-| [Setup](setup/README.md) | Install the complete manifest, configure your project, and verify adoption. |
+| [Setup](setup/README.md) | Install the workflow, evidence tools, client adapters, and status card. |
+| [PyPI distribution](docs/pypi-distribution.md) | Review the planned package installation and project setup flow. |
 | [Workflow](examples/existing-project/docs/development-workflow.md) | Follow the checks, reviews, repair, and delivery rules. |
+| [Evidence handoff](examples/existing-project/docs/development-workflow.md#carry-checks-across-the-handoff) | Record original output, verify receipts, and carry evidence into review. |
+| [Claude Code](docs/claude-code.md) | Configure the adapter and check native qualification status. |
 | [Status card](docs/status-card.md) | Publish and view task progress and the current verdict. |
 | [Benchmarks](docs/benchmark.md) | Read results and reproduce the pinned trials. |
 | [Contributing](CONTRIBUTING.md) | Read the contribution policy and run FlightCheck's own tests. |
+
+## Get started
+
+Open your existing project in your AI coding tool and paste this prompt.
+
+> Install FlightCheck from https://github.com/spring-labs-inc/FlightCheck into this project. Follow setup/README.md, preserve this project's instructions, dependency management, and delivery permissions, and verify the complete installation for my coding tool. Ask me about unresolved project choices together. Keep changes uncommitted.
+
+The [setup guide](setup/README.md) covers installation, project configuration, and verification. Codex and Claude Code adapters are included. Complete a small first flight using your tool's workflow entry point before taking on larger changes.
+
+## License and commercial use
+
+FlightCheck is available under the [Functional Source License 1.1, with MIT as its future license (FSL-1.1-MIT)](LICENSE). Personal and internal organizational use—including commercial work—is free. No account, subscription, or license key is required. Competing commercial offerings require separate permission during the applicable two-year period. Each version becomes available under MIT two years after publication. For additional permissions, contact [jeff@springfinance.io](mailto:jeff@springfinance.io). Subscriptions remain deferred.
+
+Before copying workflow files, read the [licensing and adoption guide](docs/licensing.md). Outside code contributions are currently deferred; [bug reports and feature requests are welcome](CONTRIBUTING.md).
