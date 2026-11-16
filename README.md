@@ -22,6 +22,8 @@
 
 # FlightCheck
 
+<img align="right" width="380" src="docs/status-card-preview.png" alt="Synthetic FlightCheck task status card with an expanded issue, workflow stages, local checks, and CI observations">
+
 FlightCheck is a lightweight set of repository instructions that guides AI-assisted changes from request to landing.
 
 - **Follow a consistent workflow.** Each flight moves through planning, implementation, cheap checks, and UI approval when needed, followed by broader testing and skeptical review.
@@ -29,7 +31,7 @@ FlightCheck is a lightweight set of repository instructions that guides AI-assis
 - **Make delivery decisions explicit.** The final verdict determines whether the change lands under the project’s delivery rules, returns for repair, or needs a user decision.
 - **See where the work stands.** A live status card shows the current stage, check results, verdict, and linked issues.
 
-![Synthetic FlightCheck task status card with an expanded issue, workflow stages, local checks, and CI observations](docs/status-card-preview.png)
+<br clear="right">
 
 ## The workflow
 
