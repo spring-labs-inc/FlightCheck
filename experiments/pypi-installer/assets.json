@@ -58,5 +58,6 @@
   "status-card/task.js",
   "status-card/task_details.py",
   "status-card/task_status.py",
-  "status-card/task_tab.py"
+  "status-card/task_tab.py",
+  "status-card/connect.py"
 ]

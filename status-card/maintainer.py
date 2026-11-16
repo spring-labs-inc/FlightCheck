@@ -115,7 +115,7 @@ def prepared_card_url(directory, task, port):
     return validate_task_url(url, task)
 
 
-def fetch_card(task, port, expected_candidate):
+def fetch_card(task, port, expected_candidate, publication_port=None):
     connection = HTTPConnection("127.0.0.1", port, timeout=0.75)
     try:
         connection.request("GET", task_path(task) + "status.json")
@@ -125,7 +125,7 @@ def fetch_card(task, port, expected_candidate):
         status = json.loads(response.read(1024 * 1024))
         if (
             isinstance(status, dict) and status.get("snapshot") == "live" and status.get("task") == task
-            and status.get("publicationPort") == port and status.get("candidate") == expected_candidate
+            and status.get("publicationPort") == (publication_port or port) and status.get("candidate") == expected_candidate
             and (response.status == 200 or status.get("completeness", {}).get("ready") is False)
         ):
             connection.request("GET", task_path(task))
@@ -139,13 +139,14 @@ def fetch_card(task, port, expected_candidate):
     return None
 
 
-def current_card(task, port, expected_candidate):
+def current_card(task, port, expected_candidate, publication_port=None):
     # Per-read socket timeouts can be extended by trickled bytes. Bound the
     # whole read-only probe; it cannot start listeners or modify private state.
     try:
         result = subprocess.run(
             [sys.executable, "-B", str(Path(__file__).resolve()), "probe", "--task", task,
-             "--port", str(port), "--candidate", expected_candidate],
+             "--port", str(port), "--candidate", expected_candidate,
+             "--publication-port", str(publication_port or port)],
             capture_output=True, text=True, timeout=2,
         )
         return json.loads(result.stdout) if result.returncode == 0 else None
@@ -346,7 +347,10 @@ def check_turn(checkout, state, event):
     if task:
         port = read_json(task_dir(state, task) / "endpoint.json").get("port")
         status = current_card(task, port, current) if port else None
-        if status and status.get("completeness", {}).get("ready"):
+        route = read_json(task_dir(state, task) / "reply-route.json")
+        from reply import execution_mode
+        route_ready = (route.get("execution") == execution_mode("auto") and route.get("user_url"))
+        if status and status.get("completeness", {}).get("ready") and route_ready:
             footer = chat_status({"task": task}, prepared_card_url(task_dir(state, task), task, port), "start")
             if has_footer(event.get("last_assistant_message") or "", footer):
                 return {}
@@ -373,15 +377,18 @@ def main():
     card.add_argument("--verdict", choices=VERDICTS)
     card.add_argument("--verdict-candidate")
     card.add_argument("--session", default=os.environ.get("CODEX_THREAD_ID"))
+    card.add_argument("--execution", choices=("auto", "local", "remote"), default="auto")
+    card.add_argument("--user-url", help="Explicit client-observed loopback browser route")
     commands.add_parser("hook")
     probe = commands.add_parser("probe", help="Bounded read-only checkout-host publication probe")
     probe.add_argument("--task", type=task_id, required=True)
     probe.add_argument("--port", type=int, required=True)
     probe.add_argument("--candidate", required=True)
+    probe.add_argument("--publication-port", type=int)
     args = parser.parse_args()
     try:
         if args.command == "probe":
-            print(json.dumps(fetch_card(args.task, args.port, args.candidate)))
+            print(json.dumps(fetch_card(args.task, args.port, args.candidate, args.publication_port)))
         elif args.command == "hook":
             event = json.load(sys.stdin)
             checkout = git_path(event["cwd"], "--show-toplevel")
@@ -390,7 +397,13 @@ def main():
             if bool(args.verdict) != bool(args.verdict_candidate):
                 raise ValueError("Pass --verdict and --verdict-candidate together")
             checkout = git_path(Path.cwd(), "--show-toplevel")
-            print(show_card(checkout, state_dir(checkout), args))
+            # Both controller entry points use the same startup and route guard.
+            from reply import prepare
+            result = prepare(checkout, state_dir(checkout), args)
+            print(result["footer"])
+            if result["status"] != "published":
+                print(result.get("error") or result["guidance"], file=sys.stderr)
+                return 1
     except (KeyError, OSError, ValueError, subprocess.SubprocessError) as error:
         if args.command == "hook":
             print(json.dumps({"systemMessage": f"FlightCheck could not verify this turn: {error}"}))
@@ -399,4 +412,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

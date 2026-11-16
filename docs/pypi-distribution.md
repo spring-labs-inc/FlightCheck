@@ -22,7 +22,7 @@ browser rendering require the separate rehearsal described below.
 
 The root `pyproject.toml` and `flightcheck_cli` package promote the #58 experiment into a terminal-first alpha candidate: `inspect`, guided or configuration-driven `init`, hash-bound explicit application, `doctor`, and private recovery. The source and package channels call the same `setup/install.py` planning API. README uses the Git/pipx channel until #67 publishes and verifies a release. The prototype remains historical feasibility/rehearsal material.
 
-The current candidate supports fresh setup and identical repeats, and refuses implicit upgrades/migrations. It does not implement the full production runtime manager, real active-flight upgrade locking, project removal or the proposed AI resource-discovery interview below. Keep these limits explicit. The distribution label `flightcheck-cli` is local package metadata, not an assertion of PyPI ownership or availability. Public publishing and native Claude qualification remain unverified and separate.
+The current candidate supports fresh setup and identical repeats, and refuses implicit upgrades/migrations. It does not implement the full production runtime manager, real active-flight upgrade locking, project removal or the proposed AI resource-discovery interview below. Keep these limits explicit. The proposed distribution label `flightcheck` does not establish PyPI ownership or availability. Public publishing and native Claude qualification remain unverified and separate.
 
 The #67 handoff must identify the reviewed source/version, exact wheel/sdist checksums, preserved FSL notices, tested environments, commands and remaining native/release work. Use clean source for that release; development snapshots are owner-review artifacts, not published releases.
 
@@ -292,3 +292,35 @@ a loopback PyPI-compatible simple index, with isolated pipx directories and no g
 agent configuration changes. Public PyPI delivery remains unverified until separately
 authorized publication. No prior approval for the narrower prototype is a landing
 grant for this expanded candidate.
+
+## Required status-card gate before PyPI publication
+
+PyPI publication is blocked until reliable **local and SSH status-card startup**
+has been verified using the exact proposed release wheel. Installation success
+and a worker-side HTTP 200 do not satisfy this gate. Keep this requirement with
+terminal-first installer #66; native Claude qualification #14 remains open.
+
+Retain the wheel digest, installed version, exact commands, process/route
+diagnostics and browser observations in the release evidence. Required cases:
+
+- Local installation starts the current task card, verifies its page and
+  snapshot before showing the link, and restores a stopped service on resume
+  using the same route.
+- SSH execution detects the worker context, withholds an unforwarded host link,
+  and gives the browser-machine connector or supported desktop forwarding path.
+  The connector restores the remote service, starts/reuses the loopback forward
+  and verifies the expected task and candidate from the browser machine.
+- Missing/broken forwarding, authentication failure, a busy local port, wrong
+  task/candidate, incomplete snapshots and startup failure produce an actionable
+  unavailable result without a successful card link or terminating other owners.
+- The user actually opens and observes the current card on both local and SSH
+  setups. Record browser reachability separately from rendering; controlled SSH
+  process fixtures and HTTP checks cannot substitute for this live acceptance.
+- Repeat recovery after CLI replacement/removal using the installed project
+  helpers, with its configured runtime and retained task/route state.
+
+The package must include the shared `reply.py` lifecycle and browser-machine
+`connect.py` helper through the canonical setup manifest. CLI status-card entry
+points must delegate to these helpers and preserve their nonzero failure status;
+they must not synthesize a URL or turn a host health check into a ready card.
+Publication remains a separate owner-authorized task after this gate passes.
