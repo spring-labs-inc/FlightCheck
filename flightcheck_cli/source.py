@@ -32,13 +32,13 @@ def bundle():
     package = resources.files("flightcheck_cli")
     raw = package.joinpath("manifest.json").read_bytes()
     value = json.loads(raw)
-    if (value.get("schema") != 1 or value.get("distribution") != "flightcheck-cli"
+    if (value.get("schema") != 1 or value.get("distribution") != "flightcheck"
             or not isinstance(value.get("development"), bool)
             or not all(re.fullmatch(r"[a-f0-9]{40}", value.get(k, "")) for k in ("source_revision", "source_tree", "base_revision"))
             or not isinstance(value.get("cli_files"), dict) or not value["cli_files"]):
         raise ValueError("Invalid packaged provenance manifest")
     from importlib import metadata
-    if metadata.version("flightcheck-cli") != value["version"]:
+    if metadata.version("flightcheck") != value["version"]:
         raise ValueError("Distribution metadata and packaged version disagree")
     for name, digest in value["cli_files"].items():
         if len(safe_name(name).parts) != 1 or sha(package.joinpath(name).read_bytes()) != digest:

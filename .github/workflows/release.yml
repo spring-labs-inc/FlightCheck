@@ -1,0 +1,165 @@
+name: Release FlightCheck (manual)
+'on':
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Prepare artifacts, or publish previously reviewed artifacts
+        type: choice
+        options: [prepare, publish]
+        default: prepare
+      tag:
+        description: Exact version tag, at the workflow dispatch commit
+        required: true
+        default: v0.1.0a1
+      reviewed_run_id:
+        description: Successful prepare run ID (publish only)
+      reviewed_artifact_id:
+        description: Exact immutable artifact ID reviewed by the owner (publish only)
+      reviewed_source_sha:
+        description: Full source SHA reviewed by the owner (publish only)
+      reviewed_manifest_sha256:
+        description: release.json SHA-256 reviewed by the owner (publish only)
+permissions:
+  contents: read
+concurrency:
+  group: flightcheck-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  prepare:
+    if: ${{ inputs.mode == 'prepare' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - run: python -m pip install -r requirements.release.txt
+      - name: Contributor checks
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: python -B -m unittest discover -s tests
+      - name: Prepare exact tagged artifacts
+        env:
+          VERSION_TAG: ${{ inputs.tag }}
+        run: python -B release/release.py prepare --tag "$VERSION_TAG" --output "$RUNNER_TEMP/release"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: flightcheck-release
+          path: ${{ runner.temp }}/release/
+          if-no-files-found: error
+          retention-days: 30
+  verify-publication:
+    if: ${{ inputs.mode == 'publish' && vars.FLIGHTCHECK_PYPI_PUBLISH_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      deployments: read
+    outputs:
+      artifact_id: ${{ steps.policy.outputs.artifact_id }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.13'
+      - name: Validate identifiers before provider queries
+        env:
+          RUN_ID: ${{ inputs.reviewed_run_id }}
+          ARTIFACT_ID: ${{ inputs.reviewed_artifact_id }}
+          SOURCE_SHA: ${{ inputs.reviewed_source_sha }}
+          MANIFEST_SHA: ${{ inputs.reviewed_manifest_sha256 }}
+        run: |
+          python - <<'CHECK'
+          import os,re
+          assert all(re.fullmatch(r'[0-9]+',os.environ[n]) for n in ('RUN_ID','ARTIFACT_ID'))
+          assert re.fullmatch(r'[a-f0-9]{40}',os.environ['SOURCE_SHA'])
+          assert re.fullmatch(r'[a-f0-9]{64}',os.environ['MANIFEST_SHA'])
+          CHECK
+      - name: Read current provider policy and exact run/artifact identities
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.reviewed_run_id }}
+          ARTIFACT_ID: ${{ inputs.reviewed_artifact_id }}
+        run: |
+          mkdir "$RUNNER_TEMP/provider"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" > "$RUNNER_TEMP/provider/run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID" > "$RUNNER_TEMP/provider/artifact.json"
+          gh api "repos/$GITHUB_REPOSITORY/environments/pypi" > "$RUNNER_TEMP/provider/environment.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/release.yml" > "$RUNNER_TEMP/provider/workflow.json"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ inputs.reviewed_artifact_id }}
+          run-id: ${{ inputs.reviewed_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/release
+      - name: Verify complete artifacts and publication policy
+        id: policy
+        env:
+          FLIGHTCHECK_PYPI_PUBLISH_ENABLED: ${{ vars.FLIGHTCHECK_PYPI_PUBLISH_ENABLED }}
+          RUN_ID: ${{ inputs.reviewed_run_id }}
+          ARTIFACT_ID: ${{ inputs.reviewed_artifact_id }}
+          SOURCE_SHA: ${{ inputs.reviewed_source_sha }}
+          MANIFEST_SHA: ${{ inputs.reviewed_manifest_sha256 }}
+        run: |
+          python - <<'CONTEXT'
+          import json,os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'provider'
+          context={name:json.loads((root/(name+'.json')).read_text()) for name in ('run','artifact','environment','workflow')}
+          context.update(mode='publish',current_sha=os.environ['GITHUB_SHA'])
+          (root/'context.json').write_text(json.dumps(context))
+          CONTEXT
+          python -B release/release.py gate --artifacts "$RUNNER_TEMP/release" --context "$RUNNER_TEMP/provider/context.json" --manifest-sha256 "$MANIFEST_SHA" --source-sha "$SOURCE_SHA" --reviewed-run-id "$RUN_ID" --reviewed-artifact-id "$ARTIFACT_ID" > "$RUNNER_TEMP/policy.json"
+          python - <<'OUTPUT'
+          import json,os
+          from pathlib import Path
+          result=json.loads((Path(os.environ['RUNNER_TEMP'])/'policy.json').read_text())
+          with open(os.environ['GITHUB_OUTPUT'],'a') as stream:stream.write('artifact_id='+result['artifact_id']+'\n')
+          OUTPUT
+  publish:
+    needs: verify-publication
+    if: ${{ inputs.mode == 'publish' && vars.FLIGHTCHECK_PYPI_PUBLISH_ENABLED == 'true' && needs.verify-publication.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/flightcheck/
+    permissions:
+      actions: read
+      id-token: write
+    steps:
+      # No checkout or project code runs with publishing credentials.
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.verify-publication.outputs.artifact_id }}
+          run-id: ${{ inputs.reviewed_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/release
+      - name: Recheck approved bytes after protected environment approval
+        env:
+          MANIFEST_SHA: ${{ inputs.reviewed_manifest_sha256 }}
+        run: |
+          python - <<'BYTES'
+          import hashlib,json,os
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'release'
+          raw=(root/'release.json').read_bytes()
+          assert hashlib.sha256(raw).hexdigest()==os.environ['MANIFEST_SHA']
+          record=json.loads(raw)
+          assert record['release_eligible'] and record['kind']=='release' and not record['source']['development']
+          assert {p.name for p in (root/'dist').iterdir()}==set(record['files']) and len(record['files'])==2
+          for name,expected in record['files'].items():
+              assert Path(name).name==name
+              data=(root/'dist'/name).read_bytes()
+              assert len(data)==expected['size'] and hashlib.sha256(data).hexdigest()==expected['sha256']
+          BYTES
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086
+        with:
+          packages-dir: ${{ runner.temp }}/release/dist/
+          attestations: true

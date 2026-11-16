@@ -71,7 +71,7 @@ def payload():
             if not (entry.isfile() or entry.isdir()):
                 raise ValueError("Source archive contains links/special files: " + entry.name)
     cli = {p.name: sha(p.read_bytes()) for p in (ROOT / "flightcheck_cli").glob("*.py")}
-    manifest = {"schema": 1, "distribution": "flightcheck-cli", "version": version,
+    manifest = {"schema": 1, "distribution": "flightcheck", "version": version,
                 "origin": "https://github.com/spring-labs-inc/FlightCheck", "development": dirty,
                 "base_revision": base, "source_revision": revision, "source_tree": tree,
                 "source_archive_sha256": sha(archive), "source_commit_sha256": sha(commit), "cli_files": cli}

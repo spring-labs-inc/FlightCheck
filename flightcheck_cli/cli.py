@@ -200,7 +200,7 @@ def output(value, json_output):
 def main(argv=None):
     os.umask(0o077)
     parser = argparse.ArgumentParser(description="Run from your normal terminal to configure FlightCheck. No project changes occur when installing the application.")
-    parser.add_argument("--version", action="version", version="flightcheck " + metadata.version("flightcheck-cli"))
+    parser.add_argument("--version", action="version", version="flightcheck " + metadata.version("flightcheck"))
     parser.add_argument("command", choices=("inspect", "init", "doctor", "recover"))
     parser.add_argument("target", nargs="?", default=".")
     parser.add_argument("--agent", choices=("codex", "claude", "both"))

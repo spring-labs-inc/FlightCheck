@@ -182,6 +182,7 @@ def render(data, source_name, destination, config):
     text = text.replace("../../../docs/development-workflow.md", "../../../.flightcheck/docs/development-workflow.md")
     text = text.replace("docs/development-workflow.md when", ".flightcheck/docs/development-workflow.md when")
     if destination.endswith("docs/development-workflow.md"):
+        text = text.replace("](../.flightcheck/scripts/", "](../scripts/")
         text = text.replace("separate read-only Codex session", "separate read-only session in the selected client")
         text += "\n## Installed project configuration\n\nUse `.flightcheck/project.json` for the recorded project choices. Configure each flight's task contract and evidence gates using this guide; installation does not manufacture receipts or reviewer approval.\n"
     if destination.endswith("SKILL.md"):
@@ -199,6 +200,7 @@ def render(data, source_name, destination, config):
                 + "\n\nReturn the native JSON object as your entire final message. The controller retains the original response; do not write it yourself.\n")
     if destination.endswith("docs/setup.md"):
         text = text.replace("](manifest.json)", "](../manifest.json)")
+        text = text.replace("](../examples/existing-project/docs/project-resources.md)", "](project-resources.md)")
     return text.encode()
 
 
