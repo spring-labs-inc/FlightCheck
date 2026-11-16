@@ -16,6 +16,14 @@ and version retention. Its added explicit `configure` command now delegates to t
 merged #53 installer for complete project-local configuration. Real client use and
 browser rendering require the separate rehearsal described below.
 
+## Terminal implementation follow-up (#66)
+
+The root `pyproject.toml` and `flightcheck_cli` package promote the #58 experiment into a terminal-first alpha candidate: `inspect`, guided or configuration-driven `init`, hash-bound explicit application, `doctor`, and private recovery. The source and package channels call the same `setup/install.py` planning API. README uses the Git/pipx channel until #67 publishes and verifies a release. The prototype remains historical feasibility/rehearsal material.
+
+The current candidate supports fresh setup and identical repeats, and refuses implicit upgrades/migrations. It does not implement the full production runtime manager, real active-flight upgrade locking, project removal or the proposed AI resource-discovery interview below. Keep these limits explicit. The distribution label `flightcheck-cli` is local package metadata, not an assertion of PyPI ownership or availability. Public publishing and native Claude qualification remain unverified and separate.
+
+The #67 handoff must identify the reviewed source/version, exact wheel/sdist checksums, preserved FSL notices, tested environments, commands and remaining native/release work. Use clean source for that release; development snapshots are owner-review artifacts, not published releases.
+
 ## Channels and prerequisites
 
 | Property | Immutable Git revision / manual adoption | Proposed PyPI / pipx tool |

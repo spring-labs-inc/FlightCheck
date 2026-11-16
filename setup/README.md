@@ -4,6 +4,57 @@ Use the complete installation flow below. It includes the shared workflow, all s
 
 The installer uses only Python's standard library and Git. Receipt and card tools require **Python 3.9+ on POSIX**. They can support projects using other languages. No PyPI release, plugin, account, global configuration change or new CI service is needed.
 
+## Recommended: terminal-first setup
+
+Run setup in a normal terminal on the machine holding the project. Claude's command sandbox protects `.claude/skills` and `.claude/agents`; adding a write allow rule does not lift those protections. Do not omit adapters, install hooks, or disable global sandbox settings to work around a failed AI-side install. The terminal installer uses the same shared engine as the source commands below.
+
+Until the separately tracked [PyPI release #67](https://github.com/spring-labs-inc/FlightCheck/issues/67), install the application from Git:
+
+```sh
+pipx install "git+https://github.com/spring-labs-inc/FlightCheck.git"
+cd /path/to/your/project
+flightcheck inspect .
+flightcheck init . --agent claude
+flightcheck doctor .
+```
+
+Use `codex`, `claude`, or `both` explicitly. Installing the application only installs its tool environment and command; it does not configure a project. The CLI and its runtime helpers use Python's standard library. Build dependencies belong to the isolated tool/build environment. Project checks use the project's existing interpreter and dependencies: setup does not install or upgrade application dependencies, run native project checks, enable hooks, or grant provider/reviewer permissions.
+
+`inspect` reads the current project policy/configuration hints and writes nothing. Interactive `init` groups the unresolved choices: client, project Python, actual default branch, private evidence directory, tracker, policy reference, reviewer-access decision, and a real non-mutating check command/phase. Opt-in activation and no provider writes are the safe defaults; a detected value is a suggestion. Confirm answers against existing project instructions. A project interpreter inside the disposable FlightCheck tool environment is refused.
+
+The preview lists every create/update/unchanged operation and content digest, with text diffs for changed instruction files. The full hash-bound plan is saved outside the project under owner-only installer state. No target files change until you confirm application. Successful setup/doctor returns `ready_for_client_probe`, source identity, the complete component count, and real Python-tool/loopback checks. These are not native client qualification or browser-rendering proof.
+
+### Reviewed configuration and headless setup
+
+For repeated automation or multiple checks, use the configuration JSON described in section 3. Existing confirmed project choices are reused for identical setup; otherwise headless operation requires explicit inputs. Store the plan in an owner-only directory outside the target:
+
+```sh
+flightcheck init /path/to/project --agent both --config /private/choices.json --plan /private/project-plan.json
+flightcheck init /path/to/project --apply /private/project-plan.json
+flightcheck doctor /path/to/project --json
+```
+
+The plan records normalized choices, source/distribution identity, exact target/repository, runtime identity, and before/after hashes/modes. Apply recomputes that plan: changed files, modes, runtime, package or configuration require a new preview. Existing instructions, independent `CLAUDE.md`/`AGENTS.md`, nested policy, settings, hooks, application license and dependency files are preserved. Project choices remain in `.flightcheck/project.json`; `.flightcheck/distribution.json` records the CLI bundle/runtime pin. The application is not a Python dependency of the adopting project.
+
+### Failure, recovery and version limits
+
+Each explicit apply serializes this CLI's operations and saves original bytes/modes plus a recovery journal privately outside the repository. A failed verification restores the original project where safe. A process crash leaves setup pending; it cannot silently authorize the next install. Run:
+
+```sh
+flightcheck recover /path/to/project
+flightcheck doctor /path/to/project
+```
+
+Recovery checks all affected files before restoration and refuses to overwrite changes made after interruption. Original backups remain available for manual reconciliation. Error messages identify the retained recovery information. The state location defaults to `$XDG_STATE_HOME/flightcheck/installer` or `~/.local/state/flightcheck/installer`; `FLIGHTCHECK_INSTALLER_STATE_DIR` can select another absolute private directory outside the project. Do not delete it while recovery is pending.
+
+This first CLI version supports fresh installations and identical repeats. It refuses implicit migrations, configuration changes, client changes and bundle upgrades to an existing installation. It is not a runtime manager or an active-flight upgrade coordinator. Upgrading/removing the global tool does not rewrite installed projects or their selected runtime; a disappeared/changed project interpreter is a blocker, not permission to substitute another. Explicit project removal and upgrades remain separate future work. Keep evidence and backups when uninstalling the tool.
+
+Start a fresh client after setup, verify instructions/skill/reviewer discovery, and follow section 6 for a small first flight. Browser publication, TUI presentation, effective read-only reviewer boundaries, and repair/resume need actual native observations. [#14](https://github.com/spring-labs-inc/FlightCheck/issues/14) stays open. Only local macOS/Python 3.13 execution is currently exercised by this implementation's review; other Python/POSIX combinations require qualification and native Windows is unsupported. No public PyPI install command is advertised before publication.
+
+### Proposed first-flight interview
+
+The terminal interview above is deterministic and included in #66. The proposed AI-assisted first-flight interview is a separate scope decision for owner review: inspect resources, propose sourced editable defaults, batch missing answers, confirm the exact board/access with a permitted read-only probe, mark optional resources unavailable, and persist confirmed shared pointers separately from private host paths. It must preserve explicit activation/provider/reviewer grants and validate required-resource drift on resume. That resource-discovery/board/log interview is not implemented or claimed by this delivery; it needs its own scoped behavior and native acceptance checks.
+
 ## Choose your coding surface
 
 Use the same installation and configuration flow for all four surfaces. Select the `codex` adapter for Codex CLI or Codex Desktop, the `claude` adapter for Claude Desktop or Claude Code, or `both` when the project uses both families. The [skills and reviewers guide](https://github.com/spring-labs-inc/FlightCheck/blob/main/docs/skills-and-reviewers.md) describes the installed components.
@@ -35,6 +86,10 @@ After installation, run `claude` from the configured repository and select `/dev
 
 The [Claude qualification record](https://github.com/spring-labs-inc/FlightCheck/blob/main/docs/claude-trial-status.json) currently reports a partial Claude Code trial. Record desktop observations separately. Keep native qualification open when a required client capability or execution boundary is unavailable.
 
+## Source-channel reference
+
+These low-level commands use the same planning, validation, application, and verification engine as the packaged CLI. Prefer the terminal flow above for ordinary adoption.
+
 ## 1. Obtain and pin the source
 
 Run these commands outside the adopting repository, choosing an unused destination:
@@ -46,7 +101,7 @@ git -C /path/to/FlightCheck checkout --detach FULL_COMMIT_FROM_PREVIOUS_COMMAND
 git -C /path/to/FlightCheck status --porcelain=v1 --untracked-files=all
 ```
 
-Expected: a full immutable commit ID, a detached checkout and no status output. Record that ID with the setup. The source must stay clean. The installer records the commit, Git tree, manifest digest and each component's source/installed digest. New releases are adopted deliberately; the setup prompt does not permanently pin an old version.
+Expected: a full immutable commit ID, a detached checkout and no status output. Record that ID with the setup. The source must stay clean. The installer records the commit, Git tree, manifest digest and each component's source/installed digest. New releases are adopted deliberately; installation does not permanently pin future adoptions to that version.
 
 Read the license accompanying that revision. Current FlightCheck uses FSL-1.1-MIT, permitting ordinary internal organizational commercial use without paid seats. Each version gains additional MIT rights after two years. Keep the version's license and notices with copied material; retain the adopting project's own license. Historical versions keep their historical terms.
 
@@ -186,7 +241,7 @@ umask 077
 trial_area=$(mktemp -d)
 python3 -m venv "$trial_area/venv"
 trial_python="$trial_area/venv/bin/python"
-"$trial_python" -m pip install -r examples/existing-project/requirements.dev.txt
+"$trial_python" -m pip install -r requirements.dev.txt
 flightcheck_source="$PWD"
 ```
 

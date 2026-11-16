@@ -62,11 +62,20 @@ Handoffs carry check receipts and original output between stages. Fingerprints t
 
 ## Get started
 
-Open your existing project in your AI coding tool and paste this prompt.
+Install from Git with [pipx](https://pipx.pypa.io/stable/installation/), then run setup from your terminal. Requires Git and Python 3.9+ on POSIX.
 
-> Install FlightCheck from https://github.com/spring-labs-inc/FlightCheck into this project. Follow setup/README.md, preserve this project's instructions, dependency management, and delivery permissions, and verify the complete installation for my coding tool. Ask me about unresolved project choices together. Keep changes uncommitted.
+```sh
+pipx install "git+https://github.com/spring-labs-inc/FlightCheck.git"
+cd /path/to/your/project
+flightcheck init . --agent claude
+flightcheck doctor .
+```
 
-The [setup guide](setup/README.md) covers installation, project configuration, and verification. Codex and Claude Code adapters are included. Complete a small first flight using your tool's workflow entry point before taking on larger changes.
+Use `--agent codex` for Codex or `--agent both` for both clients. Setup confirms the project choices, previews the changes, and asks before applying them. It preserves existing instructions, permissions, dependencies, and delivery policy.
+
+After verification, start a fresh session in your coding tool and select a small first flight with `/develop-change` (Claude) or `$develop-change` (Codex). TUI users can open the printed status-card URL in their regular browser.
+
+The [setup guide](setup/README.md) covers configuration, saved plans, recovery, and current client qualification limits. PyPI installation will replace this Git channel after a release is published and verified.
 
 ## License and commercial use
 

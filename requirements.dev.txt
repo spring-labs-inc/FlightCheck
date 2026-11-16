@@ -1,0 +1,5 @@
+-r examples/existing-project/requirements.dev.txt
+build==1.3.0
+setuptools==80.9.0
+wheel==0.45.1
+packaging==26.3
