@@ -177,7 +177,8 @@ def render(data, source_name, destination, config):
     text = data.decode()
     text = re.sub(r"(?<![\w./-])status-card/reply\.py", ".flightcheck/status-card/reply.py", text)
     for name in SCRIPTS:
-        text = text.replace("scripts/" + name + ".py", ".flightcheck/scripts/" + name + ".py")
+        text = re.sub(r"(?<!\.flightcheck/)scripts/" + re.escape(name) + r"\.py",
+                      ".flightcheck/scripts/" + name + ".py", text)
     text = text.replace("../../../docs/development-workflow.md", "../../../.flightcheck/docs/development-workflow.md")
     text = text.replace("docs/development-workflow.md when", ".flightcheck/docs/development-workflow.md when")
     if destination.endswith("docs/development-workflow.md"):

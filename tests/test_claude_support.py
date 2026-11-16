@@ -73,7 +73,7 @@ class ClaudeSupportTests(unittest.TestCase):
         else:
             self.assertTrue(all(x['state']=='verified' for x in report['native_requirements'].values()))
             self.assertTrue(report['claude_version'] and report['accepted_report'])
-        guide=(ROOT/'docs/claude-code.md').read_text()
+        guide=(ROOT/'setup/README.md').read_text()
         for reference in ('handoff.py refresh','next-action','--target final','capture_review.py','disable-model-invocation: true', 'BROKEN_WITNESS'):
             self.assertIn(reference,guide)
         for line in ('missing/inaccessible evidence','failed required check','stale candidate/verdict'):

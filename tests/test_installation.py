@@ -96,6 +96,9 @@ class InstallationTests(unittest.TestCase):
         self.assertEqual(result["status"], "ready_for_client_probe")
         self.assertEqual(result["runtime"]["card_http"], "passed")
         self.assertIn("pending", result["client_qualification"])
+        setup_guide = (self.target / ".flightcheck/docs/setup.md").read_text()
+        self.assertIn(".flightcheck/scripts/handoff.py preflight", setup_guide)
+        self.assertNotIn(".flightcheck/.flightcheck/", setup_guide)
         state = json.loads((self.target / ".flightcheck/installation.json").read_text())
         self.assertEqual(state["source"]["revision"], self.git(self.source, "rev-parse", "HEAD"))
         for name in ("capture_check", "handoff", "proof", "recovery", "behavior", "disposition"):

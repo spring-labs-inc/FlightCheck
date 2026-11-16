@@ -53,13 +53,11 @@ Handoffs carry check receipts and original output between stages. Fingerprints t
 
 | Guide | Use |
 | --- | --- |
-| [Setup](setup/README.md) | Install the workflow, evidence tools, client adapters, and status card. |
-| [PyPI distribution](docs/pypi-distribution.md) | Review the planned package installation and project setup flow. |
-| [Workflow](examples/existing-project/docs/development-workflow.md) | Follow the checks, reviews, repair, and delivery rules. |
+| [Workflow](examples/existing-project/docs/development-workflow.md) | Follow the stages, delivery rules, and [skills and reviewers](docs/skills-and-reviewers.md). |
+| [Status Card](docs/status-card.md) | Publish and view task progress and the current verdict. |
 | [Evidence handoff](examples/existing-project/docs/development-workflow.md#carry-checks-across-the-handoff) | Record original output, verify receipts, and carry evidence into review. |
-| [Claude Code](docs/claude-code.md) | Configure the adapter and check native qualification status. |
-| [Status card](docs/status-card.md) | Publish and view task progress and the current verdict. |
 | [Benchmarks](docs/benchmark.md) | Read results and reproduce the pinned trials. |
+| [Setup](setup/README.md) | Configure Codex CLI, Codex Desktop, Claude Desktop, or Claude Code and verify the installation. |
 | [Contributing](CONTRIBUTING.md) | Read the contribution policy and run FlightCheck's own tests. |
 
 ## Get started

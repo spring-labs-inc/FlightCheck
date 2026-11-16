@@ -56,7 +56,7 @@ Projects using other languages should use their own package manager, checks, and
 
 ## Claude integration
 
-Use the [Claude contributor/setup and trial guide](../../docs/claude-code.md). The source-layout `.claude/` wrappers reference shared policy; the complete installer generates destination-specific skills and reviewer Markdown with explicit adopter selection. Verify loaded instructions and effective tools/hooks in a fresh native session before claiming support.
+Use the [Claude contributor/setup and trial guide](../../setup/README.md#claude-code). The source-layout `.claude/` wrappers reference shared policy; the complete installer generates destination-specific skills and reviewer Markdown with explicit adopter selection. Verify loaded instructions and effective tools/hooks in a fresh native session before claiming support.
 
 ## Codex integration
 

@@ -1,6 +1,6 @@
 # Claude qualification report
 
-Status: **partial; full native qualification and acceptance remain pending**. See the [machine-readable status](claude-trial-status.json) and [reproduction guide](claude-code.md). This report records actual preparatory/native probes and a concrete execution blocker; it is not a successful end-to-end flight.
+Status: **partial; full native qualification and acceptance remain pending**. See the [machine-readable status](claude-trial-status.json) and [reproduction guide](../setup/README.md#claude-code-qualification-procedure). This report records actual preparatory/native probes and a concrete execution blocker; it is not a successful end-to-end flight.
 
 ## Environment and fixture
 
