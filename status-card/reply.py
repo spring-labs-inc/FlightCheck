@@ -64,7 +64,7 @@ def route_record(previous, task, host_url, execution, supplied):
 
 
 def observation(record, candidate, publication, verdict="Pending"):
-    url = record.get("user_url") or record.get("host_url")
+    url = record.get("user_url")
     remote_pending = record["execution"] == "remote" and not record.get("user_url")
     ready = bool(publication and publication.get("completeness", {}).get("ready"))
     result = {"task": record["task"], "candidate": candidate,
@@ -73,25 +73,29 @@ def observation(record, candidate, publication, verdict="Pending"):
               "verdict": verdict if ready else "Pending",
               "completeness": publication.get("completeness") if publication else None,
               "execution": record["execution"], "host_url": record.get("host_url"),
-              "user_url": record.get("user_url"), "footer": footer(url),
+              "user_url": record.get("user_url"), "footer": footer(url if ready else None),
               "browser_reachability": "unobserved", "browser_rendering": "unobserved"}
     if remote_pending:
         port = urlsplit(record["host_url"]).port if record.get("host_url") else "HOST_PORT"
         result["guidance"] = ("The card is on the remote checkout host. Arrange approved loopback forwarding, "
                               f"for example ssh -N -L 127.0.0.1:LOCAL_PORT:127.0.0.1:{port} HOST, "
-                              "then prepare again with --user-url and the forwarded task URL. "
+                              "or run the installed status-card/connect.py from the browser machine with --ssh and --checkout. "
+                              "The connector starts/restores the remote service and verifies the forwarded task before offering a link. "
+                              "For client-managed forwarding, prepare again with --user-url and the observed forwarded task URL. "
                               "The checkout-host URL alone is not a reachable browser route.")
     else:
         result["guidance"] = ("Open the live card in your regular browser at " + str(url)
                               + ". Continue terminal work independently; a text card is unnecessary. "
-                              "Host HTTP publication does not prove browser reachability or rendering.")
+                              "Host HTTP publication does not prove browser reachability or rendering. "
+                              "An explicit --user-url is a client-supplied route, not a browser verification by this worker.")
     if not publication:
         result["guidance"] = ("Card publication unavailable; run prepare to restore the same listener. "
-                              "Keep the known task link while reporting this blocker; browser reachability and rendering remain unobserved.")
+                              "The recorded route is retained in user_url/host_url for recovery; no working link is offered. "
+                              "Browser reachability and rendering remain unobserved.")
     elif not ready:
         result["guidance"] = ("Incomplete active-flight card; prepare again with complete --details. "
                               + " ".join(publication["completeness"]["issues"])
-                              + " Keep the known link; the browser shows its existing unavailable state.")
+                              + " The route is retained for recovery; no ready card link is offered.")
     return result
 
 
@@ -195,7 +199,7 @@ def main():
             known_url = browser_url(value, args.task) if value else None
         except (OSError, ValueError, TypeError):
             pass
-        result = {"status": "unavailable", "error": str(error), "footer": footer(known_url),
+        result = {"status": "unavailable", "error": str(error), "footer": footer(None), "known_url": known_url,
                   "publication": "unavailable", "browser_reachability": "unobserved", "browser_rendering": "unobserved"}
     print(json.dumps(result, indent=2))
     return 0 if result["status"] == "published" else 1

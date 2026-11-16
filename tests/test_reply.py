@@ -106,7 +106,9 @@ class ReplyTests(unittest.TestCase):
         self.readme.write_text("Changed while the listener was stopped\n")
         stale = self.check(first["footer"], "resume", 1)
         self.assertEqual(stale["publication"], "unavailable")
-        self.assertEqual(stale["status"], "unavailable")
+        self.assertEqual(stale["status"], "blocked")
+        self.assertNotIn("http", stale["footer"])
+        self.assertEqual(stale["user_url"], first["user_url"])
         recovered = self.api("prepare")
         self.assertEqual(recovered["footer"], first["footer"])
         self.assertNotEqual(recovered["candidate"], first["candidate"])
@@ -124,7 +126,7 @@ class ReplyTests(unittest.TestCase):
         self.assertEqual(self.check(first["footer"], expected=1)["publication"], "unavailable")
         unavailable = self.api("prepare", expected=1)
         self.assertEqual(unavailable["status"], "unavailable")
-        self.assertEqual(unavailable["footer"], first["footer"])
+        self.assertNotIn("http", unavailable["footer"])
         path.write_bytes(original)
 
         # A busy recorded port must not cause a new URL or kill its new owner.
@@ -137,7 +139,7 @@ class ReplyTests(unittest.TestCase):
             occupied.listen()
             unavailable = self.api("prepare", expected=1)
             self.assertEqual(unavailable["publication"], "unavailable")
-            self.assertEqual(unavailable["footer"], first["footer"])
+            self.assertNotIn("http", unavailable["footer"])
             self.assertEqual(self.endpoint()["port"], endpoint["port"])
             self.assertEqual(occupied.getsockname(), ("127.0.0.1", endpoint["port"]))
         self.assertEqual(self.api("prepare")["footer"], first["footer"])
@@ -293,7 +295,7 @@ class ReplyTests(unittest.TestCase):
             process.stdout.close()
 
     def test_native_stop_guard_uses_prepared_browser_footer(self):
-        env = dict(self.env, CODEX_THREAD_ID="synthetic-controller")
+        env = dict(self.env, CODEX_THREAD_ID="synthetic-controller", SSH_CONNECTION="synthetic worker")
 
         def hook(event, turn, reply=""):
             payload = {"hook_event_name": event, "cwd": str(self.checkout), "session_id": "synthetic-controller",

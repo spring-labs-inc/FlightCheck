@@ -23,6 +23,64 @@ Every user-facing controller reply in an active flight ends with the same task l
 
 The shared [controller status instructions](../examples/existing-project/.agents/skills/develop-change/references/task-status.md) describe how the selected workflow uses the desktop controls on activation and resume. The optional [tab decision helper](../status-card/task_tab.py) returns the next action from observed tabs and capabilities. Codex uses the available browser controls to carry it out. The checkout-host response, desktop forwarding, and browser render are separate checks. CLI and clients without usable browser controls can continue in chat with the same task link. [Codex built-in browser](https://learn.chatgpt.com/docs/browser) · [Remote connections](https://learn.chatgpt.com/docs/remote-connections)
 
+### Start a card over SSH
+
+Service readiness on an SSH worker does not establish a route from the machine
+running the browser. The worker detects `SSH_CONNECTION`, `SSH_CLIENT`, `SSH_TTY`,
+`CODESPACES` and `REMOTE_CONTAINERS` as hints. Managed workers can omit these
+markers; use the client's observed connection context and `--execution remote`
+in that case. An explicit local override is for genuinely local execution.
+
+Initialize the flight's private details on the worker using `reply.py prepare`.
+Then run `flightcheck card connect` **on the browser machine**, using its existing
+SSH alias, the absolute project path and the same private worker state directory:
+
+```sh
+flightcheck card connect --ssh WORKER_ALIAS \
+  --checkout /absolute/remote/project --task TASK_ID \
+  --remote-python /absolute/remote/python \
+  --remote-state-dir /absolute/remote/private/status-card
+```
+
+A local installed project can use `flightcheck card --project . --task TASK_ID --details /private/flight-details.json`; it selects the configured project Python, verifies installed card bytes and preserves shared-helper failures. `flightcheck card check` delegates reply checking. Use `--json` for structured output.
+
+The browser machine needs only the installed CLI for `card connect`, not a local project installation. Without the CLI, run the installed `.flightcheck/status-card/connect.py` directly. From a source checkout use `status-card/connect.py` and add
+`--card-dir status-card`. If the first preparation needs its complete details,
+pass `--details /absolute/remote/private/details.json`. The remote interpreter
+must be the configured project interpreter. No AI session is needed on the
+browser machine; the connector uses Python and the existing `ssh` executable.
+
+The connector prepares/restores the remote service, starts a loopback-only SSH
+forward, and verifies the expected task, candidate, publication port and page
+through the local endpoint. Only then does it return a clickable `footer`,
+`browser_reachability: verified` and `browser_rendering: unobserved`. Open that
+footer in the regular browser. The connector does not open a browser on the
+worker or claim rendering. SSH uses batch mode and existing authentication; a
+failure never changes SSH configuration or prompts inside an agent session.
+
+The tunnel uses a separate foreground SSH connection. For that invocation only,
+the connector disables connection sharing (`-S none`, `ControlMaster=no`,
+`ControlPersist=no`) and backgrounding (`ForkAfterAuthentication=no`). Otherwise,
+a multiplex client can hand its forward to an existing master and exit with no
+error, leaving the connector unable to own that process. Host, authentication
+and proxy settings remain in use; existing master connections remain running.
+Failures include the SSH exit status and a bounded diagnostic excerpt when
+available, with the full forward log retained privately.
+
+The first connection uses the remote port locally unless `--local-port` is
+explicitly supplied. Private connection state preserves that route on resume.
+Re-running restores a stopped remote service and reuses a healthy forward.
+An occupied port, wrong task/candidate, authentication error or interrupted
+forward fails without a successful link. Existing route state remains available
+for repair; the connector never silently chooses a different port or terminates
+an unrelated listener. Connection diagnostics are in the private `ssh.log`.
+
+If a desktop client provides forwarding, use its observed loopback route with
+`reply.py prepare --user-url URL` instead. This records an externally supplied
+route; the worker cannot verify the user's loopback socket. Host publication,
+browser-machine reachability and actual rendering remain separate observations.
+Record rendering only after desktop inspection or an owner observation.
+
 ### Publish work links and evidence
 
 Pass `--details /private/path/details.json` to the same publisher command. Initialize every required section first; later updates may supply only changed sections. For example, a synthetic update for `--candidate candidate-2` could contain:
@@ -84,7 +142,7 @@ A task title and HTTP 200 do not establish a complete flight. `completeness` is 
 
 Before tests run, use check state `pending`, the current candidate and observation time, and empty `counts`. Use `unavailable` with a `reason` when a planned check cannot run. If no checks apply, declare `"check_plan": []` and a `checks_unavailable` reason. Publishing a new nonempty `check_plan` removes the previous no-checks reason unless the update explicitly supplies a reason too; that contradictory combination remains incomplete. If an issue or PR does not exist, use, for example, `"links_unavailable": {"pr": "Local review; no PR yet."}` alongside the known issue link. Replace the reason when the real link exists.
 
-Incomplete flight snapshots return HTTP 503 with actionable JSON diagnostics. The existing browser view hides details and shows **Snapshot unavailable**; `prepare`/`check` fail with `status: incomplete`, preserve the task URL and explain the missing sections. The maintainer command retains its single-line footer on stdout and prints diagnostics to stderr; its transport check alone is not approval. The native Stop guard also requires completeness. Explicit low-level minimal snapshots return 200 with `snapshot: minimal` and `ready: false`; they cannot establish flight readiness or a verdict.
+Incomplete flight snapshots return HTTP 503 with actionable JSON diagnostics. The existing browser view hides details and shows **Snapshot unavailable**; `prepare`/`check` fail with `status: incomplete`, preserve the task URL and explain the missing sections. The maintainer command uses the same preparation guard as `reply.py`: it returns a nonzero exit and a plain status label when publication, completeness or remote routing is unavailable. It prints a clickable footer only after current publication and a browser-facing route are available. Diagnostics go to stderr; neither startup nor a supplied route is approval or proof of rendering. The native Stop guard also requires completeness. Explicit low-level minimal snapshots return 200 with `snapshot: minimal` and `ready: false`; they cannot establish flight readiness or a verdict.
 
 A candidate edit invalidates carried stages and checks until refreshed. A same-candidate change to check/CI observations also clears the verdict; only a newly recorded verdict can bind the new observations. Listener repair/restart preserves these rules. Completeness verifies structure and freshness, not whether the supplied narrative or results are true: publish only actual evidence.
 
@@ -92,7 +150,7 @@ A candidate edit invalidates carried stages and checks until refreshed. A same-c
 
 The server binds only `127.0.0.1`. Snapshot and asset reads require one valid loopback Host (`127.0.0.1`, `localhost`, or `[::1]`, with an optional valid port). An Origin, when present, must be a single loopback HTTP origin without a path. Foreign/malformed/duplicate authorities, foreign/null origins and absolute-form request targets are rejected. Forwarding may change the loopback port or Host; forwarded headers cannot authorize a foreign Host. No CORS grant is added. This closes the adopter journal's forged-Host read without publishing the raw journal. The policy follows HTTP's [Host authority](https://www.rfc-editor.org/rfc/rfc9110.html#section-7.2) and Fetch's [Origin header](https://fetch.spec.whatwg.org/#origin-header) boundaries.
 
-This is not authentication against local processes or other local users. Keep snapshots private, publish only curated short labels, and retain raw evidence elsewhere. Optional project-specific deny-pattern/content filters are a separate data-boundary policy, not a replacement for Host/Origin checks. No tunnel or public listener is configured automatically.
+This is not authentication against local processes or other local users. Keep snapshots private, publish only curated short labels, and retain raw evidence elsewhere. Optional project-specific deny-pattern/content filters are a separate data-boundary policy, not a replacement for Host/Origin checks. The worker never configures a public listener. The browser-machine connector explicitly starts a loopback SSH forward using existing SSH configuration.
 
 ### Rehearse on desktop
 
@@ -108,7 +166,7 @@ The [root instructions](../AGENTS.md) select FlightCheck for implementation in t
 python3 -B status-card/maintainer.py card --task example-change --title "Example change"
 ```
 
-At activation, add `--details /private/flight-details.json` using the schema above, with pending check observations for the current candidate. Run the command before an implementation reply and use its output as the reply's last paragraph. The command fingerprints the current checkout, publishes the private snapshot, and verifies the task endpoint. It gets the checkout label from Git. A named branch in the primary checkout shows **Branch** with its full name. A linked worktree shows **Worktree** with its directory name. A detached HEAD in the primary checkout hides the row. On resume the command reuses the recorded port and restores a stopped listener if that port is available. Pass `--summary` and `--details` to update the curated card content. Supply `--verdict` and `--verdict-candidate` together after a verdict for that candidate has been recorded.
+At activation, add `--details /private/flight-details.json` using the schema above, with pending check observations for the current candidate. Run the command before an implementation reply and use its output as the reply's last paragraph. The command fingerprints the current checkout, publishes the private snapshot, and verifies the task endpoint through the shared prepare guard. It detects common SSH/container markers; pass `--execution local` or `remote` when the environment is ambiguous. An SSH worker without a browser route returns a plain status label and a nonzero exit, rather than presenting its own loopback address as a working user link. It gets the checkout label from Git. A named branch in the primary checkout shows **Branch** with its full name. A linked worktree shows **Worktree** with its directory name. A detached HEAD in the primary checkout hides the row. On resume the command reuses the recorded port and restores a stopped listener if that port is available. Pass `--summary` and `--details` to update the curated card content. Supply `--verdict` and `--verdict-candidate` together after a verdict for that candidate has been recorded.
 
 The default state directory is `$XDG_STATE_HOME/flightcheck` or `~/.local/state/flightcheck`. If the session restricts that path, set `FLIGHTCHECK_STATE_DIR` to the same absolute, owner-only directory outside the checkout for Codex and its hooks. Use a host that permits IPv4 loopback binds. The listener runs in the background while the card is needed. The maintainer command replaces an older managed listener that omits current card metadata and reuses its port. Its startup log is in the private task directory.
 

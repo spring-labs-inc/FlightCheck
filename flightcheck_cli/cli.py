@@ -199,9 +199,13 @@ def output(value, json_output):
 
 def main(argv=None):
     os.umask(0o077)
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "card":
+        from .card import main as card_main
+        return card_main(argv[1:])
     parser = argparse.ArgumentParser(description="Run from your normal terminal to configure FlightCheck. No project changes occur when installing the application.")
     parser.add_argument("--version", action="version", version="flightcheck " + metadata.version("flightcheck"))
-    parser.add_argument("command", choices=("inspect", "init", "doctor", "recover"))
+    parser.add_argument("command", choices=("inspect", "init", "doctor", "recover", "card"))
     parser.add_argument("target", nargs="?", default=".")
     parser.add_argument("--agent", choices=("codex", "claude", "both"))
     parser.add_argument("--config", help="Reviewed project configuration JSON")
@@ -209,6 +213,8 @@ def main(argv=None):
     parser.add_argument("--apply", metavar="PLAN", help="Apply exactly this reviewed plan; never an implicit upgrade")
     parser.add_argument("--json", action="store_true", help="Structured output")
     args = parser.parse_args(argv)
+    if args.command == "card":
+        parser.error("Use flightcheck card [prepare|check|connect] followed by card options")
     try:
         if os.name != "posix" or sys.version_info < (3, 9):
             raise ValueError("Use Python 3.9+ on POSIX; native Windows is not supported")
