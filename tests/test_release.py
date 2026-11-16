@@ -1,0 +1,306 @@
+"""Black-box release candidates, policy failures and loopback registry controls."""
+from contextlib import contextmanager
+import copy
+import hashlib
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import json
+import os
+from pathlib import Path
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+import threading
+import unittest
+import zipfile
+
+import yaml
+
+ROOT = Path(os.environ.get('FLIGHTCHECK_PRODUCT_ROOT', Path(__file__).resolve().parents[1])).resolve()
+BASE = str(Path(sys._base_executable).resolve())
+
+
+class ReleaseTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.area = tempfile.TemporaryDirectory(prefix='flightcheck-release-tests-')
+        cls.addClassCleanup(cls.area.cleanup)
+        cls.scratch = Path(cls.area.name).resolve()
+        cls.source = cls.scratch / 'source'
+        cls.source.mkdir()
+        cls.env = dict(os.environ, PYTHONDONTWRITEBYTECODE='1', PIP_NO_INDEX='1',
+                       GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM='1', GIT_TERMINAL_PROMPT='0')
+        cls.env.pop('FLIGHTCHECK_BUILD_DEVELOPMENT', None)
+        cls.env.pop('PYTHONPATH', None)
+        names = subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z'], cwd=ROOT).decode().split('\0')
+        for name in set(names) - {''}:
+            path = ROOT / name
+            if path.is_file():
+                dest = cls.source / name
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(path, dest)
+                dest.chmod(stat.S_IMODE(path.stat().st_mode))
+        for args in (['init', '-q', '--template='], ['config', 'core.hooksPath', os.devnull], ['add', '--force', '.'],
+                     ['-c', 'user.name=Release test fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Synthetic release source fixture'],
+                     ['tag', 'v0.1.0a1']):
+            subprocess.run(['git', '-C', str(cls.source), *args], env=cls.env, check=True, capture_output=True)
+        cls.script = cls.source / 'release/release.py'
+        cls.artifacts = cls.scratch / 'release'
+        cls.command('prepare', '--output', cls.artifacts, '--tag', 'v0.1.0a1')
+        cls.record = json.loads((cls.artifacts / 'release.json').read_text())
+
+    @classmethod
+    def command(cls, *args, expected=0, script=None, env=None):
+        result = subprocess.run([sys.executable, '-B', str(script or cls.script), *map(str, args)],
+                                cwd=cls.scratch, env=env or cls.env, capture_output=True, text=True)
+        if result.returncode != expected:
+            raise AssertionError(result.stdout + result.stderr)
+        return json.loads(result.stdout)
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(dir=self.scratch)
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+
+    def artifacts_copy(self):
+        target = self.root / 'artifacts'
+        shutil.copytree(self.artifacts, target)
+        return target
+
+    def test_review_and_clean_release_provenance(self):
+        self.assertTrue(self.record['release_eligible'])
+        self.assertFalse(self.record['source']['development'])
+        self.assertEqual(self.record['source']['source_revision'], subprocess.check_output(['git', '-C', str(self.source), 'rev-parse', 'HEAD'], text=True).strip())
+        # Review mode is ineligible even on a clean source and cannot mint a release.
+        review = self.root / 'review'
+        self.command('prepare', '--output', review, '--review')
+        self.assertFalse(self.command('verify', '--artifacts', review)['release_eligible'])
+        self.command('verify', '--artifacts', review, '--require-release', expected=1)
+        self.command('prepare', '--output', self.root / 'wrong-tag', '--tag', 'v9.9.9', expected=1)
+        marker = self.source / 'uncommitted.txt'
+        marker.write_text('Owner work must not impersonate a release\n')
+        self.addCleanup(marker.unlink)
+        self.command('prepare', '--output', self.root / 'dirty', '--tag', 'v0.1.0a1', expected=1)
+        reviewed = self.command('prepare', '--output', self.root / 'dirty-review', '--review')
+        self.assertFalse(reviewed['release_eligible'])
+        self.assertTrue(reviewed['record']['source']['development'])
+        self.assertNotEqual(reviewed['record']['source']['source_revision'], self.record['source']['source_revision'])
+
+    def test_verify_rejects_tampering_and_incomplete_inventory(self):
+        folder = self.artifacts_copy()
+        self.command('verify', '--artifacts', folder, '--require-release')
+        wheel = next((folder / 'dist').glob('*.whl'))
+        original = wheel.read_bytes()
+        wheel.write_bytes(original + b'changed')
+        self.command('verify', '--artifacts', folder, expected=1)
+        wheel.write_bytes(original)
+        # A repaired outer digest cannot conceal altered executable/embedded assets.
+        with zipfile.ZipFile(wheel) as archive:
+            entries = [(item, archive.read(item.filename)) for item in archive.infolist()]
+        with zipfile.ZipFile(wheel, 'w') as archive:
+            for item, data in entries:
+                if item.filename == 'flightcheck_cli/cli.py':data += b'\n# unreviewed executable\n'
+                archive.writestr(item, data)
+        record = json.loads((folder / 'release.json').read_text())
+        record['files'][wheel.name] = {'sha256': hashlib.sha256(wheel.read_bytes()).hexdigest(), 'size': wheel.stat().st_size}
+        (folder / 'release.json').write_text(json.dumps(record))
+        error = self.command('verify', '--artifacts', folder, expected=1)
+        self.assertIn('CLI bytes', error['error'])
+        wheel.write_bytes(original)
+        (folder / 'release.json').write_bytes((self.artifacts / 'release.json').read_bytes())
+        (folder / 'dist/extra.whl').write_bytes(b'not approved')
+        self.command('verify', '--artifacts', folder, expected=1)
+        (folder / 'dist/extra.whl').unlink()
+        real = self.root / 'outside.whl'
+        wheel.rename(real)
+        wheel.symlink_to(real)
+        self.command('verify', '--artifacts', folder, expected=1)
+        self.assertEqual(real.read_bytes(), original)
+
+    def policy(self):
+        source = self.record['source']['source_revision']
+        return {'mode': 'publish', 'current_sha': source,
+                'run': {'id': 123, 'head_sha': source, 'event': 'workflow_dispatch', 'conclusion': 'success',
+                        'path': '.github/workflows/release.yml', 'workflow_id': 9,
+                        'repository': {'full_name': 'spring-labs-inc/FlightCheck'}},
+                'workflow': {'id': 9, 'path': '.github/workflows/release.yml', 'state': 'active'},
+                'artifact': {'id': 456, 'name': 'flightcheck-release', 'expired': False,
+                             'workflow_run': {'id': 123, 'head_sha': source}},
+                'environment': {'name': 'pypi', 'protection_rules': [{'type': 'required_reviewers', 'reviewers': [{'id': 7}]}]}}
+
+    def gate(self, context, expected=0, enabled=True, folder=None):
+        path = self.root / 'context.json'
+        path.write_text(json.dumps(context))
+        env = {**self.env, 'FLIGHTCHECK_PYPI_PUBLISH_ENABLED': 'true' if enabled else ''}
+        return self.command('gate', '--artifacts', folder or self.artifacts, '--context', path,
+                            '--manifest-sha256', hashlib.sha256((self.artifacts / 'release.json').read_bytes()).hexdigest(),
+                            '--source-sha', self.record['source']['source_revision'], '--reviewed-run-id', '123',
+                            '--reviewed-artifact-id', '456', expected=expected, env=env)
+
+    def test_publishing_policy_binds_reviewed_run_and_exact_artifacts(self):
+        context = self.policy()
+        self.assertEqual(self.gate(context)['artifact_id'], '456')
+        self.gate(context, expected=1, enabled=False)
+        variants = [('mode', 'prepare'), ('current_sha', '0' * 40), ('run.id', 999),
+                    ('run.path', '.github/workflows/other.yml'), ('run.head_sha', '0' * 40),
+                    ('run.event', 'push'), ('run.conclusion', 'failure'), ('run.workflow_id', 8),
+                    ('artifact.id', 457), ('artifact.expired', True), ('artifact.workflow_run.id', 999),
+                    ('environment.protection_rules', [])]
+        for key, value in variants:
+            with self.subTest(key=key):
+                changed = copy.deepcopy(context)
+                current = changed
+                path = key.split('.')
+                for part in path[:-1]:current = current[part]
+                current[path[-1]] = value
+                error = self.gate(changed, expected=1)
+                if key == 'run.id':self.assertIn('run identity', error['error'])
+        folder = self.artifacts_copy()
+        record = json.loads((folder / 'release.json').read_text())
+        record['license_sha256'] = '0' * 64
+        (folder / 'release.json').write_text(json.dumps(record))
+        self.gate(context, folder=folder, expected=1)
+
+    @contextmanager
+    def registry(self):
+        record = self.record
+        state = {'mode': 'valid', 'requests': []}
+        payloads = {name: (self.artifacts / 'dist' / name).read_bytes() for name in record['files']}
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                state['requests'].append(('GET', self.path))
+                if state['mode'] == 'missing':self.send_error(404);return
+                if self.path.endswith('/json'):
+                    entries = [{'filename': n, 'digests': {'sha256': r['sha256']}, 'size': r['size'], 'yanked': False,
+                                'url': 'http://127.0.0.1:' + str(self.server.server_port) + '/' + n} for n, r in record['files'].items()]
+                    if state['mode'] == 'metadata':entries[0]['digests']['sha256'] = '0' * 64
+                    if state['mode'] == 'yanked':entries[0]['yanked'] = True
+                    data = json.dumps({'info': {'name': record['distribution'], 'version': record['version']}, 'urls': entries}).encode()
+                else:
+                    data = payloads[self.path.lstrip('/')]
+                    if state['mode'] == 'bytes':data = bytes([data[0] ^ 1]) + data[1:]
+                self.send_response(200);self.end_headers();self.wfile.write(data)
+            def log_message(self, *args):pass
+        server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        worker = threading.Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        try:yield 'http://127.0.0.1:' + str(server.server_port), state
+        finally:server.shutdown();server.server_close();worker.join()
+
+    def test_registry_verification_and_draft_documentation(self):
+        with self.registry() as (url, state):
+            result = self.command('verify-index', '--artifacts', self.artifacts, '--test-index', url)
+            self.assertEqual(result['status'], 'simulated_registry_match')
+            self.assertTrue(result['simulated'])
+            self.assertIn('pending', result['public_installation'])
+            for mode in ('missing', 'metadata', 'yanked', 'bytes'):
+                state['mode'] = mode
+                error = self.command('verify-index', '--artifacts', self.artifacts, '--test-index', url, expected=1)
+                if mode == 'bytes':self.assertIn('downloaded bytes', error['error'])
+            self.assertTrue(all(method == 'GET' for method, _ in state['requests']))
+        self.command('verify-index', '--artifacts', self.artifacts, '--test-index', 'https://untrusted.invalid', expected=1)
+        before = (self.source / 'README.md').read_bytes()
+        proposal = self.command('docs', '--artifacts', self.artifacts)
+        self.assertEqual(proposal['status'], 'proposal_only')
+        self.assertIn('flightcheck==0.1.0a1', proposal['readme'])
+        for marker in ('## Get started', '## License and commercial use'):
+            if marker == '## Get started':self.assertEqual(proposal['readme'].split(marker)[0], before.decode().split(marker)[0])
+            else:self.assertEqual(proposal['readme'].split(marker)[1], before.decode().split(marker)[1])
+        self.assertEqual((self.source / 'README.md').read_bytes(), before)
+
+    def install(self, artifact, target):
+        subprocess.run([BASE, '-B', '-m', 'venv', str(target)], env=self.env, check=True, capture_output=True)
+        env = dict(self.env)
+        if artifact.name.endswith('.tar.gz'):
+            # Explicit offline PEP 517 no-isolation test: use the pinned maintainer
+            # build libraries, then remove this override for every runtime command.
+            import setuptools
+            env['PYTHONPATH'] = str(Path(setuptools.__file__).resolve().parents[1])
+        result = subprocess.run([str(target / 'bin/python'), '-B', '-m', 'pip', 'install', '--no-index', '--no-deps',
+                                 '--no-build-isolation', str(artifact)], env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_installed_candidate_preserves_project_and_survives_tool_removal(self):
+        for artifact in sorted((self.artifacts / 'dist').iterdir()):
+            with self.subTest(artifact=artifact.name):
+                area = self.root / ('sdist' if artifact.name.endswith('.tar.gz') else 'wheel')
+                area.mkdir(mode=0o700)
+                tool = area / 'tool'
+                self.install(artifact, tool)
+                env = {**self.env, 'FLIGHTCHECK_INSTALLER_STATE_DIR': str(area / 'private-state')}
+                project = area / 'project';project.mkdir()
+                subprocess.run(['git', '-C', str(project), 'init', '-q', '-b', 'main'], env=env, check=True)
+                owner = {'AGENTS.md': b'Owner instructions\n', 'CLAUDE.md': b'Independent Claude policy\n',
+                         'requirements.txt': b'# Existing app dependencies\n', '.claude/settings.json': b'{"hooks":{}}\n'}
+                for name, data in owner.items():
+                    path = project / name;path.parent.mkdir(parents=True, exist_ok=True);path.write_bytes(data)
+                (project / 'CLAUDE.md').chmod(0o600)
+                values = {'python': BASE, 'activation': 'opt-in', 'delivery': 'No provider writes', 'default_branch': 'main',
+                          'evidence_dir': str(area / 'evidence'), 'nit_tracker': 'Private notes', 'policy_reference': 'Synthetic owner policy',
+                          'checks': [{'name': 'Must not run in setup', 'command': [BASE, '-c', 'raise SystemExit(93)'], 'phase': 'cheap'}]}
+                config = area / 'choices.json';config.write_text(json.dumps(values));plan = area / 'plan.json'
+                result = subprocess.run([str(tool / 'bin/python'), '-B', '-c', "import flightcheck_cli;from importlib.metadata import version;assert version('flightcheck')=='0.1.0a1'"], env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                for args in (['--version'], ['init', str(project), '--agent', 'both', '--config', str(config), '--plan', str(plan)],
+                             ['init', str(project), '--apply', str(plan)], ['doctor', str(project)]):
+                    result = subprocess.run([str(tool / 'bin/flightcheck'), *args], env=env, capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                for name, data in owner.items():
+                    actual = (project / name).read_bytes()
+                    self.assertTrue(actual.startswith(data) if name.endswith('.md') else actual == data, name)
+                self.assertEqual(stat.S_IMODE((project / 'CLAUDE.md').stat().st_mode), 0o600)
+                self.assertTrue((project / '.claude/skills/develop-change/SKILL.md').is_file())
+                self.assertTrue((project / '.agents/skills/develop-change/SKILL.md').is_file())
+                shutil.rmtree(tool)
+                result = subprocess.run([BASE, '-B', str(project / '.flightcheck/install.py'), 'verify', '--target', str(project)], env=env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(json.loads(result.stdout)['status'], 'ready_for_client_probe')
+
+    def test_workflow_and_readme_publication_hold(self):
+        workflow = yaml.load((ROOT / '.github/workflows/release.yml').read_text(), Loader=yaml.BaseLoader)
+        self.assertEqual(set(workflow['on']), {'workflow_dispatch'})
+        self.assertEqual(workflow['on']['workflow_dispatch']['inputs']['mode']['default'], 'prepare')
+        self.assertEqual(workflow['permissions'], {'contents': 'read'})
+        jobs = workflow['jobs']
+        self.assertEqual(jobs['prepare']['if'], "${{ inputs.mode == 'prepare' }}")
+        for name, job in jobs.items():
+            if name != 'publish':self.assertNotIn('id-token', job.get('permissions', {}))
+            for step in job['steps']:
+                if 'uses' in step:self.assertRegex(step['uses'], r'^[\w/-]+@[a-f0-9]{40}$')
+        publish = jobs['publish']
+        self.assertIn("inputs.mode == 'publish'", publish['if'])
+        self.assertIn("vars.FLIGHTCHECK_PYPI_PUBLISH_ENABLED == 'true'", publish['if'])
+        self.assertIn("needs.verify-publication.result == 'success'", publish['if'])
+        self.assertEqual(publish['environment']['name'], 'pypi')
+        output_step = jobs['verify-publication']['steps'][-1]['run']
+        output_code = output_step.split("python - <<'OUTPUT'\n", 1)[1].split('\nOUTPUT', 1)[0]
+        (self.root / 'policy.json').write_text(json.dumps({'artifact_id': '456'}))
+        output_path = self.root / 'github-output'
+        result = subprocess.run([sys.executable, '-B', '-c', output_code],
+                                env={**self.env, 'RUNNER_TEMP': str(self.root), 'GITHUB_OUTPUT': str(output_path)},
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(output_path.read_text(), 'artifact_id=456\n')
+        self.assertEqual(publish['permissions']['id-token'], 'write')
+        self.assertFalse(any('checkout' in step.get('uses', '') for step in publish['steps']))
+        self.assertFalse(any('build ' in step.get('run', '') or 'release.py' in step.get('run', '') for step in publish['steps']))
+        download = publish['steps'][0]
+        self.assertEqual(download['with']['artifact-ids'], '${{ needs.verify-publication.outputs.artifact_id }}')
+        self.assertIn("hashlib.sha256(raw).hexdigest()==os.environ['MANIFEST_SHA']", publish['steps'][1]['run'])
+        self.assertIn('pypa/gh-action-pypi-publish@', publish['steps'][-1]['uses'])
+        readme = (ROOT / 'README.md').read_text()
+        self.assertIn('pipx install "git+https://github.com/spring-labs-inc/FlightCheck.git"', readme)
+        self.assertNotIn('pipx install flightcheck==', readme)
+        rows = [line.split(']')[0].split('[')[-1] for line in readme.splitlines() if line.startswith('| [')]
+        self.assertEqual(rows, ['Workflow', 'Status Card', 'Evidence handoff', 'Benchmarks', 'Setup', 'Contributing'])
+        guide = (ROOT / 'release/README.md').read_text()
+        for phrase in ('Preparation only', 'required human reviewers', 'same bytes', 'actual PyPI', 'simulated_registry_match', '#14'):
+            self.assertIn(phrase, guide)
+        shared = (ROOT / 'setup/README.md').read_text()
+        self.assertIn('pipx uninstall flightcheck-cli', shared)
+        self.assertIn('not yet a verified public release', shared)
+
+
+if __name__ == '__main__':
+    unittest.main()

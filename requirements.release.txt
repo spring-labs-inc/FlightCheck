@@ -1,0 +1,2 @@
+-r requirements.dev.txt
+pipx==1.18.16

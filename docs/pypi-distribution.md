@@ -1,6 +1,8 @@
-# PyPI distribution feasibility — issue #58
+# PyPI distribution planning and history — issues #58, #66, #67
 
-Decision: **go for a packaging channel built on the shared installer; no-go for
+Current preparation: see the [#67 release guide](../release/README.md) and guarded manual workflow. The owner selected proposed distribution `flightcheck` / `0.1.0a1`; public ownership, publication and public-index qualification remain pending. The earlier `flightcheck-cli` label below is historical. No upload is authorized in this preparation.
+
+Original feasibility decision: **go for a packaging channel built on the shared installer; no-go for
 publication now.** A wheel can carry FlightCheck's command, Python runtime
 scripts, Markdown, agent definitions, schemas and browser resources. Installing
 that wheel must only install the tool. Project configuration requires a separate,

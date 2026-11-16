@@ -4,7 +4,7 @@ build-backend = "build_backend"
 backend-path = ["."]
 
 [project]
-name = "flightcheck-cli"
+name = "flightcheck"
 version = "0.1.0a1"
 description = "Terminal-first project setup for the FlightCheck development workflow"
 readme = "README.md"
