@@ -32,6 +32,9 @@ class MaintainerCardTests(unittest.TestCase):
         self.state = root / "state"
         self.session = "test-maintainer-session"
         self.env = dict(os.environ, FLIGHTCHECK_STATE_DIR=str(self.state), CODEX_THREAD_ID=self.session)
+        # The synthetic browser, hook, and checkout all run on this host.
+        for marker in ("SSH_CONNECTION", "SSH_CLIENT", "SSH_TTY", "CODESPACES", "REMOTE_CONTAINERS"):
+            self.env.pop(marker, None)
         self.run_git("init", "-q")
         self.run_git("add", ".")
         self.run_git("commit", "-qm", "Synthetic starting point")
