@@ -376,7 +376,7 @@ Capture native final messages with `capture_review.py --input ORIGINAL_FINAL_MES
 
 ### Observed host limitation
 
-The implementation trial reached native discovery and read-only role probes, but the strict controller shell could not start inside the enclosing automation sandbox: `sandbox-exec: sandbox_apply: Operation not permitted` (exit 71), including for `pwd`. No unsandboxed retry was used. Run the remaining selected-flight trial in a fresh local Claude TUI on a host where the configured command sandbox can start; keep its required boundary and record any equivalent enforced isolation. The existing Python/HTTP and read-only probes do not clear this blocker. See the [partial report](https://github.com/spring-labs-inc/FlightCheck/blob/main/docs/claude-trial-report.md).
+The historical first implementation attempt reached native discovery and read-only role probes, but its strict controller shell could not start inside the enclosing automation sandbox: `sandbox-exec: sandbox_apply: Operation not permitted` (exit 71), including for `pwd`. No unsandboxed retry was used. A later, distinct bounded local TUI trial completed; see the report for its recorded source, runtime and limits. Reproduce the still-pending interface, restart/retained-request and supported-route observations on the relevant runtimes, preserving each required boundary. The historical failure remains a limit of that first host/context: later Python/HTTP checks, sign-in and read-only probes do not prove that its controller sandbox is repaired. See the [partial report](https://github.com/spring-labs-inc/FlightCheck/blob/main/docs/claude-trial-report.md).
 
 ### Report and contribute
 
