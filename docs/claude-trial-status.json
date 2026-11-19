@@ -1,43 +1,69 @@
 {
   "schema": 1,
   "qualification": "partial",
-  "claude_version": "2.1.311",
+  "claude_version": "2.1.274",
   "observations": [
-    "Claude Code 2.1.311 authenticated with claude.ai; native requests reported claude-sonnet-4-6.",
-    "Contributor and installed-adopter discovery probes found develop-change and both reviewer roles.",
-    "Interactive contributor /context displayed CLAUDE.md and AGENTS.md; /hooks displayed disabled.",
-    "Separate native CODE/EVIDENCE boundary probes read synthetic evidence and received actual secret-canary denials with Read/Grep/Glob only.",
-    "The strict controller Bash probe failed even pwd: sandbox-exec: sandbox_apply: Operation not permitted (exit 71). No unsandboxed retry was used."
+    "A supervisor-recorded fresh local Claude Code TUI trial on source cbc7e45d83458cf38a193c3edcd576c7db91df4a passed14 native tests and24 cases; original and four mutation controls remain retained.",
+    "Formal local TUI reviewer request bodies were audited with Read/Grep/Glob only; no genuine functional reviewer request arose in that trial.",
+    "Owner-reported Desktop Local app5.11492.5/runtime2.1.325 passed its bounded flight and card recovery; raw reviewer transcripts were excluded from the transported archive.",
+    "Current local Claude2.1.311 sign-in, tool-free request and enforced read-only probe pass; actual request inventories require advisor disabled and ENABLE_TOOL_SEARCH=false for exactly Read/Grep/Glob.",
+    "The current source path correction passed all150 contributor identities under default macOS temporary paths.",
+    "New Desktop computer-use selection timed out before UI state. Codex native lifecycle, Desktop restart/durability and supported-route acceptance remain pending."
   ],
   "accepted_report": null,
   "native_requirements": {
     "discovery": {
       "state": "verified",
-      "evidence": "claude-trial-report.md#observed-native-probes"
+      "evidence": "claude-trial-report.md#interface-observations"
     },
     "tui_status": {
-      "state": "pending",
-      "evidence": null
+      "state": "verified",
+      "evidence": "claude-trial-report.md#completed-local-tui-trial"
     },
     "review_boundary": {
       "state": "verified",
-      "evidence": "claude-trial-report.md#observed-native-probes"
+      "evidence": "claude-trial-report.md#completed-local-tui-trial"
     },
     "real_flight": {
-      "state": "blocked",
-      "evidence": "claude-trial-report.md#remaining-qualification"
+      "state": "verified",
+      "evidence": "claude-trial-report.md#completed-local-tui-trial"
     },
     "repair_resume": {
-      "state": "blocked",
-      "evidence": "claude-trial-report.md#remaining-qualification"
+      "state": "pending",
+      "evidence": "claude-trial-report.md#remaining-acceptance"
     },
     "failure_controls": {
-      "state": "pending",
-      "evidence": null
+      "state": "verified",
+      "evidence": "claude-trial-report.md#completed-local-tui-trial"
     },
     "accepted_report": {
       "state": "pending",
       "evidence": null
     }
+  },
+  "interfaces": {
+    "codex_desktop": {
+      "state": "pending",
+      "evidence": "claude-trial-report.md#interface-observations"
+    },
+    "codex_tui": {
+      "state": "pending",
+      "evidence": "claude-trial-report.md#interface-observations"
+    },
+    "claude_desktop": {
+      "state": "pending",
+      "evidence": "claude-trial-report.md#desktop-evidence-and-independent-reproduction"
+    },
+    "claude_code_tui": {
+      "state": "verified",
+      "version": "2.1.274",
+      "source_commit": "cbc7e45d83458cf38a193c3edcd576c7db91df4a",
+      "evidence": "claude-trial-report.md#completed-local-tui-trial"
+    }
+  },
+  "additional_runtime_probe": {
+    "version": "2.1.311",
+    "scope": "Read-only tool boundary and normal authentication only; not a complete new selected flight",
+    "evidence": "claude-trial-report.md#current-local-cli-boundary-and-source-checks"
   }
 }
