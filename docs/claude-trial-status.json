@@ -59,7 +59,7 @@
       "version": "6.6395.1",
       "runtime_version": "2.1.326",
       "evidence": "claude-trial-report.md#desktop-restart-and-durability",
-      "scope": "Recorded Local flight plus observed restart/render/resume; historical raw reviewer transcripts excluded, accepted programmatic-hook caveat retained."
+      "scope": "Owner-reported Local flight: app5.11492.5/runtime2.1.325. The app6.6395.1/runtime2.1.326 metadata above identifies only the later observed restart/render/resume. Historical raw reviewer transcripts are excluded; the accepted programmatic-hook caveat remains."
     },
     "claude_code_tui": {
       "state": "verified",
