@@ -381,7 +381,8 @@ def verify_index(folder, test_index=None, expected_manifest_sha256=None):
     record = verify(folder, True, manifest_sha256)
     if test_index:
         parsed = urlsplit(test_index)
-        if parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or parsed.username or parsed.password:
+        if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1"
+                or parsed.username is not None or parsed.password is not None or "#" in test_index):
             raise ValueError("Test registries must be explicit HTTP IPv4 loopback fixtures")
         base = test_index.rstrip("/")
     else:

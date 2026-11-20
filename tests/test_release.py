@@ -306,6 +306,23 @@ class ReleaseTests(unittest.TestCase):
                             module.verify_index(self.artifacts)
                         self.assertEqual(requested, [metadata_url])
 
+    def test_registry_test_index_rejects_component_presence(self):
+        module = self.release_module()
+        with self.registry() as (url, _):
+            result = module.verify_index(self.artifacts, url)
+            self.assertEqual(result['status'], 'simulated_registry_match')
+            for base in (url.replace('http://', 'http://@'),
+                         url.replace('http://', 'http://:@'), url + '#', url + '#fragment'):
+                with self.subTest(base=base):
+                    requested = []
+                    def forbidden_read(target, expected_size=None):
+                        requested.append(target)
+                        raise AssertionError('Reader reached before test-index validation')
+                    with mock.patch.object(module, 'read_url', side_effect=forbidden_read):
+                        with self.assertRaisesRegex(ValueError, 'Test registries'):
+                            module.verify_index(self.artifacts, base)
+                    self.assertEqual(requested, [])
+
     def test_registry_snapshot_binding(self):
         folder = self.artifacts_copy()
         manifest = folder / 'release.json'
