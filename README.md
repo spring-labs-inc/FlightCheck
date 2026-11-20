@@ -26,10 +26,10 @@
 
 FlightCheck is a lightweight set of repository instructions that guides AI-assisted changes from request to landing.
 
-- **Follow a consistent workflow.** Each flight moves through planning, implementation, cheap checks, and UI approval when needed, followed by broader testing and skeptical review.
-- **Carry evidence into every review.** Fingerprinted check results and original output pass between stages, helping reviewers catch defects and identify stale or incomplete evidence before approving a change.
-- **Make delivery decisions explicit.** The final verdict determines whether the change lands under the project’s delivery rules, returns for repair, or needs a user decision.
 - **See where the work stands.** A live status card shows the current stage, check results, verdict, and linked issues.
+- **Follow a consistent workflow.** Each flight moves through planning, implementation, cheap checks, and UI approval when needed, followed by broader testing and skeptical review.
+- **Make delivery decisions explicit.** The final verdict determines whether the change lands under the project’s delivery rules, returns for repair, or needs a user decision.
+- **Carry evidence into every review.** Fingerprinted check results and original output pass between stages, helping reviewers catch defects and identify stale or incomplete evidence before approving a change.
 
 <br clear="right">
 
@@ -54,17 +54,6 @@ FlightCheck is a lightweight set of repository instructions that guides AI-assis
 
 Handoffs carry check receipts and original output between stages. Fingerprints tie each result to the code, command, coverage, and environment that produced it. Before review or reuse, FlightCheck verifies those records and identifies missing, changed, or failed evidence. Repairs renew the affected checks and reviews while preserving earlier results for inspection.
 
-## Guides
-
-| Guide | Use |
-| --- | --- |
-| [Workflow](examples/existing-project/docs/development-workflow.md) | Follow the stages, delivery rules, and [skills and reviewers](docs/skills-and-reviewers.md). |
-| [Status Card](docs/status-card.md) | Publish and view task progress and the current verdict. |
-| [Evidence handoff](examples/existing-project/docs/development-workflow.md#carry-checks-across-the-handoff) | Record original output, verify receipts, and carry evidence into review. |
-| [Benchmarks](docs/benchmark.md) | Read results and reproduce the pinned trials. |
-| [Setup](setup/README.md) | Configure Codex CLI, Codex Desktop, Claude Desktop, or Claude Code and verify the installation. |
-| [Contributing](CONTRIBUTING.md) | Read the contribution policy and run FlightCheck's own tests. |
-
 ## Get started
 
 **Supported environments:** Claude Desktop, Claude Code TUI, Codex Desktop, and Codex CLI/TUI. FlightCheck has been verified in all four environments.
@@ -83,6 +72,17 @@ Use `--agent codex` for Codex or `--agent both` for both clients. Setup confirms
 After verification, start a fresh session in your coding tool and select a small first flight with `/develop-change` (Claude) or `$develop-change` (Codex). TUI users can open the printed status-card URL in their regular browser.
 
 The [setup guide](setup/README.md) covers configuration, saved plans, recovery, and current client qualification limits. PyPI installation will replace this Git channel after a release is published and verified.
+
+## Guides
+
+| Guide | Use |
+| --- | --- |
+| [Status Card](docs/status-card.md) | Publish and view task progress and the current verdict. |
+| [Workflow](examples/existing-project/docs/development-workflow.md) | Follow the stages, delivery rules, and [skills and reviewers](docs/skills-and-reviewers.md). |
+| [Verdict](examples/existing-project/docs/development-workflow.md#landing) | Understand verdicts and the rules for landing a change or returning for repair. |
+| [Setup](setup/README.md) | Configure Codex CLI, Codex Desktop, Claude Desktop, or Claude Code and verify the installation. |
+| [Benchmarks](docs/benchmark.md) | Read results and reproduce the pinned trials. |
+| [Contributing](CONTRIBUTING.md) | Read the contribution policy and run FlightCheck's own tests. |
 
 ## License and commercial use
 
