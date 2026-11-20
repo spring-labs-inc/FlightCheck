@@ -1,6 +1,6 @@
 # FlightCheck qualification report
 
-Status: **partial; bounded observations exist for all four interfaces, while all-reply compliance and integrated acceptance remain open**. The [status record](claude-trial-status.json) distinguishes completed observations from remaining work. Follow the [reproduction procedure](../setup/README.md#claude-code-qualification-procedure). A source test pass, installed adapter, or HTTP response does not establish a native UI observation.
+Status: **verified within the recorded native-app scope, including the explicitly accepted manual-guard limitation below**. The [status record](claude-trial-status.json) records that scope separately from the observations. Follow the [reproduction procedure](../setup/README.md#claude-code-qualification-procedure). A source test pass, installed adapter, or HTTP response does not establish a native UI observation.
 
 ## Scope and provenance
 
@@ -12,11 +12,21 @@ The later Desktop lifecycle export has 63 transport-verified files. Its final sm
 
 The earlier preparatory source snapshot and execution-blocked report remain historical evidence. Their controller sandbox failure is not silently changed into a pass. The newer successful local TUI trial is a distinct observation on source `cbc7e45d83458cf38a193c3edcd576c7db91df4a`.
 
+## Accepted native-app scope
+
+On 2026-11-20 the owner explicitly selected option 1: keep the native Codex Desktop/TUI and Claude Desktop/Code interfaces and accept their manual-guard limitation. The original decision and its presented alternatives are retained privately with the qualification evidence.
+
+The controller must still prepare the card and check the exact draft before each selected-flight reply, including progress, approval pauses, blockers, repair/resume and final handoff. Ordinary chat and raw reviewer JSON remain outside this procedure. The native apps can emit intermediate or interrupted messages without calling the guard. Qualification therefore makes no claim of automatic interception, prevention of every unchecked message, or a universally compliant transcript. Both observed bypasses below remain failures; subsequent correction does not turn them into successful pre-delivery checks.
+
+If a controller skips the procedure, retain the failure and correct the next reply using current preparation, the exact-draft check and the same task footer. Follow the existing unavailable-state and recovery procedure if publication or routing fails. The owner disposition covers this native delivery limitation only. It does not waive evidence, current-candidate binding, reviewer isolation, hook restrictions, correct verdicts or delivery authorization. No new renderer, hooks or client permissions are installed.
+
+This disposition resolves the remaining native-message acceptance in [#85](https://github.com/spring-labs-inc/FlightCheck/issues/85), [#54](https://github.com/spring-labs-inc/FlightCheck/issues/54) and [#14](https://github.com/spring-labs-inc/FlightCheck/issues/14) within this scope. The closure contribution requires an exact final **APPROVE** before delivery. Historical disposable-trial APPROVE_WITH_NITS results are preserved as historical results, not relabeled as approvals for this contribution. Other client versions, cloud sessions and package-distribution combinations remain unqualified unless separately observed.
+
 ## Interface observations
 
 | Interface | Retained observation | Remaining limit |
 | --- | --- | --- |
-| Codex desktop | Actual native start, approval pause, resume, final handoff and a corrected update match their checked text and retain one task footer. A separate observer browser rendered the advertised SSH-forwarded card; the owner confirmed it. | Two additional progress/prefatory messages omitted the check and footer. Explicit guard success does not establish universal controller compliance or automatic interception. See [native card observations](#native-card-observations-and-controller-limit). |
+| Codex desktop | Actual native start, approval pause, resume, final handoff and a corrected update match their checked text and retain one task footer. A separate observer browser rendered the advertised SSH-forwarded card; the owner confirmed it. | Two additional progress/prefatory messages omitted the check and footer. The owner accepted this manual-guard limitation; universal compliance and automatic interception are outside the accepted scope. See [native card observations](#native-card-observations-and-controller-limit). |
 | Codex TUI | An actual interactive Codex 0.167.0 session and a separate native resume emitted checked activation/resume replies with the same task link. The same card subsequently rendered through the owner-browser route. Retained discovery/ordinary-routing and separately enforced reviewer records supplement this observation. | Bounded card observation using the current source helper against an existing disposable fixture; no new complete feature flight or embedded terminal browser is claimed. |
 | Claude Desktop Code | Owner-reported Local session: app 5.11492.5, effective Code runtime 2.1.325, Strict sandbox. Instructions, skill discovery, both reviewer roles, ordinary-question routing, embedded card rendering, listener-loss refusal and same-port recovery were observed. A real quit/relaunch smoke test on app 6.6395.1/runtime 2.1.326 retained candidate, evidence, listener and route; prepare/resume checks passed and the pane rendered again. | The Browser pane needed reopening. Fresh reviewer discovery after restart was not exercised; existing transcripts establish prior registration. Raw historical reviewer transcripts remain excluded. The owner-accepted programmatic-host-hook caveat remains explicit. A separate prepared-project computer-use timeout remains an unperformed observation, not a failed native flight. |
 | Claude Code TUI | A fresh local trial with Claude Code 2.1.274 completed setup, interactive selection, 14 native tests, 24 acceptance/challenge cases, separate Plan/CODE/EVIDENCE and a validated APPROVE_WITH_NITS verdict. Browser rendering and recovery were observed separately from HTTP. | This qualifies the bounded recorded runtime and fixture, not every host, future version, Desktop session or packaged artifact. No genuine functional reviewer request arose in that trial. |
@@ -35,7 +45,7 @@ Evidence-copy controls refused missing or inaccessible receipts, a failed requir
 
 Private evidence root identifier: `claude-code-local-20261118`. The supervisor's sealed archive has 1,032 verified manifest entries and SHA-256 `968e812503ab565eba03485524d4ae734f7a142f928ae4a42e6449b747bb41d6`. Original streams and raw request bodies remain owner-only.
 
-The independent audit reconstructed all substantive native reviewer requests for seven formal attempts. Their effective tools were Read/Grep/Glob, with no advisor, deferred/server tools or tool additions; native diagnostics recorded zero hooks. This supports the recorded trial boundary, not every future runtime. The production helper/workflow code is unchanged between that trial's source base and this report follow-up; intervening changes are documentation and tests.
+The independent audit reconstructed all substantive native reviewer requests for seven formal attempts. Their effective tools were Read/Grep/Glob, with no advisor, deferred/server tools or tool additions; native diagnostics recorded zero hooks. This supports the recorded trial boundary, not every future runtime. The executable helper and handoff code is unchanged between that trial's source base and this report follow-up; intervening changes are documentation and tests.
 
 ### Keyword-only compatibility and mutation citation
 
@@ -73,7 +83,7 @@ A Codex Desktop observer then used the same worker task through a documented loo
 
 The actual Desktop start, approval pause, resume and final messages match their recorded guard-checked drafts. However, a later progress message lacked its check/footer. The guard rejects that exact text and accepts the same body with the footer. A subsequent native corrected delivery matches the passing draft, but its turn also emitted another unguarded preface. Both failures remain retained. The corrected message does not retroactively repair them.
 
-This is an observed controller-compliance gap. The explicit helper validates text when called; these results do not demonstrate automatic interception of every message. Universal all-reply acceptance remains pending. Further retry-until-success observations would not resolve that enforcement question. Private evidence identifiers are `codex-card-smoke-20261120`, `desktop-route-observation` and `intermediate-guard-recovery`; original native messages, exact checks, screenshots and manifests are retained.
+This is an observed controller-compliance gap. The explicit helper validates text when called; these results do not demonstrate automatic interception of every message. The owner accepted the narrower native-app scope on 2026-11-20, as recorded above. The gap is dispositioned by that decision, not repaired by an interception mechanism or a later successful reply. Further retry-until-success observations would not resolve the enforcement question. Private evidence identifiers are `codex-card-smoke-20261120`, `desktop-route-observation` and `intermediate-guard-recovery`; original native messages, exact checks, screenshots and manifests are retained.
 
 ## Genuine reviewer request, repair and restart
 
@@ -91,10 +101,8 @@ The old controller Bash `pwd` failure (`sandbox-exec: sandbox_apply: Operation n
 
 The separate source follow-up [#78](https://github.com/spring-labs-inc/FlightCheck/pull/78), commit `3567365e5da1b13c80564ced39817e2df2d64980`, corrects the default temporary-path assertion from [#76](https://github.com/spring-labs-inc/FlightCheck/issues/76). It passed all 150 original contributor identities on Python 3.14.7 under default macOS temporary paths, with zero skips or exclusions. Its original default-path failure, canonical-path compatibility, wrong-target and missing-file controls, skip-only sensitivity and independent source APPROVE are retained separately. This source verdict does not approve the toy implementation or all-interface support.
 
-## Remaining acceptance
+## Qualification acceptance and delivery
 
-- Resolve or explicitly disposition the observed universal all-reply compliance gap. Planned phase messages, native TUI activation/resume, Desktop restart and the forwarded browser render are recorded; another broad interface trial is unnecessary.
-- Independently review and accept the integrated support claims and durable originals, including the transport bookkeeping discrepancy and absent raw Desktop reviewer transcripts. Keep programmatic hook unknowns and unavailable client capabilities explicit.
-- Complete source/report delivery under their current grants and acceptance. The earlier source landing grant was for #75; follow-up source/report PRs remain separate reviewable deliveries.
+The retained native trials, structural controls, genuine request/repair evidence, Desktop restart and separate local/forwarded browser observations support the recorded four-interface scope. The owner explicitly dispositioned the remaining native all-reply limitation. The transport bookkeeping discrepancy, absent historical Desktop transcripts, programmatic hook unknowns and unavailable client capabilities remain explicit limits; no new successful observation is inferred for them.
 
-[#14](https://github.com/spring-labs-inc/FlightCheck/issues/14) and [#54](https://github.com/spring-labs-inc/FlightCheck/issues/54) remain open. The report update can be accurate while qualification stays partial and `accepted_report` stays null. PyPI, hosted/cloud sessions and other package-distribution combinations are separate work and are not newly qualified here.
+Source follow-ups [#78](https://github.com/spring-labs-inc/FlightCheck/pull/78) and [#79](https://github.com/spring-labs-inc/FlightCheck/pull/79) are merged. Their reviewed trees and original verdicts remain retained. The owner authorized the closing contribution for #85/#14/#54 under option 1, with an exact final APPROVE and verified delivery required. Qualification acceptance is scoped by the decision above; it does not authorize provider writes from the disposable fixtures or weaken a future project's delivery grant. Another broad native trial is unnecessary for this disposition. PyPI and other distribution work remain separate.
