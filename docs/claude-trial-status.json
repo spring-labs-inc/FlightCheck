@@ -3,12 +3,13 @@
   "qualification": "partial",
   "claude_version": "2.1.274",
   "observations": [
-    "A supervisor-recorded fresh local Claude Code TUI trial on source cbc7e45d83458cf38a193c3edcd576c7db91df4a passed14 native tests and24 cases; original and four mutation controls remain retained.",
-    "Formal local TUI reviewer request bodies were audited with Read/Grep/Glob only; no genuine functional reviewer request arose in that trial.",
-    "Owner-reported Desktop Local app5.11492.5/runtime2.1.325 passed its bounded flight and card recovery; raw reviewer transcripts were excluded from the transported archive.",
-    "Current local Claude2.1.311 reports authenticated state; tool-free and bounded read-only probes passed. Fresh probe invocation settings record advisor disabled and ENABLE_TOOL_SEARCH=false, with observed Read/Grep/Glob request inventories; necessity of both settings is not established.",
-    "The current source path correction passed all150 contributor identities under default macOS temporary paths.",
-    "New Desktop computer-use selection timed out before UI state. Codex native lifecycle, Desktop restart/durability and supported-route acceptance remain pending."
+    "A transported and independently audited local Claude Code2.1.274 trial on source cbc7e45d83458cf38a193c3edcd576c7db91df4a passed14 native tests and24 cases; original and four mutation controls remain retained.",
+    "Actual substantive requests for all seven formal local TUI reviewer attempts were audited with Read/Grep/Glob only, no advisor or tool additions and native zero-hook diagnostics.",
+    "The Desktop Local flight and recovery observations remain attributed to the owner. A transported actual quit/relaunch on app6.6395.1/runtime2.1.326 preserved candidate,312 evidence hashes, listener and route; prepare/resume and renewed embedded rendering passed. Raw historical reviewer transcripts remain excluded.",
+    "An independent audit reconciled genuine historical reviewer obligations across restart, identical-spec functional repair and refusal when the requested receipt was hidden. Those older sessions exposed an unused advisor and do not qualify strict reviewer isolation.",
+    "Actual interactive Codex0.167.0 activation/resume and four native Desktop phase replies retained the stable footer. Worker/forwarded HTTP and owner-confirmed in-app browser rendering are recorded separately.",
+    "One extra Desktop progress message and a later prefatory message skipped the explicit guard/footer. The guard rejects the original and accepts corrected text, and corrected native delivery matches. Universal all-reply compliance remains unresolved; no automatic interception is established.",
+    "Local Claude2.1.311 bounded authenticated/read-only probes and all150 contributor identities passed. Probe invocation settings record advisor disabled and ENABLE_TOOL_SEARCH=false; necessity of both settings is not established."
   ],
   "accepted_report": null,
   "native_requirements": {
@@ -29,8 +30,8 @@
       "evidence": "claude-trial-report.md#completed-local-tui-trial"
     },
     "repair_resume": {
-      "state": "pending",
-      "evidence": "claude-trial-report.md#remaining-acceptance"
+      "state": "verified",
+      "evidence": "claude-trial-report.md#genuine-reviewer-request-repair-and-restart"
     },
     "failure_controls": {
       "state": "verified",
@@ -44,15 +45,21 @@
   "interfaces": {
     "codex_desktop": {
       "state": "pending",
-      "evidence": "claude-trial-report.md#interface-observations"
+      "evidence": "claude-trial-report.md#native-card-observations-and-controller-limit",
+      "limit": "Planned phase replies passed; two other messages skipped the explicit guard/footer. Universal reply compliance is unresolved."
     },
     "codex_tui": {
-      "state": "pending",
-      "evidence": "claude-trial-report.md#interface-observations"
+      "state": "verified",
+      "version": "0.167.0",
+      "evidence": "claude-trial-report.md#native-card-observations-and-controller-limit",
+      "scope": "Bounded interactive activation/resume and browser route using an existing fixture with the current source helper; not a new complete feature flight."
     },
     "claude_desktop": {
-      "state": "pending",
-      "evidence": "claude-trial-report.md#desktop-evidence-and-independent-reproduction"
+      "state": "verified",
+      "version": "6.6395.1",
+      "runtime_version": "2.1.326",
+      "evidence": "claude-trial-report.md#desktop-restart-and-durability",
+      "scope": "Recorded Local flight plus observed restart/render/resume; historical raw reviewer transcripts excluded, accepted programmatic-hook caveat retained."
     },
     "claude_code_tui": {
       "state": "verified",
