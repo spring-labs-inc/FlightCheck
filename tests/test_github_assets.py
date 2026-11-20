@@ -59,8 +59,12 @@ class GitHubAssetsTests(unittest.TestCase):
         if "manifest_sha256" in inspect.signature(assets.payload).parameters:
             args += ["--manifest-sha256", approval or self.approval(folder)]
         captured = io.StringIO()
-        with patch.object(sys, "argv", args), redirect_stdout(captured):
-            status = assets.main()
+        previous_umask = os.umask(0o077)
+        try:
+            with patch.object(sys, "argv", args), redirect_stdout(captured):
+                status = assets.main()
+        finally:
+            os.umask(previous_umask)
         return status, json.loads(captured.getvalue())
 
     def test_prepare_exact_bundle_and_no_overwrite(self):
@@ -537,6 +541,16 @@ class GitHubAssetsTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertEqual(result["release_id"], 71)
         self.assertEqual(sorted(row["id"] for row in result["assets"].values()), [1, 2, 3, 4])
+
+    def test_cli_probe_preserves_controller_umask(self):
+        previous_umask = os.umask(0o022)
+        try:
+            responses, _, _, _ = self.public_fixture()
+            self.assertEqual(self.verify_cli_fixture(responses)[0], 0)
+            observed = os.umask(0o022)
+            self.assertEqual(observed, 0o022)
+        finally:
+            os.umask(previous_umask)
 
 
 if __name__ == "__main__":
