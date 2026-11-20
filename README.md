@@ -35,13 +35,15 @@ FlightCheck is a lightweight set of repository instructions that guides AI-assis
 
 ## The workflow
 
-1. Select a bounded task, agree on acceptance criteria, and define reproducible checks in a dedicated checkout.
-2. Implement the change and run the cheap tests. Deterministic testing is always scripted.
-3. For UI changes, obtain user approval using interactive HTML before broader testing.
-4. **Early CODE review:** run an independent skeptical review when the change’s risk or uncertainty warrants it, helping catch defects before broader testing.
-5. **Authoritative testing:** run the remaining required project checks, including applicable regression and integration tests.
-6. **Final code and evidence review:** independently review the current change, acceptance criteria, and verified evidence. Every flight receives this review.
-7. Use the verdict to determine whether to land the change, return for repair, or request a user decision.
+- **01 PLAN:** select a bounded task, agree on acceptance criteria, and define reproducible checks in a dedicated checkout.
+- **02 IMPLEMENT:** make the scoped change.
+- **03 CHEAP TESTS:** run focused, inexpensive checks. Deterministic testing is always scripted and run by the agent, never delegated to the user.
+- **04 INTERACTIVE UI APPROVAL:** for UI changes, obtain user approval using interactive HTML before broader testing.
+- **05 INDEPENDENT CODE REVIEW:** run an early skeptical CODE review when the change’s risk or uncertainty warrants it, helping catch defects before broader testing.
+- **06 AUTHORITATIVE GATES:** run the remaining required project checks, including applicable regression, integration, and visual checks.
+- **07 SKEPTICAL EVIDENCE REVIEW:** independently review the current change, acceptance criteria, and verified evidence. Every flight receives this final code and evidence review.
+- **08 FINAL VERDICT:** use the review findings to determine whether the change is ready to land, needs repair, or requires a user decision.
+- **09 PR & MERGE:** create or update the pull request and merge under the project’s delivery rules after the required checks and approvals pass.
 
 | Verdict | Action |
 | --- | --- |
