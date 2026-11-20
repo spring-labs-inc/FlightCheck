@@ -75,7 +75,11 @@ class GitHubAssetsTests(unittest.TestCase):
                 writes.append(path)
             return original_open(path, mode, *args, **kwargs)
 
-        with patch.object(Path, "open", observed_open), patch.object(subprocess, "run", side_effect=AssertionError("no build/upload")), patch.object(assets, "read_get", side_effect=AssertionError("no network")):
+        with (
+            patch.object(Path, "open", observed_open),
+            patch.object(subprocess, "run", side_effect=AssertionError("no build/upload")),
+            patch.object(assets, "read_get", side_effect=AssertionError("no network")),
+        ):
             result = self.call(assets.prepare, self.artifacts, output)
         self.assertEqual(result["status"], "private_bundle_prepared")
         self.assertIn("separate explicit grant", result["publication"])
@@ -126,9 +130,10 @@ class GitHubAssetsTests(unittest.TestCase):
         responses[index] = registry
         return responses, release_url, reference_url, index
 
-    def verify_fixture(self, responses, folder=None, approval=None, during_read=None):
+    def verify_fixture(self, responses, folder=None, approval=None, during_read=None,
+                       trace=None, trace_label=None, expected_prefix=None):
         folder = folder or self.artifacts
-        calls = []
+        calls = [] if trace is None else trace
 
         def read(url, size=None, asset=False):
             calls.append((url, size, asset))
@@ -140,13 +145,25 @@ class GitHubAssetsTests(unittest.TestCase):
                 self.assertEqual(len(raw), size)
             return raw
 
-        with patch.object(assets, "read_get", side_effect=read), patch.object(assets.release, "read_url", side_effect=read):
-            result = self.call(assets.verify_public, folder, approval=approval)
-        return result, calls
+        outcome = "raised"
+        try:
+            with (
+                patch.object(assets, "read_get", side_effect=read),
+                patch.object(assets.release, "read_url", side_effect=read),
+            ):
+                result = self.call(assets.verify_public, folder, approval=approval)
+            outcome = "returned"
+            return result, calls
+        finally:
+            if trace_label is not None:
+                print("READBACK_TRACE", json.dumps({"label": trace_label, "outcome": outcome, "calls": calls}))
+            if expected_prefix is not None:
+                self.assertEqual(calls[:len(expected_prefix)], expected_prefix)
 
     def test_public_readback_matches_and_rejects_conflicts(self):
         responses, rel, ref, index = self.public_fixture()
-        result, calls = self.verify_fixture(responses)
+        matching_trace = []
+        result, calls = self.verify_fixture(responses, trace=matching_trace, trace_label="matching")
         self.assertEqual(result["status"], "verified_public_channel_bytes")
         self.assertEqual(result["pypi"]["status"], "verified_public_artifact_bytes")
         self.assertIn("pending fresh", result["installation"])
@@ -154,11 +171,22 @@ class GitHubAssetsTests(unittest.TestCase):
         for row in responses[index]["urls"]:
             self.assertTrue(any(url == row["url"] for url, _, _ in calls))
         wheel_url = next(row["url"] for row in responses[index]["urls"] if row["filename"].endswith(".whl"))
+        sdist_url = next(row["url"] for row in responses[index]["urls"] if row["filename"].endswith(".tar.gz"))
+        wrong_sdist = copy.deepcopy(responses)
+        original_sdist = wrong_sdist[sdist_url]
+        wrong_sdist[sdist_url] = bytes([original_sdist[0] ^ 1]) + original_sdist[1:]
+        sdist_trace = []
+        with self.assertRaisesRegex(ValueError, "downloaded bytes"):
+            self.verify_fixture(wrong_sdist, trace=sdist_trace, trace_label="changed-sdist")
+        self.assertEqual(sdist_trace, matching_trace)
         wrong = copy.deepcopy(responses)
         original = wrong[wheel_url]
         wrong[wheel_url] = bytes([original[0] ^ 1]) + original[1:]
+        wheel_trace = []
+        prefix = matching_trace[:next(i + 1 for i, call in enumerate(matching_trace) if call[0] == wheel_url)]
         with self.assertRaisesRegex(ValueError, "downloaded bytes"):
-            self.verify_fixture(wrong)
+            self.verify_fixture(wrong, trace=wheel_trace, trace_label="changed-wheel", expected_prefix=prefix)
+        self.assertEqual(wheel_trace, prefix)
         for key, value in [("tag_name", "vwrong"), ("draft", True), ("prerelease", False), ("html_url", "https://example.invalid/release")]:
             with self.subTest(key=key):
                 wrong = copy.deepcopy(responses)
@@ -219,7 +247,11 @@ class GitHubAssetsTests(unittest.TestCase):
             writes.append(("mkdir", str(path)))
             return original_mkdir(path, *args, **kwargs)
 
-        with patch.object(Path, "open", observed_open), patch.object(Path, "mkdir", observed_mkdir), patch.object(assets, "read_get", side_effect=AssertionError("no public GET")):
+        with (
+            patch.object(Path, "open", observed_open),
+            patch.object(Path, "mkdir", observed_mkdir),
+            patch.object(assets, "read_get", side_effect=AssertionError("no public GET")),
+        ):
             with self.assertRaises(ValueError):
                 self.call(assets.prepare, folder, output)
             with self.assertRaises(ValueError):
@@ -227,7 +259,10 @@ class GitHubAssetsTests(unittest.TestCase):
         self.assertFalse(output.exists())
         self.assertEqual(writes, [])
         development = self.development_release()
-        with patch.object(Path, "open", observed_open), patch.object(Path, "mkdir", observed_mkdir):
+        with (
+            patch.object(Path, "open", observed_open),
+            patch.object(Path, "mkdir", observed_mkdir),
+        ):
             with self.assertRaises(ValueError):
                 self.call(assets.prepare, development, output)
         self.assertEqual(writes, [])
@@ -298,28 +333,92 @@ class GitHubAssetsTests(unittest.TestCase):
             response.close()
         self.assertNotIn("https://example.invalid/forbidden", trace)
         self.assertNotIn("http://example.invalid/forbidden", trace)
+        print("TRANSPORT_TRACE", json.dumps({"redirects": trace}))
+
+    def test_pypi_nondefault_port_boundary(self):
         responses, _, _, index = self.public_fixture()
         row = responses[index]["urls"][0]
-        row["url"] = row["url"].replace("files.pythonhosted.org", "files.pythonhosted.org:444")
+        original_url = row["url"]
+        row["url"] = original_url.replace("files.pythonhosted.org", "files.pythonhosted.org:444")
+        responses[row["url"]] = responses.pop(original_url)
         calls = []
 
         def registry_read(url, size=None):
             calls.append(url)
-            data = responses[url] if url in responses else b"unused forbidden body"
+            data = responses[url]
             return data if isinstance(data, bytes) else json.dumps(data).encode()
 
-        with patch.object(assets.release, "read_url", side_effect=registry_read):
-            with self.assertRaises(ValueError):
-                assets.release.verify_index(self.artifacts)
+        error = None
+        try:
+            with patch.object(assets.release, "read_url", side_effect=registry_read):
+                try:
+                    assets.release.verify_index(self.artifacts)
+                except ValueError as failure:
+                    error = failure
+        finally:
+            print("PORT_TRACE", json.dumps({"requests": calls, "error": str(error)}))
         self.assertEqual(calls, [index])
-        print("TRANSPORT_TRACE", json.dumps({"redirects": trace, "nondefault_port": calls}))
+        self.assertIsInstance(error, ValueError)
+
+    def test_github_redirect_authority_boundaries(self):
+        origin = "https://github.com/authority-check"
+        cases = [
+            ("Location", "https://release-assets.githubusercontent.com/allowed", True),
+            ("Location", "https://@github.com/forbidden", False),
+            ("Location", "https://:@github.com/forbidden", False),
+            ("Location", "https://release-assets.githubusercontent.com/forbidden#", False),
+            ("URI", "https://github.com/forbidden#", False),
+            ("Location", "https://github.com/forbidden#fragment", False),
+        ]
+        for header, location, allowed in cases:
+            with self.subTest(header=header, location=location):
+                trace, opened = [], []
+
+                def transport(handler, request):
+                    url = request.full_url
+                    trace.append(url)
+                    headers = Message()
+                    status = 302 if url == origin else 200
+                    if status == 302:
+                        headers[header] = location
+                    response = addinfourl(io.BytesIO(b"" if status == 302 else b"ok"), headers, url, status)
+                    response.msg = "Found" if status == 302 else "OK"
+                    opened.append(response)
+                    return response
+
+                error, result = None, None
+                try:
+                    with patch.object(HTTPSHandler, "https_open", transport):
+                        try:
+                            result = assets.read_get(origin, 2, asset=True)
+                        except ValueError as failure:
+                            error = failure
+                finally:
+                    for response in opened:
+                        response.close()
+                    print("AUTHORITY_TRACE", json.dumps({"header": header, "location": location,
+                                                         "requests": trace, "error": str(error)}))
+                if allowed:
+                    self.assertEqual(trace, [origin, location])
+                    self.assertEqual(result, b"ok")
+                    self.assertIsNone(error)
+                else:
+                    self.assertEqual(trace, [origin])
+                    self.assertIsInstance(error, ValueError)
 
     def alternate_release(self):
         source = self.root / "source-b"
         shutil.copytree(self.source, source)
         (source / "synthetic-alternate-source.txt").write_text("Distinct internally valid source for snapshot control.\n")
-        for args in [["add", "."], ["-c", "user.name=Alternate fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "Alternate synthetic release"], ["tag", "-f", "v0.1.0a1"]]:
-            subprocess.run(["git", "-C", str(source), *args], env=self.env, check=True, capture_output=True)
+        commands = [
+            ["add", "."],
+            ["-c", "user.name=Alternate fixture", "-c", "user.email=fixture@example.invalid",
+             "-c", "commit.gpgsign=false", "commit", "-qm", "Alternate synthetic release"],
+            ["tag", "-f", "v0.1.0a1"],
+        ]
+        for args in commands:
+            subprocess.run(["git", "-C", str(source), *args], env=self.env,
+                           check=True, capture_output=True)
         folder = self.root / "release-b"
         self.command("prepare", "--output", folder, "--tag", "v0.1.0a1", script=source / "release/release.py")
         return folder
@@ -385,12 +484,26 @@ class GitHubAssetsTests(unittest.TestCase):
                 return original_mkdir(path, *args, **kwargs)
 
             output = self.root / label
-            with patch.object(Path, "open", observed_open), patch.object(Path, "mkdir", observed_mkdir):
+            with (
+                patch.object(Path, "open", observed_open),
+                patch.object(Path, "mkdir", observed_mkdir),
+            ):
                 status, result = self.cli("prepare", supplied, output)
             self.assertEqual(status, 1, result)
             self.assertEqual(result["status"], "failed")
             self.assertEqual(operations, [], label)
             self.assertFalse(output.exists())
+
+    def verify_cli_fixture(self, responses):
+        def read(url, size=None, asset=False):
+            data = responses[url]
+            return data if isinstance(data, bytes) else json.dumps(data).encode()
+
+        with (
+            patch.object(assets, "read_get", side_effect=read),
+            patch.object(assets.release, "read_url", side_effect=read),
+        ):
+            return self.cli("verify-public", self.artifacts)
 
     def test_malformed_readback_response(self):
         responses, rel, ref, _ = self.public_fixture()
@@ -399,19 +512,31 @@ class GitHubAssetsTests(unittest.TestCase):
                 wrong = copy.deepcopy(responses)
                 wrong[key] = value
 
-                def read(url, size=None, asset=False):
-                    data = wrong[url]
-                    return data if isinstance(data, bytes) else json.dumps(data).encode()
-
-                args = ["github_assets.py", "verify-public", "--artifacts", str(self.artifacts)]
-                if "manifest_sha256" in inspect.signature(assets.payload).parameters:
-                    args += ["--manifest-sha256", self.approval(self.artifacts)]
-                output = io.StringIO()
-                with patch.object(sys, "argv", args), patch.object(assets, "read_get", side_effect=read), redirect_stdout(output):
-                    status = assets.main()
+                status, result = self.verify_cli_fixture(wrong)
                 self.assertEqual(status, 1)
-                self.assertEqual(json.loads(output.getvalue())["status"], "failed")
-        self.assertEqual(self.verify_fixture(responses)[0]["status"], "verified_public_channel_bytes")
+                self.assertEqual(result["status"], "failed")
+        status, result = self.verify_cli_fixture(responses)
+        self.assertEqual(status, 0)
+        self.assertEqual(result["status"], "verified_public_channel_bytes")
+
+    def test_malformed_provider_identities(self):
+        responses, rel, _, _ = self.public_fixture()
+        for field in ["release", "asset"]:
+            for value in [None, "not-an-id", True, 0, -1, 1.5]:
+                with self.subTest(field=field, value=value):
+                    wrong = copy.deepcopy(responses)
+                    row = wrong[rel] if field == "release" else wrong[rel]["assets"][0]
+                    row["id"] = value
+                    status, result = self.verify_cli_fixture(wrong)
+                    self.assertEqual(status, 1)
+                    self.assertEqual(result["status"], "failed")
+        duplicate = copy.deepcopy(responses)
+        duplicate[rel]["assets"][1]["id"] = duplicate[rel]["assets"][0]["id"]
+        self.assertEqual(self.verify_cli_fixture(duplicate)[0], 1)
+        status, result = self.verify_cli_fixture(responses)
+        self.assertEqual(status, 0)
+        self.assertEqual(result["release_id"], 71)
+        self.assertEqual(sorted(row["id"] for row in result["assets"].values()), [1, 2, 3, 4])
 
 
 if __name__ == "__main__":

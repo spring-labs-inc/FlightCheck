@@ -80,12 +80,14 @@ def prepare(folder, output, manifest_sha256):
 def download_origin(url):
     parsed = urlsplit(url)
     return (parsed.scheme == "https" and parsed.hostname in ("github.com", "release-assets.githubusercontent.com")
-            and parsed.port in (None, 443) and not parsed.username and not parsed.password)
+            and parsed.port in (None, 443) and parsed.username is None and parsed.password is None
+            and "#" not in url)
 
 
 class AssetRedirects(HTTPRedirectHandler):
     def redirect_request(self, request, response, code, message, headers, newurl):
-        if not download_origin(newurl):
+        location = headers.get("location", headers.get("uri", ""))
+        if "#" in location or not download_origin(newurl):
             raise ValueError("Untrusted GitHub asset redirect")
         return super().redirect_request(request, response, code, message, headers, newurl)
 
@@ -133,16 +135,23 @@ def verify_public(folder, manifest_sha256):
             or metadata.get("prerelease") is not Version(record["version"]).is_prerelease
             or metadata.get("html_url") != WEB + "/releases/tag/" + tag):
         raise ValueError("GitHub release identity/state differs")
+    if type(metadata.get("id")) is not int or metadata["id"] <= 0:
+        raise ValueError("GitHub release ID must be a positive integer")
     if tag_commit(tag) != record["source"]["source_revision"]:
         raise ValueError("GitHub tag source commit differs")
     assets = metadata["assets"]
     if len(assets) != len(expected) or {row["name"] for row in assets} != set(expected):
         raise ValueError("Missing, duplicate or unexpected GitHub assets")
     identities = {}
+    seen_ids = set()
     for asset in assets:
         name, data = asset["name"], expected[asset["name"]]
         url = WEB + "/releases/download/" + quote(tag, safe="") + "/" + quote(name, safe="")
         digest = release.sha(data)
+        identity = asset.get("id")
+        if type(identity) is not int or identity <= 0 or identity in seen_ids:
+            raise ValueError("GitHub asset IDs must be distinct positive integers")
+        seen_ids.add(identity)
         if (asset.get("browser_download_url") != url or asset.get("state") != "uploaded"
                 or asset.get("size") != len(data)
                 or asset.get("digest") not in (None, "sha256:" + digest)):
