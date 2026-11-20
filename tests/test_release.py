@@ -246,6 +246,17 @@ class ReleaseTests(unittest.TestCase):
         protected = self.source / 'forbidden-release-output'
         self.addCleanup(shutil.rmtree, protected, ignore_errors=True)
         alias = prefix / '..' / self.source.name / protected.name
+        module = self.release_module()
+        created = []
+        original_mkdir = Path.mkdir
+        def observe_mkdir(path, *args, **kwargs):
+            if path.resolve() == protected.resolve():
+                created.append(str(path))
+            return original_mkdir(path, *args, **kwargs)
+        with mock.patch.object(Path, 'mkdir', autospec=True, side_effect=observe_mkdir):
+            with self.assertRaises(ValueError):
+                module.prepare(alias, tag='v0.1.0a1')
+        self.assertEqual(created, [])
         error = self.command('prepare', '--tag', 'v0.1.0a1', '--output', alias, expected=1)
         self.assertIn('outside the checkout', error['error'])
         self.assertFalse(protected.exists())
@@ -271,6 +282,7 @@ class ReleaseTests(unittest.TestCase):
             ('https://files.pythonhosted.org@untrusted.invalid', False),
             ('http://files.pythonhosted.org', False),
             ('https://user@files.pythonhosted.org', False),
+            ('https://files.pythonhosted.org/#fragment', False),
         ):
             with self.subTest(origin=origin):
                 entries = [{'filename': n, 'digests': {'sha256': r['sha256']}, 'size': r['size'],
