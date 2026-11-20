@@ -41,7 +41,7 @@ class ClaudeSupportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             project=Path(temporary);wrapper=project/'.claude/skills/develop-change/SKILL.md';wrapper.parent.mkdir(parents=True)
             guide=project/'.flightcheck/docs/development-workflow.md';guide.parent.mkdir(parents=True);guide.write_text('Adopter workflow\n')
-            self.assertEqual((wrapper.parent/target).resolve(),guide)
+            self.assertEqual((wrapper.parent/target).resolve(),guide.resolve())
             self.assertTrue((wrapper.parent/target).is_file())
 
     def test_reviewer_adapters_preserve_canonical_policy_and_tool_boundary(self):
