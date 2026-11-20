@@ -402,7 +402,8 @@ def verify_index(folder, test_index=None, expected_manifest_sha256=None):
         allowed = (parsed.scheme == "https" and parsed.hostname == "files.pythonhosted.org"
                    and parsed.port in (None, 443)) if not test_index else (
             parsed.scheme == "http" and parsed.netloc == urlsplit(base).netloc)
-        if not allowed or parsed.username or parsed.password or parsed.fragment:
+        if (not allowed or parsed.username is not None or parsed.password is not None
+                or "#" in entry["url"]):
             raise ValueError("Unexpected artifact download origin")
         if sha(read_url(entry["url"], expected["size"])) != expected["sha256"]:
             raise ValueError("Registry metadata and downloaded bytes disagree")

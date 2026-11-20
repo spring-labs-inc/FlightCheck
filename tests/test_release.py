@@ -275,24 +275,27 @@ class ReleaseTests(unittest.TestCase):
         module = self.release_module()
         metadata_url = 'https://pypi.org/pypi/flightcheck/0.1.0a1/json'
         payloads = {n: (self.artifacts / 'dist' / n).read_bytes() for n in self.record['files']}
-        for origin, accepted in (
-            ('https://files.pythonhosted.org', True),
-            ('https://files.pythonhosted.org:443', True),
-            ('https://files.pythonhosted.org:8443', False),
-            ('https://files.pythonhosted.org@untrusted.invalid', False),
-            ('http://files.pythonhosted.org', False),
-            ('https://user@files.pythonhosted.org', False),
-            ('https://files.pythonhosted.org/#fragment', False),
+        for template, accepted in (
+            ('https://files.pythonhosted.org/{filename}', True),
+            ('https://files.pythonhosted.org:443/{filename}', True),
+            ('https://files.pythonhosted.org:8443/{filename}', False),
+            ('https://files.pythonhosted.org@untrusted.invalid/{filename}', False),
+            ('http://files.pythonhosted.org/{filename}', False),
+            ('https://user@files.pythonhosted.org/{filename}', False),
+            ('https://@files.pythonhosted.org/{filename}', False),
+            ('https://:@files.pythonhosted.org/{filename}', False),
+            ('https://files.pythonhosted.org/{filename}#fragment', False),
+            ('https://files.pythonhosted.org/{filename}#', False),
         ):
-            with self.subTest(origin=origin):
+            with self.subTest(url=template):
                 entries = [{'filename': n, 'digests': {'sha256': r['sha256']}, 'size': r['size'],
-                            'yanked': False, 'url': origin + '/' + n} for n, r in self.record['files'].items()]
+                            'yanked': False, 'url': template.format(filename=n)} for n, r in self.record['files'].items()]
                 requested = []
                 def download(url, expected_size=None):
                     requested.append(url)
                     if url == metadata_url:
                         return json.dumps({'info': {'name': 'flightcheck', 'version': '0.1.0a1'}, 'urls': entries}).encode()
-                    return payloads[url.rsplit('/', 1)[-1]]
+                    return payloads[module.urlsplit(url).path.rsplit('/', 1)[-1]]
                 with mock.patch.object(module, 'read_url', side_effect=download):
                     if accepted:
                         result = module.verify_index(self.artifacts)
