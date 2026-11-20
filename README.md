@@ -36,11 +36,12 @@ FlightCheck is a lightweight set of repository instructions that guides AI-assis
 ## The workflow
 
 1. Select a bounded task, agree on acceptance criteria, and define reproducible checks in a dedicated checkout.
-2. Implement the change and run the cheap checks. For owner-facing UI, review interactive HTML with synthetic data and record approval before broader testing.
-3. Apply the [early CODE review criteria](examples/existing-project/docs/development-workflow.md#decide-on-early-code-review). When early review is needed, supply the current change and check evidence. Then run the remaining required tests and visual checks.
-4. Hand the current change, acceptance criteria, and verified evidence to a separate final reviewer. Use the verdict below to determine the next step.
-
-Handoffs carry check receipts and original output between stages. Fingerprints tie each result to the code, command, coverage, and environment that produced it. Before review or reuse, FlightCheck verifies those records and identifies missing, changed, or failed evidence. Repairs renew the affected checks and reviews while preserving earlier results for inspection.
+2. Implement the change and run the cheap tests. Deterministic testing is always scripted.
+3. For UI changes, obtain user approval using interactive HTML before broader testing.
+4. **Early CODE review:** run an independent skeptical review when the change’s risk or uncertainty warrants it, helping catch defects before broader testing.
+5. **Authoritative testing:** run the remaining required project checks, including applicable regression and integration tests.
+6. **Final code and evidence review:** independently review the current change, acceptance criteria, and verified evidence. Every flight receives this review.
+7. Use the verdict to determine whether to land the change, return for repair, or request a user decision.
 
 | Verdict | Action |
 | --- | --- |
@@ -48,6 +49,8 @@ Handoffs carry check receipts and original output between stages. Fingerprints t
 | `APPROVE_WITH_NITS` | Track the nits, then begin authorized landing. |
 | `APPROVE_WITH_OBSERVATIONS` | Ask the owner to approve the specific observations before landing. |
 | `REVISE` | Return to the plan or implementation and renew affected checks and reviews. |
+
+Handoffs carry check receipts and original output between stages. Fingerprints tie each result to the code, command, coverage, and environment that produced it. Before review or reuse, FlightCheck verifies those records and identifies missing, changed, or failed evidence. Repairs renew the affected checks and reviews while preserving earlier results for inspection.
 
 ## Guides
 
