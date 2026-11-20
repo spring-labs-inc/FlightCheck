@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "qualification": "partial",
+  "qualification": "verified",
   "claude_version": "2.1.274",
   "observations": [
     "A transported and independently audited local Claude Code2.1.274 trial on source cbc7e45d83458cf38a193c3edcd576c7db91df4a passed14 native tests and24 cases; original and four mutation controls remain retained.",
@@ -8,10 +8,10 @@
     "The Desktop Local flight and recovery observations remain attributed to the owner. A transported actual quit/relaunch on app6.6395.1/runtime2.1.326 preserved candidate,312 evidence hashes, listener and route; prepare/resume and renewed embedded rendering passed. Raw historical reviewer transcripts remain excluded.",
     "An independent audit reconciled genuine historical reviewer obligations across restart, identical-spec functional repair and refusal when the requested receipt was hidden. Those older sessions exposed an unused advisor and do not qualify strict reviewer isolation.",
     "Actual interactive Codex0.167.0 activation/resume and four native Desktop phase replies retained the stable footer. Worker/forwarded HTTP and owner-confirmed in-app browser rendering are recorded separately.",
-    "One extra Desktop progress message and a later prefatory message skipped the explicit guard/footer. The guard rejects the original and accepts corrected text, and corrected native delivery matches. Universal all-reply compliance remains unresolved; no automatic interception is established.",
+    "One extra Desktop progress message and a later prefatory message skipped the explicit guard/footer. The guard rejects the original and accepts corrected text. On 2026-11-20 the owner explicitly accepted the native/manual limitation; the original failures remain retained and no automatic interception was added.",
     "Local Claude2.1.311 bounded authenticated/read-only probes and all150 contributor identities passed. Probe invocation settings record advisor disabled and ENABLE_TOOL_SEARCH=false; necessity of both settings is not established."
   ],
-  "accepted_report": null,
+  "accepted_report": "claude-trial-report.md#accepted-native-app-scope",
   "native_requirements": {
     "discovery": {
       "state": "verified",
@@ -38,15 +38,15 @@
       "evidence": "claude-trial-report.md#completed-local-tui-trial"
     },
     "accepted_report": {
-      "state": "pending",
-      "evidence": null
+      "state": "verified",
+      "evidence": "claude-trial-report.md#accepted-native-app-scope"
     }
   },
   "interfaces": {
     "codex_desktop": {
-      "state": "pending",
+      "state": "verified",
       "evidence": "claude-trial-report.md#native-card-observations-and-controller-limit",
-      "limit": "Planned phase replies passed; two other messages skipped the explicit guard/footer. Universal reply compliance is unresolved."
+      "limit": "The owner explicitly accepted the manual-guard limitation on 2026-11-20. Both skipped native messages remain failures; automatic interception and universal reply compliance are outside the accepted scope."
     },
     "codex_tui": {
       "state": "verified",
@@ -72,5 +72,26 @@
     "version": "2.1.311",
     "scope": "Read-only tool boundary and normal authentication only; not a complete new selected flight",
     "evidence": "claude-trial-report.md#current-local-cli-boundary-and-source-checks"
+  },
+  "acceptance_scope": {
+    "controller_delivery": "explicit-manual-guard",
+    "automatic_message_interception": false,
+    "owner_disposition": {
+      "state": "accepted",
+      "date": "2026-11-20",
+      "choice": "Keep native apps; accept the explicit manual-guard limitation",
+      "reference": "claude-trial-report.md#accepted-native-app-scope"
+    },
+    "applies_to": [
+      "codex_desktop",
+      "codex_tui",
+      "claude_desktop",
+      "claude_code_tui"
+    ],
+    "limits": [
+      "Unchecked intermediate or interrupted native messages can reach the user. The controller must still prepare/check every selected-flight reply; retain a skip and correct the next reply.",
+      "Qualification covers the recorded runtimes, fixtures and observations; untested versions, cloud sessions and distribution combinations remain outside it.",
+      "Existing historical Desktop transcript and host-programmatic-hook limits remain explicit. Evidence integrity, current-candidate verdicts, reviewer isolation and delivery authorization are unchanged."
+    ]
   }
 }
