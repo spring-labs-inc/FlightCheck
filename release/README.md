@@ -80,6 +80,7 @@ A failed preparation cannot authorize upload; retain logs and choose a fresh out
 
 ## References
 
+- [Matching GitHub release assets and public readback](github-assets.md)
 - [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/using-a-publisher/)
 - [Creating a project through a pending publisher](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/)
 - [GitHub Actions packaging guide](https://packaging.python.org/en/latest/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/)
