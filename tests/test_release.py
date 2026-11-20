@@ -2,6 +2,8 @@
 from contextlib import contextmanager
 import copy
 import hashlib
+import importlib.util
+import io
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -13,6 +15,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest import mock
 import zipfile
 
 import yaml
@@ -170,6 +173,14 @@ class ReleaseTests(unittest.TestCase):
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
                 state['requests'].append(('GET', self.path))
+                hook = state.get('on_get')
+                if hook:
+                    hook(self.path)
+                if state.get('redirect'):
+                    self.send_response(302)
+                    self.send_header('Location', state['redirect'])
+                    self.end_headers()
+                    return
                 if state['mode'] == 'missing':self.send_error(404);return
                 if self.path.endswith('/json'):
                     entries = [{'filename': n, 'digests': {'sha256': r['sha256']}, 'size': r['size'], 'yanked': False,
@@ -178,7 +189,8 @@ class ReleaseTests(unittest.TestCase):
                     if state['mode'] == 'yanked':entries[0]['yanked'] = True
                     data = json.dumps({'info': {'name': record['distribution'], 'version': record['version']}, 'urls': entries}).encode()
                 else:
-                    data = payloads[self.path.lstrip('/')]
+                    filename = self.path.lstrip('/')
+                    data = state.get('overrides', {}).get(filename, payloads[filename])
                     if state['mode'] == 'bytes':data = bytes([data[0] ^ 1]) + data[1:]
                 self.send_response(200);self.end_headers();self.wfile.write(data)
             def log_message(self, *args):pass
@@ -209,10 +221,160 @@ class ReleaseTests(unittest.TestCase):
             else:self.assertEqual(proposal['readme'].split(marker)[1], before.decode().split(marker)[1])
         self.assertEqual((self.source / 'README.md').read_bytes(), before)
 
+    def test_registry_qualification_scope(self):
+        with self.registry() as (url, _):
+            result = self.command('verify-index', '--artifacts', self.artifacts, '--test-index', url)
+        qualification = result['native_qualification']
+        self.assertIn('bounded native/manual scope', qualification)
+        self.assertIn('#14 closed', qualification)
+        self.assertIn('docs/claude-trial-report.md', qualification)
+        self.assertIn('exact release-wheel local/SSH/browser checks pending', qualification)
+        self.assertIn('no automatic interception', qualification)
+        self.assertEqual(result['status'], 'simulated_registry_match')
+        self.assertTrue(result['simulated'])
+        self.assertIn('pending', result['public_installation'])
+
+    def release_module(self):
+        spec = importlib.util.spec_from_file_location('release_fixture', self.script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_release_output_canonical_parent_boundary(self):
+        prefix = self.scratch / 'parent-route'
+        prefix.mkdir(exist_ok=True)
+        protected = self.source / 'forbidden-release-output'
+        self.addCleanup(shutil.rmtree, protected, ignore_errors=True)
+        alias = prefix / '..' / self.source.name / protected.name
+        error = self.command('prepare', '--tag', 'v0.1.0a1', '--output', alias, expected=1)
+        self.assertIn('outside the checkout', error['error'])
+        self.assertFalse(protected.exists())
+        outside = self.root / 'external-review'
+        self.assertFalse(self.command('prepare', '--review', '--output', outside)['release_eligible'])
+
+    def test_registry_redirects_stop_before_destination_request(self):
+        with self.registry() as (destination, destination_state):
+            with self.registry() as (origin, origin_state):
+                origin_state['redirect'] = destination + '/pypi/flightcheck/0.1.0a1/json'
+                self.command('verify-index', '--artifacts', self.artifacts, '--test-index', origin, expected=1)
+        self.assertEqual(len(origin_state['requests']), 1)
+        self.assertEqual(destination_state['requests'], [])
+
+    def test_registry_public_origin_is_checked_before_download(self):
+        module = self.release_module()
+        metadata_url = 'https://pypi.org/pypi/flightcheck/0.1.0a1/json'
+        payloads = {n: (self.artifacts / 'dist' / n).read_bytes() for n in self.record['files']}
+        for origin, accepted in (
+            ('https://files.pythonhosted.org', True),
+            ('https://files.pythonhosted.org:443', True),
+            ('https://files.pythonhosted.org:8443', False),
+            ('https://files.pythonhosted.org@untrusted.invalid', False),
+            ('http://files.pythonhosted.org', False),
+            ('https://user@files.pythonhosted.org', False),
+        ):
+            with self.subTest(origin=origin):
+                entries = [{'filename': n, 'digests': {'sha256': r['sha256']}, 'size': r['size'],
+                            'yanked': False, 'url': origin + '/' + n} for n, r in self.record['files'].items()]
+                requested = []
+                def download(url, expected_size=None):
+                    requested.append(url)
+                    if url == metadata_url:
+                        return json.dumps({'info': {'name': 'flightcheck', 'version': '0.1.0a1'}, 'urls': entries}).encode()
+                    return payloads[url.rsplit('/', 1)[-1]]
+                with mock.patch.object(module, 'read_url', side_effect=download):
+                    if accepted:
+                        result = module.verify_index(self.artifacts)
+                        self.assertEqual(result['status'], 'verified_public_artifact_bytes')
+                        self.assertIn('pending', result['public_installation'])
+                    else:
+                        with self.assertRaisesRegex(ValueError, 'origin'):
+                            module.verify_index(self.artifacts)
+                        self.assertEqual(requested, [metadata_url])
+
+    def test_registry_snapshot_binding(self):
+        folder = self.artifacts_copy()
+        manifest = folder / 'release.json'
+        original = manifest.read_bytes()
+        digest = hashlib.sha256(original).hexdigest()
+        with self.registry() as (url, state):
+            result = self.command('verify-index', '--artifacts', folder, '--test-index', url,
+                                  '--manifest-sha256', digest)
+            self.assertEqual(result['manifest_sha256'], digest)
+            state['requests'].clear()
+            with self.subTest(boundary='before request'):
+                error = self.command('verify-index', '--artifacts', folder, '--test-index', url,
+                                     '--manifest-sha256', '0' * 64, expected=1)
+                self.assertIn('manifest', error['error'].lower())
+                self.assertEqual(state['requests'], [])
+            def replace_manifest(path):
+                if path.endswith('/json'):
+                    manifest.write_bytes(original + b'\n')
+            state['on_get'] = replace_manifest
+            with self.subTest(boundary='during readback'):
+                error = self.command('verify-index', '--artifacts', folder, '--test-index', url,
+                                     '--manifest-sha256', digest, expected=1)
+                self.assertIn('manifest', error['error'].lower())
+
+    def test_registry_rejects_valid_same_name_wheel_substitution(self):
+        filename = next(n for n in self.record['files'] if n.endswith('.whl'))
+        original = (self.artifacts / 'dist' / filename).read_bytes()
+        replacement = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(original)) as archive:
+            with zipfile.ZipFile(replacement, 'w') as altered:
+                altered.comment = archive.comment
+                for index, item in enumerate(archive.infolist()):
+                    changed = copy.copy(item)
+                    if index == 0:
+                        changed.date_time = (1981, 1, 1, 0, 0, 0)
+                    altered.writestr(changed, archive.read(item.filename))
+        substitute = replacement.getvalue()
+        self.assertNotEqual(substitute, original)
+        self.assertEqual(len(substitute), len(original))
+        variant = self.root / filename
+        variant.write_bytes(substitute)
+        module = self.release_module()
+        self.assertEqual(module.wheel_payload(variant, 'flightcheck', '0.1.0a1'),
+                         module.wheel_payload(self.artifacts / 'dist' / filename, 'flightcheck', '0.1.0a1'))
+        with self.registry() as (url, state):
+            result = self.command('verify-index', '--artifacts', self.artifacts, '--test-index', url)
+            self.assertEqual(result['status'], 'simulated_registry_match')
+            self.assertIn('pending', result['public_installation'])
+            state['overrides'] = {filename: substitute}
+            error = self.command('verify-index', '--artifacts', self.artifacts, '--test-index', url, expected=1)
+            self.assertIn('downloaded bytes disagree', error['error'])
+            self.assertEqual(error['status'], 'incomplete')
+
+    def test_review_wheel_installs_but_cannot_publish(self):
+        folder = self.root / 'review'
+        result = self.command('prepare', '--review', '--output', folder)
+        self.assertFalse(result['release_eligible'])
+        record = result['record']
+        wheel = next((folder / 'dist').glob('*.whl'))
+        self.assertEqual(hashlib.sha256(wheel.read_bytes()).hexdigest(), record['files'][wheel.name]['sha256'])
+        tool = self.root / 'review-tool'
+        self.install(wheel, tool)
+        smoke = subprocess.run([str(tool / 'bin/flightcheck'), '--version'], env=self.env,
+                               capture_output=True, text=True)
+        self.assertEqual(smoke.returncode, 0, smoke.stdout + smoke.stderr)
+        self.assertIn('flightcheck 0.1.0a1', smoke.stdout)
+        identity = subprocess.run([str(tool / 'bin/python'), '-B', '-c',
+                                   "from importlib.metadata import version;assert version('flightcheck')=='0.1.0a1'"],
+                                  env=self.env, capture_output=True, text=True)
+        self.assertEqual(identity.returncode, 0, identity.stdout + identity.stderr)
+        context = self.root / 'no-actions-context.json'
+        context.write_text(json.dumps({'mode': 'publish'}))
+        error = self.command('gate', '--artifacts', folder, '--context', context,
+                             '--manifest-sha256', hashlib.sha256((folder / 'release.json').read_bytes()).hexdigest(),
+                             '--source-sha', record['source']['source_revision'], '--reviewed-run-id', '0',
+                             '--reviewed-artifact-id', '0', expected=1,
+                             env={**self.env, 'FLIGHTCHECK_PYPI_PUBLISH_ENABLED': ''})
+        self.assertIn('cannot authorize publication', error['error'])
+        self.assertEqual(hashlib.sha256(wheel.read_bytes()).hexdigest(), record['files'][wheel.name]['sha256'])
+
     def install(self, artifact, target):
         subprocess.run([BASE, '-B', '-m', 'venv', str(target)], env=self.env, check=True, capture_output=True)
         env = dict(self.env)
-        if artifact.name.endswith('.tar.gz'):
+        if artifact.is_dir() or artifact.name.endswith('.tar.gz'):
             # Explicit offline PEP 517 no-isolation test: use the pinned maintainer
             # build libraries, then remove this override for every runtime command.
             import setuptools
@@ -222,9 +384,10 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_installed_candidate_preserves_project_and_survives_tool_removal(self):
-        for artifact in sorted((self.artifacts / 'dist').iterdir()):
+        for artifact in [self.source, *sorted((self.artifacts / 'dist').iterdir())]:
             with self.subTest(artifact=artifact.name):
-                area = self.root / ('sdist' if artifact.name.endswith('.tar.gz') else 'wheel')
+                kind = 'source' if artifact.is_dir() else 'sdist' if artifact.name.endswith('.tar.gz') else 'wheel'
+                area = self.root / kind
                 area.mkdir(mode=0o700)
                 tool = area / 'tool'
                 self.install(artifact, tool)
