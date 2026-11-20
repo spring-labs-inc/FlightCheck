@@ -62,6 +62,8 @@ Handoffs carry check receipts and original output between stages. Fingerprints t
 
 ## Get started
 
+**Supported environments:** Claude Desktop, Claude Code TUI, Codex Desktop, and Codex CLI/TUI. FlightCheck has been verified in all four environments.
+
 Install from Git with [pipx](https://pipx.pypa.io/stable/installation/), then run setup from your terminal. Requires Git and Python 3.9+ on POSIX.
 
 ```sh
