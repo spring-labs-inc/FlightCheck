@@ -2,21 +2,33 @@
 
 Use the complete installation flow below. It includes the shared workflow, all six evidence tools, the browser status card and the selected client adapter. A documentation-only installation is incomplete. Preserve existing project policy; record a concrete blocker or an explicit owner-approved exclusion rather than silently dropping a component.
 
-The installer uses only Python's standard library and Git. Receipt and card tools require **Python 3.9+ on POSIX**. They can support projects using other languages. No PyPI release, plugin, account, global configuration change or new CI service is needed.
+The installer uses only Python's standard library and Git. Receipt and card tools require **Python 3.9+ on POSIX**. They can support projects using other languages. No plugin, account, global configuration change or new CI service is needed. The source channel below remains available without using PyPI.
 
 ## Recommended: terminal-first setup
 
 Run setup in a normal terminal on the machine holding the project. Claude's command sandbox protects `.claude/skills` and `.claude/agents`; adding a write allow rule does not lift those protections. Do not omit adapters, install hooks, or disable global sandbox settings to work around a failed AI-side install. The terminal installer uses the same shared engine as the source commands below.
 
-Until the separately tracked [PyPI release #67](https://github.com/spring-labs-inc/FlightCheck/issues/67), install the application from Git:
+Install the verified alpha from PyPI. First follow [pipx installation and PATH setup](https://pipx.pypa.io/stable/how-to/install-pipx.html); pipx has its own prerequisites. Open a fresh shell after updating PATH so `flightcheck` is available:
 
 ```sh
-pipx install "git+https://github.com/spring-labs-inc/FlightCheck.git"
+pipx install flightcheck==0.1.0a2
 cd /path/to/your/project
 flightcheck inspect .
 flightcheck init . --agent claude
 flightcheck doctor .
 ```
+
+Alternative: install the persistent command with uv (install uv separately):
+
+```sh
+uv tool install --python /absolute/path/to/python3 --no-python-downloads \
+  --no-config --default-index https://pypi.org/simple \
+  --prerelease explicit flightcheck==0.1.0a2
+```
+
+Replace the Python path with an existing Python 3.9+ executable on POSIX. Git is also required for project setup. Put uv's tool executable directory on PATH; uv prints that directory after installation. Follow its shell-update guidance if needed, then open a fresh shell. This installs the persistent `flightcheck` tool, not project configuration. Choose a persistent project Python outside the disposable tool environment during setup. The retained public installation observations used uv 0.13.9 and Python 3.13.18; the compatibility floor does not qualify every Python/platform combination. Installation of uv itself has its own method-specific prerequisites.
+
+After either installation, use the same project setup commands above.
 
 Use `codex`, `claude`, or `both` explicitly. Installing the application only installs its tool environment and command; it does not configure a project. The CLI and its runtime helpers use Python's standard library. Build dependencies belong to the isolated tool/build environment. Project checks use the project's existing interpreter and dependencies: setup does not install or upgrade application dependencies, run native project checks, enable hooks, or grant provider/reviewer permissions.
 
@@ -26,7 +38,7 @@ The preview lists every create/update/unchanged operation and content digest, wi
 
 ### PyPI release status and earlier Git tool installs
 
-The proposed PyPI distribution is `flightcheck`, version `0.1.0a2`; it is not yet a verified public release. Keep using the Git command above until publication and a fresh public-index installation are verified. Maintainers prepare and validate the release through the separate [release guide](https://github.com/spring-labs-inc/FlightCheck/blob/main/release/README.md); local artifacts and loopback-index tests do not prove public availability.
+Published PyPI distribution: `flightcheck`, version `0.1.0a2` ([public release](https://pypi.org/project/flightcheck/0.1.0a2/)). Its public wheel and sdist match the retained approved release; fresh public-index pipx and uv installation and project setup were verified in the recorded alpha scope. Use the public pin above or the source fallback below. Maintainers retain the release identity and future-release safeguards in the separate [release guide](https://github.com/spring-labs-inc/FlightCheck/blob/main/release/README.md); local artifacts and loopback-index tests alone do not prove public availability. The published a2 archives and PyPI long description retain preparation-era wording from their release source. This online Setup guide gives current instructions; published bytes remain unchanged.
 
 Earlier Git builds used distribution name `flightcheck-cli` while exposing the same `flightcheck` executable. Before installing the renamed tool, retain the old artifact for rollback and run `pipx uninstall flightcheck-cli`; this removes its tool environment and launcher, not project instructions, evidence or the selected project runtime. Install the new tool afterward. Do not overwrite an unrelated executable. Existing projects are not implicitly migrated: run `flightcheck doctor` and retain the supported fresh-setup/identical-repeat boundary below.
 
@@ -55,7 +67,7 @@ Recovery checks all affected files before restoration and refuses to overwrite c
 
 This first CLI version supports fresh installations and identical repeats. It refuses implicit migrations, configuration changes, client changes and bundle upgrades to an existing installation. It is not a runtime manager or an active-flight upgrade coordinator. Upgrading/removing the global tool does not rewrite installed projects or their selected runtime; a disappeared/changed project interpreter is a blocker, not permission to substitute another. Explicit project removal and upgrades remain separate future work. Keep evidence and backups when uninstalling the tool.
 
-Start a fresh client after setup, verify instructions/skill/reviewer discovery, and follow section 6 for a small first flight. [#14](https://github.com/spring-labs-inc/FlightCheck/issues/14) is closed within the [recorded four-interface native scope](https://github.com/spring-labs-inc/FlightCheck/blob/main/docs/claude-trial-report.md#accepted-native-app-scope), including the owner's acceptance of the manual prepare/check/footer procedure. Retained bypass failures and runtime, transcript and host limits remain explicit; automatic interception and universal transcript compliance are not promised. Browser publication, effective read-only reviewer boundaries, rendering and repair/resume still need actual observations for a new project/runtime. Those source observations do not qualify new release artifact bytes: release acceptance separately requires local and real SSH card startup, recovery and browser rendering with the exact retained wheel. Python 3.9+/POSIX is the declared compatibility floor, not qualification of every Python/platform combination; native Windows is unsupported. No public PyPI install command is advertised before publication and public-index verification.
+Start a fresh client after setup, verify instructions/skill/reviewer discovery, and follow section 6 for a small first flight. [#14](https://github.com/spring-labs-inc/FlightCheck/issues/14) is closed within the [recorded four-interface native scope](https://github.com/spring-labs-inc/FlightCheck/blob/main/docs/claude-trial-report.md#accepted-native-app-scope), including the owner's acceptance of the manual prepare/check/footer procedure. Retained bypass failures and runtime, transcript and host limits remain explicit; automatic interception and universal transcript compliance are not promised. Browser publication, effective read-only reviewer boundaries, rendering and repair/resume still need actual observations for a new project/runtime. Those source observations alone do not qualify new release artifact bytes. Version `0.1.0a2` separately passed local and real SSH card startup, recovery and browser rendering with its exact retained wheel; future versions require their own release-byte observations. Python 3.9+/POSIX is the declared compatibility floor, not qualification of every Python/platform combination; native Windows is unsupported. The public command above applies to this verified alpha; other versions require their own publication and public-index verification.
 
 ### Proposed first-flight interview
 
@@ -94,7 +106,13 @@ The [qualification record](https://github.com/spring-labs-inc/FlightCheck/blob/m
 
 ## Source-channel reference
 
-These low-level commands use the same planning, validation, application, and verification engine as the packaged CLI. Prefer the terminal flow above for ordinary adoption.
+If you prefer installing the CLI from Git, the existing source alternative remains available:
+
+```sh
+pipx install "git+https://github.com/spring-labs-inc/FlightCheck.git"
+```
+
+The low-level commands below use the same planning, validation, application, and verification engine as the packaged CLI. Prefer the terminal flow above for ordinary adoption; use the pinned checkout below when you need to retain a particular source revision.
 
 ## 1. Obtain and pin the source
 
