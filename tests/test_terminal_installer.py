@@ -328,7 +328,7 @@ with installer() as (_,root,*rest):
         self.assertIn("flightcheck init", readme)
         self.assertIn("flightcheck doctor", readme)
         self.assertNotIn("[PyPI distribution]", readme)
-        self.assertLess(readme.index("## Guides"), readme.index("## Get started"))
+        self.assertLess(readme.index("## Get started"), readme.index("## Guides"))
         self.assertTrue(readme.rstrip().endswith("[bug reports and feature requests are welcome](CONTRIBUTING.md)."))
         guide = (PRODUCT / "setup/README.md").read_text()
         self.assertIn("flightcheck recover", guide)
