@@ -5,7 +5,7 @@ backend-path = ["."]
 
 [project]
 name = "flightcheck"
-version = "0.1.0a1"
+version = "0.1.0a2"
 description = "Terminal-first project setup for the FlightCheck development workflow"
 readme = "README.md"
 requires-python = ">=3.9"

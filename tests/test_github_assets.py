@@ -418,13 +418,13 @@ class GitHubAssetsTests(unittest.TestCase):
             ["add", "."],
             ["-c", "user.name=Alternate fixture", "-c", "user.email=fixture@example.invalid",
              "-c", "commit.gpgsign=false", "commit", "-qm", "Alternate synthetic release"],
-            ["tag", "-f", "v0.1.0a1"],
+            ["tag", "-f", self.tag],
         ]
         for args in commands:
             subprocess.run(["git", "-C", str(source), *args], env=self.env,
                            check=True, capture_output=True)
         folder = self.root / "release-b"
-        self.command("prepare", "--output", folder, "--tag", "v0.1.0a1", script=source / "release/release.py")
+        self.command("prepare", "--output", folder, "--tag", self.tag, script=source / "release/release.py")
         return folder
 
     def development_release(self):

@@ -1,6 +1,6 @@
 # Prepare the first FlightCheck PyPI release
 
-**Preparation only.** The owner selected distribution `flightcheck`, executable `flightcheck`, internal module `flightcheck_cli`, and proposed alpha version `0.1.0a1`. Neither a missing public listing nor a local build establishes PyPI ownership. No release has been published or tested against the public index in this work. Keep #67 open until its actual public-release checks pass. The [native qualification report](../docs/claude-trial-report.md#accepted-native-app-scope) records the bounded four-interface scope that closed #14, including the owner-accepted manual prepare/check/footer limitation. It does not qualify new release bytes or promise automatic interception of every message.
+**Preparation only.** The owner selected distribution `flightcheck`, executable `flightcheck`, and internal module `flightcheck_cli`. The next proposed preparation candidate is alpha version `0.1.0a2`. Neither a missing public listing nor a local build establishes PyPI ownership. No release has been published or tested against the public index in this work. Keep #67 open until its actual public-release checks pass. The [native qualification report](../docs/claude-trial-report.md#accepted-native-app-scope) records the bounded four-interface scope that closed #14, including the owner-accepted manual prepare/check/footer limitation. It does not qualify new release bytes or promise automatic interception of every message.
 
 The README retains the working Git/pipx installation until publication and public installation are verified. Do not recommend an index package based only on its name. Existing project files and the selected project Python survive uninstalling the global CLI. This alpha supports fresh setup and identical repeats; project upgrades, removal, runtime management and the proposed AI resource interview remain separate work.
 
@@ -35,7 +35,7 @@ The landed workflow has only `workflow_dispatch`; neither a push, tag nor GitHub
 After the separately approved clean tag exists:
 
 ```sh
-gh workflow run release.yml --ref v0.1.0a1 -f mode=prepare -f tag=v0.1.0a1
+gh workflow run release.yml --ref v0.1.0a2 -f mode=prepare -f tag=v0.1.0a2
 ```
 
 Dispatch on the version tag so the run's source SHA equals the checked-out release source. The preparation job runs contributor checks, requires clean Git and the exact tag at HEAD, builds wheel/sdist, validates strict metadata/resources/notices, and uploads one immutable `flightcheck-release` artifact. Review/download it and retain the run ID, artifact ID, full source SHA and `release.json` SHA-256. Keep the original distributions; rebuilding would produce different bytes and is not a substitute for approval. Record this one release identity across all channels: distribution/version/tag, full source SHA, prepare run ID, immutable artifact ID, `release.json` hash, and both distribution filenames, sizes and SHA-256 digests. Later visitor-documentation commits do not rebuild or replace the published version.
@@ -43,7 +43,7 @@ Dispatch on the version tag so the run's source SHA equals the checked-out relea
 A later, explicitly authorized dispatch uses those exact four reviewed identities:
 
 ```sh
-gh workflow run release.yml --ref v0.1.0a1 -f mode=publish -f tag=v0.1.0a1 \
+gh workflow run release.yml --ref v0.1.0a2 -f mode=publish -f tag=v0.1.0a2 \
   -f reviewed_run_id=APPROVED_RUN_ID -f reviewed_artifact_id=APPROVED_ARTIFACT_ID \
   -f reviewed_source_sha=APPROVED_FULL_SOURCE_SHA -f reviewed_manifest_sha256=APPROVED_MANIFEST_SHA256
 ```
@@ -59,7 +59,7 @@ After successful authorized publication, use the retained clean release director
 ```sh
 python3 -B release/release.py verify-index --artifacts /private/reviewed-release \
   --manifest-sha256 APPROVED_MANIFEST_SHA256 > /private/pypi-verification.json
-pipx install 'flightcheck==0.1.0a1'
+pipx install 'flightcheck==0.1.0a2'
 cd /path/to/disposable-existing-project
 flightcheck inspect .
 flightcheck init . --agent claude

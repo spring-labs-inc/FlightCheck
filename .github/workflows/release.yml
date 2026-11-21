@@ -10,7 +10,7 @@ name: Release FlightCheck (manual)
       tag:
         description: Exact version tag, at the workflow dispatch commit
         required: true
-        default: v0.1.0a1
+        default: v0.1.0a2
       reviewed_run_id:
         description: Successful prepare run ID (publish only)
       reviewed_artifact_id:
@@ -99,6 +99,7 @@ jobs:
           run-id: ${{ inputs.reviewed_run_id }}
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/release
+          merge-multiple: true
       - name: Verify complete artifacts and publication policy
         id: policy
         env:
@@ -141,6 +142,7 @@ jobs:
           run-id: ${{ inputs.reviewed_run_id }}
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/release
+          merge-multiple: true
       - name: Recheck approved bytes after protected environment approval
         env:
           MANIFEST_SHA: ${{ inputs.reviewed_manifest_sha256 }}
