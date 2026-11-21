@@ -501,17 +501,6 @@ class ReleaseTests(unittest.TestCase):
 
     def workflow(self):
         workflow = yaml.load((ROOT / '.github/workflows/release.yml').read_text(), Loader=yaml.BaseLoader)
-        mutation = os.environ.get('FC_LAYOUT_MUTATION', '')
-        job = 'verify-publication' if mutation.startswith('verify-') else 'publish'
-        download = next(step for step in workflow['jobs'][job]['steps']
-                        if step.get('uses', '').startswith('actions/download-artifact@'))
-        if mutation.endswith('-no-merge'):
-            download['with'].pop('merge-multiple', None)
-        elif mutation.endswith('-by-name'):
-            download['with'].pop('artifact-ids', None)
-            download['with']['name'] = 'flightcheck-release'
-        elif mutation == 'unprotected-job':
-            workflow['jobs']['publish'].pop('environment', None)
         return workflow
 
     def downloaded_fixture(self, workflow, job, runner, variant):
@@ -633,10 +622,10 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("vars.FLIGHTCHECK_PYPI_PUBLISH_ENABLED == 'true'", publish['if'])
         self.assertIn("needs.verify-publication.result == 'success'", publish['if'])
         self.assertFalse(any('checkout' in s.get('uses', '') for s in publish['steps']))
-        self.assertIn('0.1.0a2', (ROOT / 'setup/README.md').read_text().splitlines()[28])
-        self.assertIn('0.1.0a2', (ROOT / 'docs/pypi-distribution.md').read_text().splitlines()[2])
+        self.assertIn('version `0.1.0a2`', next(line for line in (ROOT / 'setup/README.md').read_text().splitlines() if line.startswith('The proposed PyPI distribution is `flightcheck`')))
+        self.assertIn('`0.1.0a2`', next(line for line in (ROOT / 'docs/pypi-distribution.md').read_text().splitlines() if line.startswith('Current preparation:')))
         guide = (ROOT / 'release/README.md').read_text()
-        self.assertIn('0.1.0a2', guide.splitlines()[2])
+        self.assertIn('alpha version `0.1.0a2`', next(line for line in guide.splitlines() if line.startswith('**Preparation only.**')))
         self.assertIn('--ref v0.1.0a2 -f mode=prepare -f tag=v0.1.0a2', guide)
         self.assertIn('--ref v0.1.0a2 -f mode=publish -f tag=v0.1.0a2', guide)
         self.assertIn("pipx install 'flightcheck==0.1.0a2'", guide)
