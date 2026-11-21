@@ -26,7 +26,7 @@ The preview lists every create/update/unchanged operation and content digest, wi
 
 ### PyPI release status and earlier Git tool installs
 
-The proposed PyPI distribution is `flightcheck`, version `0.1.0a1`; it is not yet a verified public release. Keep using the Git command above until publication and a fresh public-index installation are verified. Maintainers prepare and validate the release through the separate [release guide](https://github.com/spring-labs-inc/FlightCheck/blob/main/release/README.md); local artifacts and loopback-index tests do not prove public availability.
+The proposed PyPI distribution is `flightcheck`, version `0.1.0a2`; it is not yet a verified public release. Keep using the Git command above until publication and a fresh public-index installation are verified. Maintainers prepare and validate the release through the separate [release guide](https://github.com/spring-labs-inc/FlightCheck/blob/main/release/README.md); local artifacts and loopback-index tests do not prove public availability.
 
 Earlier Git builds used distribution name `flightcheck-cli` while exposing the same `flightcheck` executable. Before installing the renamed tool, retain the old artifact for rollback and run `pipx uninstall flightcheck-cli`; this removes its tool environment and launcher, not project instructions, evidence or the selected project runtime. Install the new tool afterward. Do not overwrite an unrelated executable. Existing projects are not implicitly migrated: run `flightcheck doctor` and retain the supported fresh-setup/identical-repeat boundary below.
 

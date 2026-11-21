@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import tomllib
 import unittest
 from unittest import mock
 import zipfile
@@ -44,13 +45,15 @@ class ReleaseTests(unittest.TestCase):
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(path, dest)
                 dest.chmod(stat.S_IMODE(path.stat().st_mode))
+        cls.version = tomllib.loads((cls.source / 'pyproject.toml').read_text())['project']['version']
+        cls.tag = 'v' + cls.version
         for args in (['init', '-q', '--template='], ['config', 'core.hooksPath', os.devnull], ['add', '--force', '.'],
                      ['-c', 'user.name=Release test fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Synthetic release source fixture'],
-                     ['tag', 'v0.1.0a1']):
+                     ['tag', cls.tag]):
             subprocess.run(['git', '-C', str(cls.source), *args], env=cls.env, check=True, capture_output=True)
         cls.script = cls.source / 'release/release.py'
         cls.artifacts = cls.scratch / 'release'
-        cls.command('prepare', '--output', cls.artifacts, '--tag', 'v0.1.0a1')
+        cls.command('prepare', '--output', cls.artifacts, '--tag', cls.tag)
         cls.record = json.loads((cls.artifacts / 'release.json').read_text())
 
     @classmethod
@@ -84,7 +87,7 @@ class ReleaseTests(unittest.TestCase):
         marker = self.source / 'uncommitted.txt'
         marker.write_text('Owner work must not impersonate a release\n')
         self.addCleanup(marker.unlink)
-        self.command('prepare', '--output', self.root / 'dirty', '--tag', 'v0.1.0a1', expected=1)
+        self.command('prepare', '--output', self.root / 'dirty', '--tag', self.tag, expected=1)
         reviewed = self.command('prepare', '--output', self.root / 'dirty-review', '--review')
         self.assertFalse(reviewed['release_eligible'])
         self.assertTrue(reviewed['record']['source']['development'])
@@ -215,7 +218,7 @@ class ReleaseTests(unittest.TestCase):
         before = (self.source / 'README.md').read_bytes()
         proposal = self.command('docs', '--artifacts', self.artifacts)
         self.assertEqual(proposal['status'], 'proposal_only')
-        self.assertIn('flightcheck==0.1.0a1', proposal['readme'])
+        self.assertIn('flightcheck==' + self.version, proposal['readme'])
         for marker in ('## Get started', '## License and commercial use'):
             if marker == '## Get started':self.assertEqual(proposal['readme'].split(marker)[0], before.decode().split(marker)[0])
             else:self.assertEqual(proposal['readme'].split(marker)[1], before.decode().split(marker)[1])
@@ -255,9 +258,9 @@ class ReleaseTests(unittest.TestCase):
             return original_mkdir(path, *args, **kwargs)
         with mock.patch.object(Path, 'mkdir', autospec=True, side_effect=observe_mkdir):
             with self.assertRaises(ValueError):
-                module.prepare(alias, tag='v0.1.0a1')
+                module.prepare(alias, tag=self.tag)
         self.assertEqual(created, [])
-        error = self.command('prepare', '--tag', 'v0.1.0a1', '--output', alias, expected=1)
+        error = self.command('prepare', '--tag', self.tag, '--output', alias, expected=1)
         self.assertIn('outside the checkout', error['error'])
         self.assertFalse(protected.exists())
         outside = self.root / 'external-review'
@@ -266,14 +269,14 @@ class ReleaseTests(unittest.TestCase):
     def test_registry_redirects_stop_before_destination_request(self):
         with self.registry() as (destination, destination_state):
             with self.registry() as (origin, origin_state):
-                origin_state['redirect'] = destination + '/pypi/flightcheck/0.1.0a1/json'
+                origin_state['redirect'] = destination + '/pypi/flightcheck/' + self.version + '/json'
                 self.command('verify-index', '--artifacts', self.artifacts, '--test-index', origin, expected=1)
         self.assertEqual(len(origin_state['requests']), 1)
         self.assertEqual(destination_state['requests'], [])
 
     def test_registry_public_origin_is_checked_before_download(self):
         module = self.release_module()
-        metadata_url = 'https://pypi.org/pypi/flightcheck/0.1.0a1/json'
+        metadata_url = 'https://pypi.org/pypi/flightcheck/' + self.version + '/json'
         payloads = {n: (self.artifacts / 'dist' / n).read_bytes() for n in self.record['files']}
         for template, accepted in (
             ('https://files.pythonhosted.org/{filename}', True),
@@ -294,7 +297,7 @@ class ReleaseTests(unittest.TestCase):
                 def download(url, expected_size=None):
                     requested.append(url)
                     if url == metadata_url:
-                        return json.dumps({'info': {'name': 'flightcheck', 'version': '0.1.0a1'}, 'urls': entries}).encode()
+                        return json.dumps({'info': {'name': 'flightcheck', 'version': self.version}, 'urls': entries}).encode()
                     return payloads[module.urlsplit(url).path.rsplit('/', 1)[-1]]
                 with mock.patch.object(module, 'read_url', side_effect=download):
                     if accepted:
@@ -365,8 +368,8 @@ class ReleaseTests(unittest.TestCase):
         variant = self.root / filename
         variant.write_bytes(substitute)
         module = self.release_module()
-        self.assertEqual(module.wheel_payload(variant, 'flightcheck', '0.1.0a1'),
-                         module.wheel_payload(self.artifacts / 'dist' / filename, 'flightcheck', '0.1.0a1'))
+        self.assertEqual(module.wheel_payload(variant, 'flightcheck', self.version),
+                         module.wheel_payload(self.artifacts / 'dist' / filename, 'flightcheck', self.version))
         with self.registry() as (url, state):
             result = self.command('verify-index', '--artifacts', self.artifacts, '--test-index', url)
             self.assertEqual(result['status'], 'simulated_registry_match')
@@ -388,9 +391,9 @@ class ReleaseTests(unittest.TestCase):
         smoke = subprocess.run([str(tool / 'bin/flightcheck'), '--version'], env=self.env,
                                capture_output=True, text=True)
         self.assertEqual(smoke.returncode, 0, smoke.stdout + smoke.stderr)
-        self.assertIn('flightcheck 0.1.0a1', smoke.stdout)
+        self.assertIn('flightcheck ' + self.version, smoke.stdout)
         identity = subprocess.run([str(tool / 'bin/python'), '-B', '-c',
-                                   "from importlib.metadata import version;assert version('flightcheck')=='0.1.0a1'"],
+                                   "from importlib.metadata import version;assert version('flightcheck')==" + repr(self.version)],
                                   env=self.env, capture_output=True, text=True)
         self.assertEqual(identity.returncode, 0, identity.stdout + identity.stderr)
         context = self.root / 'no-actions-context.json'
@@ -435,7 +438,7 @@ class ReleaseTests(unittest.TestCase):
                           'evidence_dir': str(area / 'evidence'), 'nit_tracker': 'Private notes', 'policy_reference': 'Synthetic owner policy',
                           'checks': [{'name': 'Must not run in setup', 'command': [BASE, '-c', 'raise SystemExit(93)'], 'phase': 'cheap'}]}
                 config = area / 'choices.json';config.write_text(json.dumps(values));plan = area / 'plan.json'
-                result = subprocess.run([str(tool / 'bin/python'), '-B', '-c', "import flightcheck_cli;from importlib.metadata import version;assert version('flightcheck')=='0.1.0a1'"], env=env, capture_output=True, text=True)
+                result = subprocess.run([str(tool / 'bin/python'), '-B', '-c', "import flightcheck_cli;from importlib.metadata import version;assert version('flightcheck')==" + repr(self.version)], env=env, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 for args in (['--version'], ['init', str(project), '--agent', 'both', '--config', str(config), '--plan', str(plan)],
                              ['init', str(project), '--apply', str(plan)], ['doctor', str(project)]):
@@ -495,6 +498,149 @@ class ReleaseTests(unittest.TestCase):
         shared = (ROOT / 'setup/README.md').read_text()
         self.assertIn('pipx uninstall flightcheck-cli', shared)
         self.assertIn('not yet a verified public release', shared)
+
+    def workflow(self):
+        workflow = yaml.load((ROOT / '.github/workflows/release.yml').read_text(), Loader=yaml.BaseLoader)
+        mutation = os.environ.get('FC_LAYOUT_MUTATION', '')
+        job = 'verify-publication' if mutation.startswith('verify-') else 'publish'
+        download = next(step for step in workflow['jobs'][job]['steps']
+                        if step.get('uses', '').startswith('actions/download-artifact@'))
+        if mutation.endswith('-no-merge'):
+            download['with'].pop('merge-multiple', None)
+        elif mutation.endswith('-by-name'):
+            download['with'].pop('artifact-ids', None)
+            download['with']['name'] = 'flightcheck-release'
+        elif mutation == 'unprotected-job':
+            workflow['jobs']['publish'].pop('environment', None)
+        return workflow
+
+    def downloaded_fixture(self, workflow, job, runner, variant):
+        step = next(step for step in workflow['jobs'][job]['steps']
+                    if step.get('uses', '').startswith('actions/download-artifact@'))
+        options = step['with']
+        expected_id = ('${{ inputs.reviewed_artifact_id }}' if job == 'verify-publication'
+                       else '${{ needs.verify-publication.outputs.artifact_id }}')
+        self.assertEqual(options['artifact-ids'], expected_id)
+        self.assertEqual(options['run-id'], '${{ inputs.reviewed_run_id }}')
+        self.assertNotIn('name', options, 'A named/latest download must not replace immutable ID selection')
+        self.assertEqual(options['path'], '${{ runner.temp }}/release')
+        # Exact pinned d3f86a1 source: isSingleArtifactDownload is based on name,
+        # not on the number of IDs. Missing merge-multiple defaults to false.
+        merge = options.get('merge-multiple', 'false') in ('true', 'True', 'TRUE')
+        destination = runner / 'release'
+        if not options.get('name') and not merge:
+            destination /= 'flightcheck-release'
+        if variant == 'nested':
+            destination /= 'unexpected-child'
+        if variant == 'missing':
+            return destination
+        if variant == 'empty':
+            destination.mkdir(parents=True)
+            return destination
+        shutil.copytree(self.artifacts, destination)
+        if variant in ('wheel-byte', 'sdist-byte'):
+            path = next((destination / 'dist').glob('*.whl' if variant == 'wheel-byte' else '*.tar.gz'))
+            data = path.read_bytes()
+            path.write_bytes(bytes([data[0] ^ 1]) + data[1:])
+        elif variant == 'extra':
+            (destination / 'dist/unapproved-stale.whl').write_bytes(b'Unapproved extra distribution')
+        elif variant == 'manifest-byte':
+            path = destination / 'release.json'
+            path.write_bytes(path.read_bytes() + b'\n')
+        return destination
+
+    def workflow_environment(self, runner):
+        return {**self.env, 'PATH': str(Path(sys.executable).parent) + os.pathsep + os.environ['PATH'],
+                'RUNNER_TEMP': str(runner), 'FLIGHTCHECK_PYPI_PUBLISH_ENABLED': 'true',
+                'RUN_ID': '123', 'ARTIFACT_ID': '456',
+                'SOURCE_SHA': self.record['source']['source_revision'],
+                'GITHUB_SHA': self.record['source']['source_revision'],
+                'MANIFEST_SHA': hashlib.sha256((self.artifacts / 'release.json').read_bytes()).hexdigest(),
+                'GITHUB_OUTPUT': str(runner / 'github-output')}
+
+    def test_workflow_verify_publication_download_layout(self):
+        workflow = self.workflow()
+        policy = workflow['jobs']['verify-publication']['steps'][-1]['run']
+        for variant in ('valid', 'nested', 'missing', 'empty', 'wheel-byte', 'sdist-byte',
+                        'extra', 'manifest-byte', 'wrong-current-sha', 'wrong-source-sha', 'wrong-artifact-id'):
+            with self.subTest(variant=variant), tempfile.TemporaryDirectory(dir=self.root) as area:
+                runner = Path(area)
+                destination = self.downloaded_fixture(workflow, 'verify-publication', runner, variant)
+                provider = runner / 'provider'
+                provider.mkdir()
+                context = self.policy()
+                if variant == 'wrong-source-sha':
+                    context['run']['head_sha'] = '0' * 40
+                elif variant == 'wrong-artifact-id':
+                    context['artifact']['id'] = 457
+                for name in ('run', 'artifact', 'environment', 'workflow'):
+                    (provider / (name + '.json')).write_text(json.dumps(context[name]))
+                env = self.workflow_environment(runner)
+                if variant == 'wrong-current-sha':
+                    env['GITHUB_SHA'] = '0' * 40
+                result = subprocess.run(['/bin/bash', '-e', '-c', policy], cwd=self.source,
+                                        env=env, capture_output=True, text=True)
+                policy_result = json.loads((runner / 'policy.json').read_text())
+                if variant == 'valid':
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr + json.dumps(policy_result))
+                    self.assertEqual(policy_result['status'], 'eligible_for_protected_job')
+                    self.assertEqual(policy_result['artifact_id'], '456')
+                    self.assertEqual((runner / 'github-output').read_text(), 'artifact_id=456\n')
+                    self.assertEqual(destination, runner / 'release')
+                    for name, expected in self.record['files'].items():
+                        self.assertEqual(hashlib.sha256((destination / 'dist' / name).read_bytes()).hexdigest(), expected['sha256'])
+                else:
+                    self.assertNotEqual(result.returncode, 0, variant)
+                    self.assertEqual(policy_result['status'], 'incomplete')
+                    self.assertFalse((runner / 'github-output').exists(), 'A failed policy cannot authorize the protected download')
+        self.assertIn("needs.verify-publication.result == 'success'", workflow['jobs']['publish']['if'])
+
+    def test_workflow_protected_publish_download_layout(self):
+        workflow = self.workflow()
+        publish = workflow['jobs']['publish']
+        bytecheck = publish['steps'][1]['run']
+        self.assertEqual(publish['environment']['name'], 'pypi')
+        self.assertTrue(publish['steps'][-1]['uses'].startswith('pypa/gh-action-pypi-publish@'))
+        self.assertNotIn('if', publish['steps'][-1], 'Do not make upload run after a failed bytecheck')
+        self.assertEqual(publish['steps'][-1]['with']['packages-dir'], '${{ runner.temp }}/release/dist/')
+        for variant in ('valid', 'nested', 'missing', 'empty', 'wheel-byte', 'sdist-byte', 'extra', 'manifest-byte'):
+            with self.subTest(variant=variant), tempfile.TemporaryDirectory(dir=self.root) as area:
+                runner = Path(area)
+                destination = self.downloaded_fixture(workflow, 'publish', runner, variant)
+                result = subprocess.run(['/bin/bash', '-e', '-c', bytecheck], cwd=self.source,
+                                        env=self.workflow_environment(runner), capture_output=True, text=True)
+                if variant == 'valid':
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertEqual(destination, runner / 'release')
+                    self.assertEqual({p.name for p in (runner / 'release/dist').iterdir()}, set(self.record['files']))
+                    for name, expected in self.record['files'].items():
+                        self.assertEqual(hashlib.sha256((runner / 'release/dist' / name).read_bytes()).hexdigest(), expected['sha256'])
+                else:
+                    self.assertNotEqual(result.returncode, 0, variant)
+        # No publishing action or live provider approval is executed in this test.
+
+    def test_preparation_candidate_version_consistency(self):
+        metadata = tomllib.loads((ROOT / 'pyproject.toml').read_text())['project']
+        self.assertEqual(metadata['version'], '0.1.0a2', 'Keep explicit next-candidate intent independent of derived fixture values')
+        self.assertEqual(metadata['name'], 'flightcheck')
+        self.assertEqual(metadata['license'], 'FSL-1.1-MIT')
+        workflow = self.workflow()
+        self.assertEqual(workflow['on']['workflow_dispatch']['inputs']['tag']['default'], 'v0.1.0a2')
+        self.assertEqual(set(workflow['on']), {'workflow_dispatch'})
+        publish = workflow['jobs']['publish']
+        self.assertEqual(publish['environment']['name'], 'pypi')
+        self.assertEqual(publish['permissions']['id-token'], 'write')
+        self.assertIn("vars.FLIGHTCHECK_PYPI_PUBLISH_ENABLED == 'true'", publish['if'])
+        self.assertIn("needs.verify-publication.result == 'success'", publish['if'])
+        self.assertFalse(any('checkout' in s.get('uses', '') for s in publish['steps']))
+        self.assertIn('0.1.0a2', (ROOT / 'setup/README.md').read_text().splitlines()[28])
+        self.assertIn('0.1.0a2', (ROOT / 'docs/pypi-distribution.md').read_text().splitlines()[2])
+        guide = (ROOT / 'release/README.md').read_text()
+        self.assertIn('0.1.0a2', guide.splitlines()[2])
+        self.assertIn('--ref v0.1.0a2 -f mode=prepare -f tag=v0.1.0a2', guide)
+        self.assertIn('--ref v0.1.0a2 -f mode=publish -f tag=v0.1.0a2', guide)
+        self.assertIn("pipx install 'flightcheck==0.1.0a2'", guide)
+        self.assertIn('Keep it disabled during preparation.', guide)
 
 
 if __name__ == '__main__':

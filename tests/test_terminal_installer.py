@@ -278,7 +278,12 @@ with installer() as (_,root,*rest):
     path=root/'examples/existing-project/docs/project-resources.md'
     path.write_bytes(path.read_bytes()+b'\\nChanged source resource for stale-plan control.\\n')
     pyproject=root/'pyproject.toml'
-    pyproject.write_text(pyproject.read_text().replace('version = "0.1.0a1"','version = "0.1.0a2"'))
+    import re
+    content = pyproject.read_text()
+    version = re.search(r'(?m)^version = "([^"]+)"$', content).group(1)
+    changed, count = re.subn(r'(?m)^version = "[^"]+"$', 'version = "' + version + '.post1"', content)
+    assert count == 1 and changed != content
+    pyproject.write_text(changed)
     for args in (['add','.'],['-c','user.name=Variant fixture','-c','user.email=fixture@example.invalid','-c','commit.gpgsign=false','commit','-qm','Different packaged source fixture']):
         subprocess.run(['git','-C',str(root),*args],check=True,capture_output=True)
     subprocess.run([BUILD_PYTHON,'-B','-m','build','--wheel','--no-isolation','--outdir',ARTIFACTS,str(root)],check=True,capture_output=True)
@@ -286,6 +291,10 @@ with installer() as (_,root,*rest):
         r = subprocess.run([str(self.tool / "bin/python"), "-B", "-c", code], cwd=self.root, env=self.environ, capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.install_tool(tool, next(artifacts.glob("*.whl")))
+        versions = [subprocess.run([str(path / "bin/flightcheck"), "--version"], env=self.environ,
+                                  capture_output=True, text=True, check=True).stdout.strip()
+                    for path in (self.tool, tool)]
+        self.assertNotEqual(versions[0], versions[1], "The refusal fixture needs a genuinely different version")
         return tool
 
     def test_provenance_corruption_and_existing_version_refusal(self):
