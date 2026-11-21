@@ -1,8 +1,8 @@
 # Prepare the first FlightCheck PyPI release
 
-**Preparation only.** The owner selected distribution `flightcheck`, executable `flightcheck`, and internal module `flightcheck_cli`. The next proposed preparation candidate is alpha version `0.1.0a2`. Neither a missing public listing nor a local build establishes PyPI ownership. No release has been published or tested against the public index in this work. Keep #67 open until its actual public-release checks pass. The [native qualification report](../docs/claude-trial-report.md#accepted-native-app-scope) records the bounded four-interface scope that closed #14, including the owner-accepted manual prepare/check/footer limitation. It does not qualify new release bytes or promise automatic interception of every message.
+**Published alpha.** Distribution `flightcheck`, executable `flightcheck`, and internal module `flightcheck_cli` are published as version `0.1.0a2` ([PyPI](https://pypi.org/project/flightcheck/0.1.0a2/)). The release uses source `2ee1a5325a6e80d466190918391f4e79cbb85c01`, prepare run `44950505267` and immutable artifact `14725706386`. Public wheel/sdist bytes, fresh public-index installation/setup and exact-wheel local/real SSH startup, recovery and browser rendering are verified within their recorded scope. Published tags and bytes remain immutable: this documentation update does not rebuild or replace them or authorize another upload. Track remaining #67 delivery separately. The [native qualification report](../docs/claude-trial-report.md#accepted-native-app-scope) retains the bounded four-interface scope that closed #14, including the owner-accepted manual prepare/check/footer limitation; it does not promise automatic interception or qualify every future version/runtime.
 
-The README retains the working Git/pipx installation until publication and public installation are verified. Do not recommend an index package based only on its name. Existing project files and the selected project Python survive uninstalling the global CLI. This alpha supports fresh setup and identical repeats; project upgrades, removal, runtime management and the proposed AI resource interview remain separate work.
+The README uses the verified PyPI pin; shared Setup retains the Git/source alternative. Do not recommend an index package based only on its name. Existing project files and the selected project Python survive uninstalling the global CLI. This alpha supports fresh setup and identical repeats; project upgrades, removal, runtime management and the proposed AI resource interview remain separate work.
 
 ## Local owner review
 
@@ -21,7 +21,7 @@ The documentation command returns a **proposal**, including the expected old REA
 
 ## Owner setup before any public upload
 
-These are future manual actions, not performed by this implementation:
+For future releases, follow this manual process under their own approval. The recorded a2 procedure below is not permission to rebuild or republish its immutable bytes:
 
 1. Confirm control and availability of `flightcheck` through the owner's PyPI account, with 2FA and minimal maintainers. A 404 does not reserve the name. Record the agreed release version and publication/license date; retain FSL-1.1-MIT notices and historical terms.
 2. Configure a normal or pending Trusted Publisher for this repository, workflow `release.yml`, environment `pypi`. Configure that GitHub environment **before** publication with required human reviewers. Keep release-tag creation restricted to authorized maintainers. A pending publisher is not a successful public release.
@@ -32,7 +32,7 @@ The landed workflow has only `workflow_dispatch`; neither a push, tag nor GitHub
 
 ## Build once, review, then publish the same bytes
 
-After the separately approved clean tag exists:
+The commands below record the published a2 procedure. Do not rerun them to rebuild or republish a2. A future release needs a new approved version/tag and newly reviewed identity; never move the published tag:
 
 ```sh
 gh workflow run release.yml --ref v0.1.0a2 -f mode=prepare -f tag=v0.1.0a2

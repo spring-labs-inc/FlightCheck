@@ -58,10 +58,10 @@ Handoffs carry check receipts and original output between stages. Fingerprints t
 
 **Supported environments:** Claude Desktop, Claude Code TUI, Codex Desktop, and Codex CLI/TUI. FlightCheck has been verified in all four environments.
 
-Install from Git with [pipx](https://pipx.pypa.io/stable/installation/), then run setup from your terminal. Requires Git and Python 3.9+ on POSIX.
+Install with [pipx](https://pipx.pypa.io/stable/how-to/install-pipx.html), then run setup from your terminal. Requires Git and Python 3.9+ on POSIX.
 
 ```sh
-pipx install "git+https://github.com/spring-labs-inc/FlightCheck.git"
+pipx install flightcheck==0.1.0a2
 cd /path/to/your/project
 flightcheck init . --agent claude
 flightcheck doctor .
@@ -71,7 +71,7 @@ Use `--agent codex` for Codex or `--agent both` for both clients. Setup confirms
 
 After verification, start a fresh session in your coding tool and select a small first flight with `/develop-change` (Claude) or `$develop-change` (Codex). TUI users can open the printed status-card URL in their regular browser.
 
-The [setup guide](setup/README.md) covers configuration, saved plans, recovery, and current client qualification limits. PyPI installation will replace this Git channel after a release is published and verified.
+The [setup guide](setup/README.md) covers configuration, saved plans, recovery, and current client qualification limits. For source installation and retained versions, use the setup guide.
 
 ## Guides
 

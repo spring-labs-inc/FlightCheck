@@ -216,13 +216,44 @@ class ReleaseTests(unittest.TestCase):
             self.assertTrue(all(method == 'GET' for method, _ in state['requests']))
         self.command('verify-index', '--artifacts', self.artifacts, '--test-index', 'https://untrusted.invalid', expected=1)
         before = (self.source / 'README.md').read_bytes()
-        proposal = self.command('docs', '--artifacts', self.artifacts)
+        artifact_bytes = {str(path.relative_to(self.artifacts)): path.read_bytes()
+                          for path in self.artifacts.rglob('*') if path.is_file()}
+        refusal = self.command('docs', '--artifacts', self.artifacts, expected=1)
+        self.assertIn('README quickstart changed; reconcile the proposal explicitly', refusal['error'])
+        self.assertNotIn('readme', refusal)
+        self.assertNotEqual(refusal.get('status'), 'proposal_only')
+        self.assertEqual((self.source / 'README.md').read_bytes(), before)
+
+        # Exercise the proposal's unpromoted input without changing the shared source.
+        docs_source = self.root / 'docs-source'
+        (docs_source / 'release').mkdir(parents=True)
+        docs_script = docs_source / 'release/release.py'
+        shutil.copyfile(self.script, docs_script)
+        shutil.copyfile(self.source / 'pyproject.toml', docs_source / 'pyproject.toml')
+        public_pin = ('pipx install flightcheck==' + self.version).encode()
+        self.assertEqual(before.count(public_pin), 1)
+        unpromoted = before.replace(public_pin, b'pipx install "git+https://github.com/spring-labs-inc/FlightCheck.git"')
+        self.assertEqual(unpromoted.count(b'Install with [pipx]'), 1)
+        unpromoted = unpromoted.replace(b'Install with [pipx]', b'Install from Git with [pipx]')
+        published_note = b'For source installation and retained versions, use the setup guide.'
+        self.assertEqual(unpromoted.count(published_note), 1)
+        unpromoted = unpromoted.replace(published_note, b'PyPI installation will replace this Git channel after a release is published and verified.')
+        self.assertNotEqual(unpromoted, before)
+        docs_readme = docs_source / 'README.md'
+        docs_readme.write_bytes(unpromoted)
+        proposal = self.command('docs', '--artifacts', self.artifacts, script=docs_script)
         self.assertEqual(proposal['status'], 'proposal_only')
+        self.assertEqual(proposal['before_sha256'], hashlib.sha256(unpromoted).hexdigest())
+        self.assertEqual(proposal['readme'], before.decode())
         self.assertIn('flightcheck==' + self.version, proposal['readme'])
         for marker in ('## Get started', '## License and commercial use'):
-            if marker == '## Get started':self.assertEqual(proposal['readme'].split(marker)[0], before.decode().split(marker)[0])
-            else:self.assertEqual(proposal['readme'].split(marker)[1], before.decode().split(marker)[1])
+            if marker == '## Get started':self.assertEqual(proposal['readme'].split(marker)[0], unpromoted.decode().split(marker)[0])
+            else:self.assertEqual(proposal['readme'].split(marker)[1], unpromoted.decode().split(marker)[1])
+        self.assertEqual(docs_readme.read_bytes(), unpromoted)
         self.assertEqual((self.source / 'README.md').read_bytes(), before)
+        self.assertEqual(docs_script.read_bytes(), self.script.read_bytes())
+        self.assertEqual({str(path.relative_to(self.artifacts)): path.read_bytes()
+                          for path in self.artifacts.rglob('*') if path.is_file()}, artifact_bytes)
 
     def test_registry_qualification_scope(self):
         with self.registry() as (url, _):
@@ -488,16 +519,23 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("hashlib.sha256(raw).hexdigest()==os.environ['MANIFEST_SHA']", publish['steps'][1]['run'])
         self.assertIn('pypa/gh-action-pypi-publish@', publish['steps'][-1]['uses'])
         readme = (ROOT / 'README.md').read_text()
-        self.assertIn('pipx install "git+https://github.com/spring-labs-inc/FlightCheck.git"', readme)
-        self.assertNotIn('pipx install flightcheck==', readme)
+        quickstart = readme.split('## Get started', 1)[1].split('## Guides', 1)[0]
+        self.assertIn('pipx install flightcheck==0.1.0a2', quickstart)
+        self.assertNotIn('pipx install "git+https://github.com/spring-labs-inc/FlightCheck.git"', quickstart)
         rows = [line.split(']')[0].split('[')[-1] for line in readme.splitlines() if line.startswith('| [')]
         self.assertEqual(rows, ['Status Card', 'Workflow', 'Verdict', 'Setup', 'Benchmarks', 'Contributing'])
         guide = (ROOT / 'release/README.md').read_text()
-        for phrase in ('Preparation only', 'required human reviewers', 'same bytes', 'actual PyPI', 'simulated_registry_match', '#14'):
+        for phrase in ('Published alpha', 'required human reviewers', 'same bytes', 'actual PyPI', 'simulated_registry_match', '#14'):
             self.assertIn(phrase, guide)
         shared = (ROOT / 'setup/README.md').read_text()
         self.assertIn('pipx uninstall flightcheck-cli', shared)
-        self.assertIn('not yet a verified public release', shared)
+        self.assertIn('Published PyPI distribution: `flightcheck`, version `0.1.0a2`', shared)
+        self.assertIn('pipx install "git+https://github.com/spring-labs-inc/FlightCheck.git"', shared)
+        self.assertNotIn('not yet a verified public release', shared)
+        uv_blocks = [block.split('```', 1)[0] for block in shared.split('```sh\n')[1:] if block.lstrip().startswith('uv tool install ')]
+        self.assertEqual(len(uv_blocks), 1, 'Expected one persistent uv installation alternative')
+        uv_command = ' '.join(uv_blocks[0].replace('\\\n', ' ').split())
+        self.assertEqual(uv_command, 'uv tool install --python /absolute/path/to/python3 --no-python-downloads --no-config --default-index https://pypi.org/simple --prerelease explicit flightcheck==0.1.0a2')
 
     def workflow(self):
         workflow = yaml.load((ROOT / '.github/workflows/release.yml').read_text(), Loader=yaml.BaseLoader)
@@ -622,10 +660,16 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("vars.FLIGHTCHECK_PYPI_PUBLISH_ENABLED == 'true'", publish['if'])
         self.assertIn("needs.verify-publication.result == 'success'", publish['if'])
         self.assertFalse(any('checkout' in s.get('uses', '') for s in publish['steps']))
-        self.assertIn('version `0.1.0a2`', next(line for line in (ROOT / 'setup/README.md').read_text().splitlines() if line.startswith('The proposed PyPI distribution is `flightcheck`')))
-        self.assertIn('`0.1.0a2`', next(line for line in (ROOT / 'docs/pypi-distribution.md').read_text().splitlines() if line.startswith('Current preparation:')))
+        setup_status = [line for line in (ROOT / 'setup/README.md').read_text().splitlines() if line.startswith('Published PyPI distribution: `flightcheck`')]
+        self.assertEqual(len(setup_status), 1, 'Expected one current published status sentence in setup/README.md')
+        self.assertIn('version `0.1.0a2`', setup_status[0])
+        distribution_status = [line for line in (ROOT / 'docs/pypi-distribution.md').read_text().splitlines() if line.startswith('Current release:')]
+        self.assertEqual(len(distribution_status), 1, 'Expected one current published status sentence in docs/pypi-distribution.md')
+        self.assertIn('`0.1.0a2`', distribution_status[0])
         guide = (ROOT / 'release/README.md').read_text()
-        self.assertIn('alpha version `0.1.0a2`', next(line for line in guide.splitlines() if line.startswith('**Preparation only.**')))
+        release_status = [line for line in guide.splitlines() if line.startswith('**Published alpha.**')]
+        self.assertEqual(len(release_status), 1, 'Expected one current published status sentence in release/README.md')
+        self.assertIn('version `0.1.0a2`', release_status[0])
         self.assertIn('--ref v0.1.0a2 -f mode=prepare -f tag=v0.1.0a2', guide)
         self.assertIn('--ref v0.1.0a2 -f mode=publish -f tag=v0.1.0a2', guide)
         self.assertIn("pipx install 'flightcheck==0.1.0a2'", guide)
