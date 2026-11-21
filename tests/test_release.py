@@ -488,7 +488,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn('pipx install "git+https://github.com/spring-labs-inc/FlightCheck.git"', readme)
         self.assertNotIn('pipx install flightcheck==', readme)
         rows = [line.split(']')[0].split('[')[-1] for line in readme.splitlines() if line.startswith('| [')]
-        self.assertEqual(rows, ['Workflow', 'Status Card', 'Evidence handoff', 'Benchmarks', 'Setup', 'Contributing'])
+        self.assertEqual(rows, ['Status Card', 'Workflow', 'Verdict', 'Setup', 'Benchmarks', 'Contributing'])
         guide = (ROOT / 'release/README.md').read_text()
         for phrase in ('Preparation only', 'required human reviewers', 'same bytes', 'actual PyPI', 'simulated_registry_match', '#14'):
             self.assertIn(phrase, guide)
