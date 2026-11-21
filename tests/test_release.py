@@ -233,12 +233,18 @@ class ReleaseTests(unittest.TestCase):
         public_pin = ('pipx install flightcheck==' + self.version).encode()
         self.assertEqual(before.count(public_pin), 1)
         unpromoted = before.replace(public_pin, b'pipx install "git+https://github.com/spring-labs-inc/FlightCheck.git"')
+        self.assertEqual(unpromoted.count(b'Install with [pipx]'), 1)
+        unpromoted = unpromoted.replace(b'Install with [pipx]', b'Install from Git with [pipx]')
+        published_note = b'For source installation and retained versions, use the setup guide.'
+        self.assertEqual(unpromoted.count(published_note), 1)
+        unpromoted = unpromoted.replace(published_note, b'PyPI installation will replace this Git channel after a release is published and verified.')
         self.assertNotEqual(unpromoted, before)
         docs_readme = docs_source / 'README.md'
         docs_readme.write_bytes(unpromoted)
         proposal = self.command('docs', '--artifacts', self.artifacts, script=docs_script)
         self.assertEqual(proposal['status'], 'proposal_only')
         self.assertEqual(proposal['before_sha256'], hashlib.sha256(unpromoted).hexdigest())
+        self.assertEqual(proposal['readme'], before.decode())
         self.assertIn('flightcheck==' + self.version, proposal['readme'])
         for marker in ('## Get started', '## License and commercial use'):
             if marker == '## Get started':self.assertEqual(proposal['readme'].split(marker)[0], unpromoted.decode().split(marker)[0])
