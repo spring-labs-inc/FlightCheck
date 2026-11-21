@@ -216,13 +216,38 @@ class ReleaseTests(unittest.TestCase):
             self.assertTrue(all(method == 'GET' for method, _ in state['requests']))
         self.command('verify-index', '--artifacts', self.artifacts, '--test-index', 'https://untrusted.invalid', expected=1)
         before = (self.source / 'README.md').read_bytes()
-        proposal = self.command('docs', '--artifacts', self.artifacts)
+        artifact_bytes = {str(path.relative_to(self.artifacts)): path.read_bytes()
+                          for path in self.artifacts.rglob('*') if path.is_file()}
+        refusal = self.command('docs', '--artifacts', self.artifacts, expected=1)
+        self.assertIn('README quickstart changed; reconcile the proposal explicitly', refusal['error'])
+        self.assertNotIn('readme', refusal)
+        self.assertNotEqual(refusal.get('status'), 'proposal_only')
+        self.assertEqual((self.source / 'README.md').read_bytes(), before)
+
+        # Exercise the proposal's unpromoted input without changing the shared source.
+        docs_source = self.root / 'docs-source'
+        (docs_source / 'release').mkdir(parents=True)
+        docs_script = docs_source / 'release/release.py'
+        shutil.copyfile(self.script, docs_script)
+        shutil.copyfile(self.source / 'pyproject.toml', docs_source / 'pyproject.toml')
+        public_pin = ('pipx install flightcheck==' + self.version).encode()
+        self.assertEqual(before.count(public_pin), 1)
+        unpromoted = before.replace(public_pin, b'pipx install "git+https://github.com/spring-labs-inc/FlightCheck.git"')
+        self.assertNotEqual(unpromoted, before)
+        docs_readme = docs_source / 'README.md'
+        docs_readme.write_bytes(unpromoted)
+        proposal = self.command('docs', '--artifacts', self.artifacts, script=docs_script)
         self.assertEqual(proposal['status'], 'proposal_only')
+        self.assertEqual(proposal['before_sha256'], hashlib.sha256(unpromoted).hexdigest())
         self.assertIn('flightcheck==' + self.version, proposal['readme'])
         for marker in ('## Get started', '## License and commercial use'):
-            if marker == '## Get started':self.assertEqual(proposal['readme'].split(marker)[0], before.decode().split(marker)[0])
-            else:self.assertEqual(proposal['readme'].split(marker)[1], before.decode().split(marker)[1])
+            if marker == '## Get started':self.assertEqual(proposal['readme'].split(marker)[0], unpromoted.decode().split(marker)[0])
+            else:self.assertEqual(proposal['readme'].split(marker)[1], unpromoted.decode().split(marker)[1])
+        self.assertEqual(docs_readme.read_bytes(), unpromoted)
         self.assertEqual((self.source / 'README.md').read_bytes(), before)
+        self.assertEqual(docs_script.read_bytes(), self.script.read_bytes())
+        self.assertEqual({str(path.relative_to(self.artifacts)): path.read_bytes()
+                          for path in self.artifacts.rglob('*') if path.is_file()}, artifact_bytes)
 
     def test_registry_qualification_scope(self):
         with self.registry() as (url, _):
