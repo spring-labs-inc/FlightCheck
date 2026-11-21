@@ -21,7 +21,7 @@ import tarfile
 import tempfile
 import tomllib
 from urllib.parse import urlsplit
-from urllib.request import urlopen
+from urllib.request import HTTPRedirectHandler, build_opener
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,7 +52,7 @@ def ordinary(path):
     path = Path(path).absolute()
     if any(p.is_symlink() for p in (path, *path.parents)):
         raise ValueError("Symlink paths are not accepted: " + str(path))
-    return path
+    return path.resolve()
 
 
 def project():
@@ -254,9 +254,12 @@ def sdist_payload(path, name, version):
     return manifest, source
 
 
-def verify(folder, require_release=False):
+def verify(folder, require_release=False, expected_manifest_sha256=None):
     folder = ordinary(folder)
-    record = json.loads(ordinary(folder / "release.json").read_text())
+    raw = ordinary(folder / "release.json").read_bytes()
+    if expected_manifest_sha256 is not None and sha(raw) != expected_manifest_sha256:
+        raise ValueError("Approved release manifest digest differs")
+    record = json.loads(raw)
     if record.get("schema") != 1 or record.get("kind") not in ("review", "release"):
         raise ValueError("Invalid release record")
     config = project()
@@ -328,7 +331,7 @@ def prepare(output, review=False, tag=None):
 
 
 def publication_gate(folder, context, expected_manifest, expected_source, reviewed_run, reviewed_artifact, enabled):
-    record = verify(folder, True)
+    record = verify(folder, True, expected_manifest)
     if not enabled or context["mode"] != "publish":
         raise ValueError("Publication is disabled; explicit owner publish mode and repository enablement are required")
     if sha((Path(folder) / "release.json").read_bytes()) != expected_manifest:
@@ -355,8 +358,13 @@ def publication_gate(folder, context, expected_manifest, expected_source, review
             "note": "This validation does not upload or substitute for GitHub environment approval"}
 
 
+class NoRegistryRedirect(HTTPRedirectHandler):
+    def redirect_request(self, request, response, code, message, headers, new_url):
+        raise ValueError("Unexpected registry redirect")
+
+
 def read_url(url, expected_size=None):
-    with urlopen(url, timeout=30) as response:
+    with build_opener(NoRegistryRedirect()).open(url, timeout=30) as response:
         if response.url != url:
             raise ValueError("Unexpected registry redirect")
         data = response.read((expected_size if expected_size is not None else 4_000_000) + 1)
@@ -365,11 +373,16 @@ def read_url(url, expected_size=None):
     return data
 
 
-def verify_index(folder, test_index=None):
-    record = verify(folder, True)
+def verify_index(folder, test_index=None, expected_manifest_sha256=None):
+    folder = ordinary(folder)
+    manifest_sha256 = expected_manifest_sha256
+    if manifest_sha256 is None:
+        manifest_sha256 = sha(ordinary(folder / "release.json").read_bytes())
+    record = verify(folder, True, manifest_sha256)
     if test_index:
         parsed = urlsplit(test_index)
-        if parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or parsed.username or parsed.password:
+        if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1"
+                or parsed.username is not None or parsed.password is not None or "#" in test_index):
             raise ValueError("Test registries must be explicit HTTP IPv4 loopback fixtures")
         base = test_index.rstrip("/")
     else:
@@ -387,19 +400,23 @@ def verify_index(folder, test_index=None):
         if entry.get("yanked") or entry["digests"]["sha256"] != expected["sha256"] or entry["size"] != expected["size"]:
             raise ValueError("Registry artifact digest, size or yanked state differs")
         parsed = urlsplit(entry["url"])
-        allowed = (parsed.scheme == "https" and parsed.hostname == "files.pythonhosted.org") if not test_index else (
+        allowed = (parsed.scheme == "https" and parsed.hostname == "files.pythonhosted.org"
+                   and parsed.port in (None, 443)) if not test_index else (
             parsed.scheme == "http" and parsed.netloc == urlsplit(base).netloc)
-        if not allowed or parsed.username or parsed.password:
+        if (not allowed or parsed.username is not None or parsed.password is not None
+                or "#" in entry["url"]):
             raise ValueError("Unexpected artifact download origin")
         if sha(read_url(entry["url"], expected["size"])) != expected["sha256"]:
             raise ValueError("Registry metadata and downloaded bytes disagree")
+    verify(folder, True, manifest_sha256)
     return {"status": "simulated_registry_match" if test_index else "verified_public_artifact_bytes",
             "simulated": bool(test_index), "index": base,
-            "manifest_sha256": sha((Path(folder) / "release.json").read_bytes()),
+            "manifest_sha256": manifest_sha256,
             "distribution": record["distribution"], "version": record["version"],
             "source_revision": record["source"]["source_revision"],
             "public_installation": "pending fresh public-index pipx installation",
-            "native_qualification": "pending separate client/reviewer/browser observations under #14"}
+            "native_qualification": "bounded native/manual scope recorded in docs/claude-trial-report.md (#14 closed); "
+                                    "exact release-wheel local/SSH/browser checks pending; no automatic interception"}
 
 
 def docs_proposal(folder):
@@ -443,7 +460,7 @@ def main():
             if not args.artifacts:
                 raise ValueError("--artifacts is required")
             if args.command == "verify":
-                record = verify(args.artifacts, args.require_release)
+                record = verify(args.artifacts, args.require_release, args.manifest_sha256)
                 result = {"status": "verified", "release_eligible": record["release_eligible"], "record": record}
             elif args.command == "gate":
                 if not all((args.context, args.manifest_sha256, args.source_sha, args.reviewed_run_id, args.reviewed_artifact_id)):
@@ -452,7 +469,7 @@ def main():
                                           args.manifest_sha256, args.source_sha, args.reviewed_run_id,
                                           args.reviewed_artifact_id, os.environ.get("FLIGHTCHECK_PYPI_PUBLISH_ENABLED") == "true")
             elif args.command == "verify-index":
-                result = verify_index(args.artifacts, args.test_index)
+                result = verify_index(args.artifacts, args.test_index, args.manifest_sha256)
             else:
                 result = docs_proposal(args.artifacts)
         print(json.dumps(result, indent=2))

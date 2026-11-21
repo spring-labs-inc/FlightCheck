@@ -1,6 +1,6 @@
 # PyPI distribution planning and history — issues #58, #66, #67
 
-Current preparation: see the [#67 release guide](../release/README.md) and guarded manual workflow. The owner selected proposed distribution `flightcheck` / `0.1.0a1`; public ownership, publication and public-index qualification remain pending. The earlier `flightcheck-cli` label below is historical. No upload is authorized in this preparation.
+Current preparation: see the [#67 release guide](../release/README.md) and guarded manual workflow. The owner selected proposed distribution `flightcheck` / `0.1.0a1`; public ownership, publication and public-index qualification remain pending. The earlier `flightcheck-cli` label below is historical. No upload is authorized in this preparation. The [native qualification report](claude-trial-report.md#accepted-native-app-scope) records the bounded four-interface qualification accepted under #14, including the manual prepare/check/footer limitation. That closure does not qualify new release artifacts or promise automatic interception of every message.
 
 Original feasibility decision: **go for a packaging channel built on the shared installer; no-go for
 publication now.** A wheel can carry FlightCheck's command, Python runtime
@@ -22,7 +22,7 @@ browser rendering require the separate rehearsal described below.
 
 The root `pyproject.toml` and `flightcheck_cli` package promote the #58 experiment into a terminal-first alpha candidate: `inspect`, guided or configuration-driven `init`, hash-bound explicit application, `doctor`, and private recovery. The source and package channels call the same `setup/install.py` planning API. README uses the Git/pipx channel until #67 publishes and verifies a release. The prototype remains historical feasibility/rehearsal material.
 
-The current candidate supports fresh setup and identical repeats, and refuses implicit upgrades/migrations. It does not implement the full production runtime manager, real active-flight upgrade locking, project removal or the proposed AI resource-discovery interview below. Keep these limits explicit. The proposed distribution label `flightcheck` does not establish PyPI ownership or availability. Public publishing and native Claude qualification remain unverified and separate.
+The current candidate supports fresh setup and identical repeats, and refuses implicit upgrades/migrations. It does not implement the full production runtime manager, real active-flight upgrade locking, project removal or the proposed AI resource-discovery interview below. Keep these limits explicit. The proposed distribution label `flightcheck` does not establish PyPI ownership or availability. Public publishing and exact-release-wheel qualification remain pending, separately from the bounded native qualification recorded above.
 
 The #67 handoff must identify the reviewed source/version, exact wheel/sdist checksums, preserved FSL notices, tested environments, commands and remaining native/release work. Use clean source for that release; development snapshots are owner-review artifacts, not published releases.
 
@@ -58,8 +58,9 @@ qualification; WSL is not a native Windows support claim.
 The original exploration baseline targeted Codex. The current bundle includes the
 merged #53 installer, which generates the selected Codex or Claude adapters. Their
 installation establishes neither native client discovery nor an enforced reviewer
-boundary. The real local Claude trial remains in #14; Claude is not qualified by this
-Codex rehearsal. Merged #54 supplies the portable per-reply card prepare/check guard,
+boundary. This historical Codex rehearsal does not qualify Claude. The later bounded
+native trials and #14 closure are recorded in the linked qualification report.
+Merged #54 supplies the portable per-reply card prepare/check guard,
 whose actual native use and remote route must be verified separately. A portable HTTP card can work
 without an embedded browser; browser routing/rendering and remote forwarding need
 separate observations.
@@ -298,7 +299,9 @@ grant for this expanded candidate.
 PyPI publication is blocked until reliable **local and SSH status-card startup**
 has been verified using the exact proposed release wheel. Installation success
 and a worker-side HTTP 200 do not satisfy this gate. Keep this requirement with
-terminal-first installer #66; native Claude qualification #14 remains open.
+the #67 release gate, separately from the closed terminal-first installer #66 and
+the bounded native #14 qualification. Earlier source or development-wheel
+observations do not qualify these newly built release bytes.
 
 Retain the wheel digest, installed version, exact commands, process/route
 diagnostics and browser observations in the release evidence. Required cases:
