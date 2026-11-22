@@ -10,7 +10,7 @@ name: Release FlightCheck (manual)
       tag:
         description: Exact version tag, at the workflow dispatch commit
         required: true
-        default: v0.1.0a2
+        default: v0.1.0
       reviewed_run_id:
         description: Successful prepare run ID (publish only)
       reviewed_artifact_id:

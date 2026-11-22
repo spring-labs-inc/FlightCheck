@@ -22,7 +22,7 @@
 
 # FlightCheck
 
-<img align="right" width="380" src="docs/status-card-preview.png" alt="Synthetic FlightCheck task status card with an expanded issue, workflow stages, local checks, and CI observations">
+<img align="right" width="380" src="https://raw.githubusercontent.com/spring-labs-inc/FlightCheck/08e7e15fca019ff6d00307fbaf31ebefebccc86b/docs/status-card-preview.png" alt="Synthetic FlightCheck task status card with an expanded issue, workflow stages, local checks, and CI observations">
 
 FlightCheck is a lightweight set of repository instructions that guides AI-assisted changes from request to landing.
 
@@ -58,34 +58,44 @@ Handoffs carry check receipts and original output between stages. Fingerprints t
 
 **Supported environments:** Claude Desktop, Claude Code TUI, Codex Desktop, and Codex CLI/TUI. FlightCheck has been verified in all four environments.
 
-Install with [pipx](https://pipx.pypa.io/stable/how-to/install-pipx.html), then run setup from your terminal. Requires Git and Python 3.9+ on POSIX.
+Use an installed supported coding client, Git, and Python 3.9+ on POSIX. Install with pip in an unused tool environment outside your project:
 
 ```sh
-pipx install flightcheck==0.1.0a2
-cd /path/to/your/project
-flightcheck init . --agent claude
-flightcheck doctor .
+flightcheck_tool="$HOME/.local/share/flightcheck/venvs/0.1.0"
+python3 -m venv "$flightcheck_tool"
+(
+  . "$flightcheck_tool/bin/activate"
+  python3 -m pip install flightcheck==0.1.0
+)
 ```
 
-Use `--agent codex` for Codex or `--agent both` for both clients. Setup confirms the project choices, previews the changes, and asks before applying them. It preserves existing instructions, permissions, dependencies, and delivery policy.
+The full tool path below avoids changing your project's Python or PATH. The [setup guide](https://github.com/spring-labs-inc/FlightCheck/blob/main/setup/README.md) covers pipx, uv, source installation, configuration, and remote/browser details.
 
-After verification, start a fresh session in your coding tool and select a small first flight with `/develop-change` (Claude) or `$develop-change` (Codex). TUI users can open the printed status-card URL in their regular browser.
+From an existing project checkout:
 
-The [setup guide](setup/README.md) covers configuration, saved plans, recovery, and current client qualification limits. For source installation and retained versions, use the setup guide.
+```sh
+cd /path/to/your/project
+"$flightcheck_tool/bin/flightcheck" init . --agent claude
+"$flightcheck_tool/bin/flightcheck" doctor .
+```
+
+Use `--agent codex` or `--agent both` for those clients. Setup confirms the project choices, previews changes, and asks before applying them, preserving existing instructions, permissions, dependencies, and delivery policy.
+
+Open a fresh client session in the configured project. Select `/develop-change` in Claude (including Desktop's Code tab), or `$develop-change`/the `develop-change` skill in Codex, and request a small first flight. Activation is opt-in by default. Open the printed status-card URL in your browser.
 
 ## Guides
 
 | Guide | Use |
 | --- | --- |
-| [Status Card](docs/status-card.md) | Publish and view task progress and the current verdict. |
-| [Workflow](workflow/docs/development-workflow.md) | Follow the stages, delivery rules, and [skills and reviewers](docs/skills-and-reviewers.md). |
-| [Verdict](workflow/docs/development-workflow.md#landing) | Understand verdicts and the rules for landing a change or returning for repair. |
-| [Setup](setup/README.md) | Configure Codex CLI, Codex Desktop, Claude Desktop, or Claude Code and verify the installation. |
-| [Benchmarks](docs/benchmark.md) | Read results and reproduce the pinned trials. |
-| [Contributing](CONTRIBUTING.md) | Read the contribution policy and run FlightCheck's own tests. |
+| [Status Card](https://github.com/spring-labs-inc/FlightCheck/blob/main/docs/status-card.md) | Publish and view task progress and the current verdict. |
+| [Workflow](https://github.com/spring-labs-inc/FlightCheck/blob/main/workflow/docs/development-workflow.md) | Follow the stages, delivery rules, and [skills and reviewers](https://github.com/spring-labs-inc/FlightCheck/blob/main/docs/skills-and-reviewers.md). |
+| [Verdict](https://github.com/spring-labs-inc/FlightCheck/blob/main/workflow/docs/development-workflow.md#landing) | Understand verdicts and the rules for landing a change or returning for repair. |
+| [Setup](https://github.com/spring-labs-inc/FlightCheck/blob/main/setup/README.md) | Configure Codex CLI, Codex Desktop, Claude Desktop, or Claude Code and verify the installation. |
+| [Benchmarks](https://github.com/spring-labs-inc/FlightCheck/blob/main/docs/benchmark.md) | Read results and reproduce the pinned trials. |
+| [Contributing](https://github.com/spring-labs-inc/FlightCheck/blob/main/CONTRIBUTING.md) | Read the contribution policy and run FlightCheck's own tests. |
 
 ## License and commercial use
 
-FlightCheck is available under the [Functional Source License 1.1, with MIT as its future license (FSL-1.1-MIT)](LICENSE). Personal and internal organizational use—including commercial work—is free. No account, subscription, or license key is required. Competing commercial offerings require separate permission during the applicable two-year period. Each version becomes available under MIT two years after publication. For additional permissions, contact [jeff@springfinance.io](mailto:jeff@springfinance.io). Subscriptions remain deferred.
+FlightCheck is available under the [Functional Source License 1.1, with MIT as its future license (FSL-1.1-MIT)](https://github.com/spring-labs-inc/FlightCheck/blob/main/LICENSE). Personal and internal organizational use—including commercial work—is free. No account, subscription, or license key is required. Competing commercial offerings require separate permission during the applicable two-year period. Each version becomes available under MIT two years after publication. For additional permissions, contact [jeff@springfinance.io](mailto:jeff@springfinance.io). Subscriptions remain deferred.
 
-Before copying workflow files, read the [licensing and adoption guide](docs/licensing.md). Outside code contributions are currently deferred; [bug reports and feature requests are welcome](CONTRIBUTING.md).
+Before copying workflow files, read the [licensing and adoption guide](https://github.com/spring-labs-inc/FlightCheck/blob/main/docs/licensing.md). Outside code contributions are currently deferred; [bug reports and feature requests are welcome](https://github.com/spring-labs-inc/FlightCheck/blob/main/CONTRIBUTING.md).

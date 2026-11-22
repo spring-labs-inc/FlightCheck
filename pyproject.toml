@@ -5,13 +5,13 @@ backend-path = ["."]
 
 [project]
 name = "flightcheck"
-version = "0.1.0a2"
+version = "0.1.0"
 description = "FlightCheck is a lightweight set of repository instructions that guides AI-assisted changes from request to landing."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "FSL-1.1-MIT"
 license-files = ["LICENSE"]
-classifiers = ["Development Status :: 3 - Alpha", "Operating System :: POSIX", "Programming Language :: Python :: 3"]
+classifiers = ["Development Status :: 5 - Production/Stable", "Operating System :: POSIX", "Programming Language :: Python :: 3"]
 
 [project.urls]
 Source = "https://github.com/spring-labs-inc/FlightCheck"
