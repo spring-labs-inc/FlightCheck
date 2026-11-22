@@ -1,5 +1,6 @@
 """Prepare private GitHub assets and verify public readback; never build or upload."""
 import argparse
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -8,7 +9,10 @@ import sys
 from urllib.parse import quote, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-import release
+_release_spec = importlib.util.spec_from_file_location(
+    "flightcheck_release_tool", Path(__file__).resolve().parents[1] / "tools/release.py")
+release = importlib.util.module_from_spec(_release_spec)
+_release_spec.loader.exec_module(release)
 
 API = "https://api.github.com/repos/" + release.REPOSITORY
 WEB = "https://github.com/" + release.REPOSITORY

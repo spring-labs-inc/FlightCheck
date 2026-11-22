@@ -45,7 +45,7 @@ jobs:
       - name: Prepare exact tagged artifacts
         env:
           VERSION_TAG: ${{ inputs.tag }}
-        run: python -B release/release.py prepare --tag "$VERSION_TAG" --output "$RUNNER_TEMP/release"
+        run: python -B tools/release.py prepare --tag "$VERSION_TAG" --output "$RUNNER_TEMP/release"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: flightcheck-release
@@ -117,7 +117,7 @@ jobs:
           context.update(mode='publish',current_sha=os.environ['GITHUB_SHA'])
           (root/'context.json').write_text(json.dumps(context))
           CONTEXT
-          python -B release/release.py gate --artifacts "$RUNNER_TEMP/release" --context "$RUNNER_TEMP/provider/context.json" --manifest-sha256 "$MANIFEST_SHA" --source-sha "$SOURCE_SHA" --reviewed-run-id "$RUN_ID" --reviewed-artifact-id "$ARTIFACT_ID" > "$RUNNER_TEMP/policy.json"
+          python -B tools/release.py gate --artifacts "$RUNNER_TEMP/release" --context "$RUNNER_TEMP/provider/context.json" --manifest-sha256 "$MANIFEST_SHA" --source-sha "$SOURCE_SHA" --reviewed-run-id "$RUN_ID" --reviewed-artifact-id "$ARTIFACT_ID" > "$RUNNER_TEMP/policy.json"
           python - <<'OUTPUT'
           import json,os
           from pathlib import Path

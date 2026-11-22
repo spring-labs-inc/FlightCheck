@@ -8,6 +8,8 @@ import json
 from pathlib import Path
 import shutil
 import tarfile
+import subprocess
+import sys
 import unittest
 import zipfile
 
@@ -92,6 +94,43 @@ class ReleaseIntegrityTests(unittest.TestCase):
                     for item, contents in entries.values():archive.writestr(item, contents)
                 self.repair_outer_record(folder, artifact)
                 self.command('verify', '--artifacts', folder, expected=1)
+
+    def test_canonical_release_tool_in_source_payload(self):
+        source_payloads = []
+        with zipfile.ZipFile(next((self.artifacts / 'dist').glob('*.whl'))) as archive:
+            source_payloads.append(archive.read('flightcheck_cli/source.tar'))
+        with tarfile.open(next((self.artifacts / 'dist').glob('*.tar.gz'))) as archive:
+            member = next(m for m in archive.getmembers() if m.name.endswith('/flightcheck_cli/source.tar'))
+            source_payloads.append(archive.extractfile(member).read())
+        for raw in source_payloads:
+            with self.subTest(artifact_sha256=hashlib.sha256(raw).hexdigest()), tarfile.open(fileobj=io.BytesIO(raw)) as source:
+                names = {m.name for m in source.getmembers()}
+                for name in ('tools/release.py', 'docs/maintainers/releasing.md',
+                             '.github/workflows/release.yml', '.claude/agents/workflow-code-reviewer.md',
+                             '.claude/agents/workflow-evidence-reviewer.md'):
+                    self.assertIn(name, names)
+                    self.assertEqual(source.extractfile(name).read(), (self.source / name).read_bytes())
+                self.assertNotIn('release/release.py', names)
+                self.assertFalse(any(name.startswith('experiments/pypi-installer/') for name in names))
+        decoy = self.root / 'unrelated'
+        decoy.mkdir()
+        (decoy / 'pyproject.toml').write_text('Invalid decoy metadata must never be read')
+        (decoy / 'LICENSE').write_text('Unrelated owner license')
+        alias = self.root / 'source-alias'
+        alias.symlink_to(self.source, target_is_directory=True)
+        for cwd in (self.source, self.source / 'docs/maintainers', decoy, alias):
+            with self.subTest(cwd=str(cwd)):
+                before = {str(p.relative_to(decoy)): p.read_bytes() for p in decoy.rglob('*') if p.is_file()}
+                result = subprocess.run([sys.executable, '-B', str(self.script), 'verify',
+                                         '--artifacts', str(self.artifacts), '--require-release'],
+                                        cwd=cwd, env=self.env, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertTrue(json.loads(result.stdout)['release_eligible'])
+                self.assertEqual({str(p.relative_to(decoy)): p.read_bytes() for p in decoy.rglob('*') if p.is_file()}, before)
+                help_result = subprocess.run([sys.executable, '-B', str(self.script), '--help'],
+                                             cwd=cwd, env=self.env, capture_output=True, text=True)
+                self.assertEqual(help_result.returncode, 0, help_result.stdout + help_result.stderr)
+
 
 
 if __name__ == '__main__':
