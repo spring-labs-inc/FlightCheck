@@ -13,7 +13,7 @@ from pathlib import Path
 
 CONFIGURED = os.environ.get("FLIGHTCHECK_SCRIPTS_ROOT")
 PRODUCT = os.environ.get("FLIGHTCHECK_PRODUCT_ROOT")
-SCRIPTS = (Path(CONFIGURED) if CONFIGURED else Path(PRODUCT) / "examples/existing-project/scripts"
+SCRIPTS = (Path(CONFIGURED) if CONFIGURED else Path(PRODUCT) / "workflow/scripts"
            if PRODUCT else Path(__file__).resolve().parents[1] / "scripts").resolve()
 SCRIPT = SCRIPTS / "capture_check.py"
 

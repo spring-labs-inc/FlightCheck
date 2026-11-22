@@ -78,8 +78,8 @@ The [setup guide](setup/README.md) covers configuration, saved plans, recovery, 
 | Guide | Use |
 | --- | --- |
 | [Status Card](docs/status-card.md) | Publish and view task progress and the current verdict. |
-| [Workflow](examples/existing-project/docs/development-workflow.md) | Follow the stages, delivery rules, and [skills and reviewers](docs/skills-and-reviewers.md). |
-| [Verdict](examples/existing-project/docs/development-workflow.md#landing) | Understand verdicts and the rules for landing a change or returning for repair. |
+| [Workflow](workflow/docs/development-workflow.md) | Follow the stages, delivery rules, and [skills and reviewers](docs/skills-and-reviewers.md). |
+| [Verdict](workflow/docs/development-workflow.md#landing) | Understand verdicts and the rules for landing a change or returning for repair. |
 | [Setup](setup/README.md) | Configure Codex CLI, Codex Desktop, Claude Desktop, or Claude Code and verify the installation. |
 | [Benchmarks](docs/benchmark.md) | Read results and reproduce the pinned trials. |
 | [Contributing](CONTRIBUTING.md) | Read the contribution policy and run FlightCheck's own tests. |

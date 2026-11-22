@@ -106,9 +106,9 @@ def git_tree(files):
     return directory(tree).hex()
 
 
-def source_payload(files, distribution, version):
-    package = {name.removeprefix("flightcheck_cli/"): data for name, data in files.items()
-               if name.startswith("flightcheck_cli/")}
+def source_payload(files, distribution, version, package_prefix="flightcheck_cli/"):
+    package = {name.removeprefix(package_prefix): data for name, data in files.items()
+               if name.startswith(package_prefix)}
     manifest = json.loads(package["manifest.json"])
     archive, commit = package["source.tar"], package["source-commit.txt"]
     if manifest["distribution"] != distribution or manifest["version"] != version:
@@ -122,7 +122,7 @@ def source_payload(files, distribution, version):
             or not commit.startswith(("tree " + tree + "\n").encode())):
         raise ValueError("Embedded Git commit/tree mismatch")
     expected_cli = {name.split("/")[-1]: sha(data) for name, (data, _) in source.items()
-                    if name.startswith("flightcheck_cli/") and name.count("/") == 1 and name.endswith(".py")}
+                    if name.startswith("src/flightcheck_cli/") and name.count("/") == 2 and name.endswith(".py")}
     if expected_cli != manifest["cli_files"]:
         raise ValueError("Incomplete CLI source inventory")
     expected = set(expected_cli) | {"manifest.json", "source.tar", "source-commit.txt"}
@@ -221,15 +221,15 @@ def sdist_payload(path, name, version):
         raise ValueError("Unexpected sdist root")
     files = {n[len(prefix):]: data for n, (data, _) in entries.items()}
     config = tomllib.loads(files["pyproject.toml"].decode())
-    manifest, source = source_payload(files, name, version)
+    manifest, source = source_payload(files, name, version, "src/flightcheck_cli/")
     expected_config = tomllib.loads(source["pyproject.toml"][0].decode())
     # These are the only transformations made by the canonical staging backend.
     expected_config["build-system"]["build-backend"] = "setuptools.build_meta"
     expected_config["build-system"].pop("backend-path")
     if config != expected_config:
         raise ValueError("Sdist build configuration differs from reviewed source")
-    egg = normalize(name).replace("-", "_") + ".egg-info/"
-    expected_names = ({n for n in files if n.startswith("flightcheck_cli/")}
+    egg = "src/" + normalize(name).replace("-", "_") + ".egg-info/"
+    expected_names = ({n for n in files if n.startswith("src/flightcheck_cli/")}
                       | {"LICENSE", "README.md", "pyproject.toml", "setup.cfg", "PKG-INFO"}
                       | {egg + n for n in ("PKG-INFO", "SOURCES.txt", "dependency_links.txt", "entry_points.txt", "top_level.txt")})
     if set(files) != expected_names:

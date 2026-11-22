@@ -41,7 +41,7 @@ Use the project instructions and the relevant stage input. For a fresh implement
 
 Give the CODE reviewer the validated CODE packet, including the task scope and acceptance criteria, with original evidence available when needed. Give the final reviewer the validated final packet. Open the applicable guide section when a stage input leaves a decision or requirement unresolved. Load status-card instructions for interactive tasks with a configured card.
 
-See the [small first-flight guide](first-flight.md) for supplied pytest reports/fingerprints, portable runtime tests, controller capture and safe candidate refresh. Complete setup and mutating hooks before freezing. Run applicable CODE review first, then authoritative checks, then a separate EVIDENCE review.
+See the [small first-flight guide](../../examples/existing-project/docs/first-flight.md) for supplied pytest reports/fingerprints, portable runtime tests, controller capture and safe candidate refresh. Complete setup and mutating hooks before freezing. Run applicable CODE review first, then authoritative checks, then a separate EVIDENCE review.
 
 ## Evidence and reuse
 
@@ -200,7 +200,7 @@ The read-only packet includes the exact proposal hash, owner scope/criteria, reg
 
 ## Bootstrap and additive flights
 
-The executable [adoption example](../examples/evidence-bootstrap/README.md) prepares a small new behavior, empty native baseline and explicit report/spec bindings before the first freeze. It records a real failing original-product control and a passing proposed implementation under unchanged test fixtures; it does not invent independent reviews. Installation includes the example under `.flightcheck/examples/evidence-bootstrap/`.
+The executable [adoption example](../../examples/existing-project/examples/evidence-bootstrap/README.md) prepares a small new behavior, empty native baseline and explicit report/spec bindings before the first freeze. It records a real failing original-product control and a passing proposed implementation under unchanged test fixtures; it does not invent independent reviews. Installation includes the example under `.flightcheck/examples/evidence-bootstrap/`.
 
 For an existing project, retain a coverage baseline for existing IDs and outcomes; new expected IDs belong to the witness, not a fabricated historical baseline. Keep original product identity separate from a new test overlay and fingerprint both. Use the same tests/fixtures/spec artifact for control and current native runs. Compatibility requires the original product to pass; regression requires it to fail; a specification control may use a documented original product or deliberate mutation that fails the stated contract. No count-only report establishes sensitivity.
 

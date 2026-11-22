@@ -70,7 +70,7 @@ def payload():
         for entry in stream.getmembers():
             if not (entry.isfile() or entry.isdir()):
                 raise ValueError("Source archive contains links/special files: " + entry.name)
-    cli = {p.name: sha(p.read_bytes()) for p in (ROOT / "flightcheck_cli").glob("*.py")}
+    cli = {p.name: sha(p.read_bytes()) for p in (ROOT / "src/flightcheck_cli").glob("*.py")}
     manifest = {"schema": 1, "distribution": "flightcheck", "version": version,
                 "origin": "https://github.com/spring-labs-inc/FlightCheck", "development": dirty,
                 "base_revision": base, "source_revision": revision, "source_tree": tree,
@@ -83,9 +83,9 @@ def staged():
     manifest, archive, commit = payload()
     with tempfile.TemporaryDirectory(prefix="flightcheck-distribution-") as scratch:
         stage = Path(scratch)
-        package = stage / "flightcheck_cli"
-        package.mkdir()
-        for path in (ROOT / "flightcheck_cli").glob("*.py"):
+        package = stage / "src/flightcheck_cli"
+        package.mkdir(parents=True)
+        for path in (ROOT / "src/flightcheck_cli").glob("*.py"):
             shutil.copyfile(path, package / path.name)
         (package / "manifest.json").write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
         (package / "source.tar").write_bytes(archive)

@@ -103,7 +103,7 @@ class InstallationTests(unittest.TestCase):
         self.assertEqual(state["source"]["revision"], self.git(self.source, "rev-parse", "HEAD"))
         for name in ("capture_check", "handoff", "proof", "recovery", "behavior", "disposition"):
             self.assertEqual((self.target / (".flightcheck/scripts/" + name + ".py")).read_bytes(),
-                             (self.source / ("examples/existing-project/scripts/" + name + ".py")).read_bytes())
+                             (self.source / ("workflow/scripts/" + name + ".py")).read_bytes())
         for name in ("serve.py", "task_status.py", "maintainer.py", "task_details.py", "task.js", "task.html", "card.css"):
             self.assertEqual((self.target / (".flightcheck/status-card/" + name)).read_bytes(),
                              (self.source / ("status-card/" + name)).read_bytes())

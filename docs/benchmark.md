@@ -68,7 +68,7 @@ Run the handoff integration tests from the FlightCheck checkout on a POSIX host 
 python3 -B -m unittest discover -s tests -p 'test_handoff.py'
 ```
 
-The tests create temporary checkouts and private evidence directories. They exercise fresh receipts, reuse, blocked review packets, and frozen coverage baselines using the standard library. For your own project, follow the [task JSON and evidence setup](../examples/existing-project/docs/development-workflow.md#resume-summary-and-final-packet).
+The tests create temporary checkouts and private evidence directories. They exercise fresh receipts, reuse, blocked review packets, and frozen coverage baselines using the standard library. For your own project, follow the [task JSON and evidence setup](../workflow/docs/development-workflow.md#resume-summary-and-final-packet).
 
 ## Versioned qualification after escaped defects
 

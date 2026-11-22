@@ -14,7 +14,8 @@ parser.add_argument("--evidence", type=Path, required=True)
 args = parser.parse_args()
 project = args.project.resolve()
 project.mkdir(mode=0o700, parents=True, exist_ok=False)
-scripts = BASE.parent.parent / "scripts"
+scripts = (BASE.parent.parent / "scripts" if BASE.parent.parent.name == ".flightcheck"
+           else BASE.parents[3] / "workflow/scripts")
 sys.path.insert(0, str(scripts))
 from capture_check import evidence_directory
 

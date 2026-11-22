@@ -9,7 +9,8 @@ import subprocess
 import sys
 
 BASE = Path(__file__).resolve().parent
-SCRIPTS = BASE.parent.parent / "scripts"
+SCRIPTS = (BASE.parent.parent / "scripts" if BASE.parent.parent.name == ".flightcheck"
+           else BASE.parents[3] / "workflow/scripts")
 sys.path.insert(0, str(SCRIPTS))
 from capture_check import evidence_directory
 

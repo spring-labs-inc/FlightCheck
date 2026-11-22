@@ -13,7 +13,7 @@ import unittest
 import test_workflow_contract as fixture
 
 PRODUCT = Path(os.environ.get("FLIGHTCHECK_PRODUCT_ROOT", Path(__file__).resolve().parents[1]))
-SCRIPTS = PRODUCT / "examples/existing-project/scripts"
+SCRIPTS = PRODUCT / "workflow/scripts"
 
 
 class AdoptionPreflightTests(unittest.TestCase):
