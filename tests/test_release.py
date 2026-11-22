@@ -542,7 +542,7 @@ class ReleaseTests(unittest.TestCase):
         rows = [line.split(']')[0].split('[')[-1] for line in readme.splitlines() if line.startswith('| [')]
         self.assertEqual(rows, ['Status Card', 'Workflow', 'Verdict', 'Setup', 'Benchmarks', 'Contributing'])
         guide = (ROOT / 'docs/maintainers/releasing.md').read_text()
-        for phrase in ('Published alpha', 'required human reviewers', 'same bytes', 'actual PyPI', 'simulated_registry_match', '#14'):
+        for phrase in ('Retained published a2 checkpoint', 'required human reviewers', 'same bytes', 'actual PyPI', 'simulated_registry_match', '#14'):
             self.assertIn(phrase, guide)
         shared = (ROOT / 'setup/README.md').read_text()
         self.assertIn('pipx uninstall flightcheck-cli', shared)
@@ -682,12 +682,12 @@ class ReleaseTests(unittest.TestCase):
         setup_status = [line for line in (ROOT / 'setup/README.md').read_text().splitlines() if line.startswith('Retained published PyPI checkpoint: `flightcheck`')]
         self.assertEqual(len(setup_status), 1, 'Expected one retained published a2 checkpoint in setup/README.md')
         self.assertIn('version `0.1.0a2`', setup_status[0])
-        distribution_status = [line for line in (ROOT / 'docs/pypi-distribution.md').read_text().splitlines() if line.startswith('Current release:')]
-        self.assertEqual(len(distribution_status), 1, 'Expected one current published status sentence in docs/pypi-distribution.md')
+        distribution_status = [line for line in (ROOT / 'docs/pypi-distribution.md').read_text().splitlines() if line.startswith('Retained published checkpoint:')]
+        self.assertEqual(len(distribution_status), 1, 'Expected one retained published a2 checkpoint in docs/pypi-distribution.md')
         self.assertIn('`0.1.0a2`', distribution_status[0])
         guide = (ROOT / 'docs/maintainers/releasing.md').read_text()
-        release_status = [line for line in guide.splitlines() if line.startswith('**Published alpha.**')]
-        self.assertEqual(len(release_status), 1, 'Expected one current published status sentence in docs/maintainers/releasing.md')
+        release_status = [line for line in guide.splitlines() if line.startswith('**Retained published a2 checkpoint.**')]
+        self.assertEqual(len(release_status), 1, 'Expected one retained published a2 checkpoint in docs/maintainers/releasing.md')
         self.assertIn('version `0.1.0a2`', release_status[0])
         self.assertIn('--ref APPROVED_VERSION_TAG -f mode=prepare -f tag=APPROVED_VERSION_TAG', guide)
         self.assertIn('--ref APPROVED_VERSION_TAG -f mode=publish -f tag=APPROVED_VERSION_TAG', guide)
