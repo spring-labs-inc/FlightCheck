@@ -230,26 +230,40 @@ class ReleaseTests(unittest.TestCase):
         docs_script = docs_source / 'tools/release.py'
         shutil.copyfile(self.script, docs_script)
         shutil.copyfile(self.source / 'pyproject.toml', docs_source / 'pyproject.toml')
-        public_pin = ('pipx install flightcheck==' + self.version).encode()
-        self.assertEqual(before.count(public_pin), 1)
-        unpromoted = before.replace(public_pin, b'pipx install "git+https://github.com/spring-labs-inc/FlightCheck.git"')
-        self.assertEqual(unpromoted.count(b'Install with [pipx]'), 1)
-        unpromoted = unpromoted.replace(b'Install with [pipx]', b'Install from Git with [pipx]')
-        published_note = b'For source installation and retained versions, use the setup guide.'
-        self.assertEqual(unpromoted.count(published_note), 1)
-        unpromoted = unpromoted.replace(published_note, b'PyPI installation will replace this Git channel after a release is published and verified.')
-        self.assertNotEqual(unpromoted, before)
+        # The legacy proposal targets the historical Git/pipx input, not the new
+        # pip-first README. Keep that valid input explicit and independent of
+        # today's quickstart so a missing replacement cannot become a no-op.
+        legacy_command = b'pipx install "git+https://github.com/spring-labs-inc/FlightCheck.git"'
+        unpromoted = (b'# FlightCheck\n\n## Get started\n\n'
+                      b'Install from Git with [pipx](https://pipx.pypa.io/stable/).\n\n'
+                      b'```sh\n' + legacy_command + b'\n```\n\n'
+                      b'PyPI installation will replace this Git channel after a release is published and verified.\n\n'
+                      b'## License and commercial use\n\nRetain the version license and notices.\n')
+        expected_promoted = ('# FlightCheck\n\n## Get started\n\n'
+                             'Install with [pipx](https://pipx.pypa.io/stable/).\n\n'
+                             '```sh\npipx install flightcheck==' + self.version + '\n```\n\n'
+                             'For source installation and retained versions, use the setup guide.\n\n'
+                             '## License and commercial use\n\nRetain the version license and notices.\n')
+        self.assertEqual(before.count(legacy_command), 0)
+        self.assertEqual(unpromoted.count(legacy_command), 1)
+        self.assertNotEqual(unpromoted, expected_promoted.encode())
         docs_readme = docs_source / 'README.md'
         docs_readme.write_bytes(unpromoted)
         proposal = self.command('docs', '--artifacts', self.artifacts, script=docs_script)
         self.assertEqual(proposal['status'], 'proposal_only')
         self.assertEqual(proposal['before_sha256'], hashlib.sha256(unpromoted).hexdigest())
-        self.assertEqual(proposal['readme'], before.decode())
+        self.assertEqual(proposal['readme'], expected_promoted)
         self.assertIn('flightcheck==' + self.version, proposal['readme'])
         for marker in ('## Get started', '## License and commercial use'):
             if marker == '## Get started':self.assertEqual(proposal['readme'].split(marker)[0], unpromoted.decode().split(marker)[0])
             else:self.assertEqual(proposal['readme'].split(marker)[1], unpromoted.decode().split(marker)[1])
         self.assertEqual(docs_readme.read_bytes(), unpromoted)
+        for drifted in (unpromoted.replace(legacy_command, b'pipx install unrelated'),
+                        unpromoted + legacy_command + b'\n'):
+            docs_readme.write_bytes(drifted)
+            rejected = self.command('docs', '--artifacts', self.artifacts, script=docs_script, expected=1)
+            self.assertIn('README quickstart changed; reconcile the proposal explicitly', rejected['error'])
+            self.assertEqual(docs_readme.read_bytes(), drifted)
         self.assertEqual((self.source / 'README.md').read_bytes(), before)
         self.assertEqual(docs_script.read_bytes(), self.script.read_bytes())
         self.assertEqual({str(path.relative_to(self.artifacts)): path.read_bytes()
@@ -520,22 +534,25 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn('pypa/gh-action-pypi-publish@', publish['steps'][-1]['uses'])
         readme = (ROOT / 'README.md').read_text()
         quickstart = readme.split('## Get started', 1)[1].split('## Guides', 1)[0]
-        self.assertIn('pipx install flightcheck==0.1.0a2', quickstart)
+        self.assertIn('python3 -m pip install flightcheck==0.1.0', quickstart)
+        self.assertIn('python3 -m venv', quickstart)
+        self.assertIn('\"$flightcheck_tool/bin/flightcheck\" init . --agent claude', quickstart)
+        self.assertIn('\"$flightcheck_tool/bin/flightcheck\" doctor .', quickstart)
         self.assertNotIn('pipx install "git+https://github.com/spring-labs-inc/FlightCheck.git"', quickstart)
         rows = [line.split(']')[0].split('[')[-1] for line in readme.splitlines() if line.startswith('| [')]
         self.assertEqual(rows, ['Status Card', 'Workflow', 'Verdict', 'Setup', 'Benchmarks', 'Contributing'])
         guide = (ROOT / 'docs/maintainers/releasing.md').read_text()
-        for phrase in ('Published alpha', 'required human reviewers', 'same bytes', 'actual PyPI', 'simulated_registry_match', '#14'):
+        for phrase in ('Retained published a2 checkpoint', 'required human reviewers', 'same bytes', 'actual PyPI', 'simulated_registry_match', '#14'):
             self.assertIn(phrase, guide)
         shared = (ROOT / 'setup/README.md').read_text()
         self.assertIn('pipx uninstall flightcheck-cli', shared)
-        self.assertIn('Published PyPI distribution: `flightcheck`, version `0.1.0a2`', shared)
+        self.assertIn('Retained published PyPI checkpoint: `flightcheck`, version `0.1.0a2`', shared)
         self.assertIn('pipx install "git+https://github.com/spring-labs-inc/FlightCheck.git"', shared)
         self.assertNotIn('not yet a verified public release', shared)
         uv_blocks = [block.split('```', 1)[0] for block in shared.split('```sh\n')[1:] if block.lstrip().startswith('uv tool install ')]
         self.assertEqual(len(uv_blocks), 1, 'Expected one persistent uv installation alternative')
         uv_command = ' '.join(uv_blocks[0].replace('\\\n', ' ').split())
-        self.assertEqual(uv_command, 'uv tool install --python /absolute/path/to/python3 --no-python-downloads --no-config --default-index https://pypi.org/simple --prerelease explicit flightcheck==0.1.0a2')
+        self.assertEqual(uv_command, 'uv tool install --python /absolute/path/to/python3 --no-python-downloads --no-config --default-index https://pypi.org/simple flightcheck==0.1.0')
 
     def workflow(self):
         workflow = yaml.load((ROOT / '.github/workflows/release.yml').read_text(), Loader=yaml.BaseLoader)
@@ -648,11 +665,13 @@ class ReleaseTests(unittest.TestCase):
 
     def test_preparation_candidate_version_consistency(self):
         metadata = tomllib.loads((ROOT / 'pyproject.toml').read_text())['project']
-        self.assertEqual(metadata['version'], '0.1.0a2', 'Keep explicit published a2 identity unchanged through cleanup, independent of derived fixture values')
+        self.assertEqual(metadata['version'], '0.1.0', 'The intended new stable target is independent of derived fixture values')
+        self.assertIn('Development Status :: 5 - Production/Stable', metadata['classifiers'])
+        self.assertEqual(metadata['description'], 'FlightCheck is a lightweight set of repository instructions that guides AI-assisted changes from request to landing.')
         self.assertEqual(metadata['name'], 'flightcheck')
         self.assertEqual(metadata['license'], 'FSL-1.1-MIT')
         workflow = self.workflow()
-        self.assertEqual(workflow['on']['workflow_dispatch']['inputs']['tag']['default'], 'v0.1.0a2')
+        self.assertEqual(workflow['on']['workflow_dispatch']['inputs']['tag']['default'], 'v0.1.0')
         self.assertEqual(set(workflow['on']), {'workflow_dispatch'})
         publish = workflow['jobs']['publish']
         self.assertEqual(publish['environment']['name'], 'pypi')
@@ -660,15 +679,15 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("vars.FLIGHTCHECK_PYPI_PUBLISH_ENABLED == 'true'", publish['if'])
         self.assertIn("needs.verify-publication.result == 'success'", publish['if'])
         self.assertFalse(any('checkout' in s.get('uses', '') for s in publish['steps']))
-        setup_status = [line for line in (ROOT / 'setup/README.md').read_text().splitlines() if line.startswith('Published PyPI distribution: `flightcheck`')]
-        self.assertEqual(len(setup_status), 1, 'Expected one current published status sentence in setup/README.md')
+        setup_status = [line for line in (ROOT / 'setup/README.md').read_text().splitlines() if line.startswith('Retained published PyPI checkpoint: `flightcheck`')]
+        self.assertEqual(len(setup_status), 1, 'Expected one retained published a2 checkpoint in setup/README.md')
         self.assertIn('version `0.1.0a2`', setup_status[0])
-        distribution_status = [line for line in (ROOT / 'docs/pypi-distribution.md').read_text().splitlines() if line.startswith('Current release:')]
-        self.assertEqual(len(distribution_status), 1, 'Expected one current published status sentence in docs/pypi-distribution.md')
+        distribution_status = [line for line in (ROOT / 'docs/pypi-distribution.md').read_text().splitlines() if line.startswith('Retained published checkpoint:')]
+        self.assertEqual(len(distribution_status), 1, 'Expected one retained published a2 checkpoint in docs/pypi-distribution.md')
         self.assertIn('`0.1.0a2`', distribution_status[0])
         guide = (ROOT / 'docs/maintainers/releasing.md').read_text()
-        release_status = [line for line in guide.splitlines() if line.startswith('**Published alpha.**')]
-        self.assertEqual(len(release_status), 1, 'Expected one current published status sentence in docs/maintainers/releasing.md')
+        release_status = [line for line in guide.splitlines() if line.startswith('**Retained published a2 checkpoint.**')]
+        self.assertEqual(len(release_status), 1, 'Expected one retained published a2 checkpoint in docs/maintainers/releasing.md')
         self.assertIn('version `0.1.0a2`', release_status[0])
         self.assertIn('--ref APPROVED_VERSION_TAG -f mode=prepare -f tag=APPROVED_VERSION_TAG', guide)
         self.assertIn('--ref APPROVED_VERSION_TAG -f mode=publish -f tag=APPROVED_VERSION_TAG', guide)

@@ -110,7 +110,8 @@ class GitHubAssetsTests(unittest.TestCase):
         folder = folder or self.artifacts
         record, files = self.call(assets.payload, folder)
         tag = record["tag"]
-        metadata = {"id": 71, "tag_name": tag, "draft": False, "prerelease": True,
+        from packaging.version import Version
+        metadata = {"id": 71, "tag_name": tag, "draft": False, "prerelease": Version(record["version"]).is_prerelease,
                     "html_url": assets.WEB + "/releases/tag/" + tag, "assets": []}
         responses = {}
         for i, (name, data) in enumerate(files.items(), 1):
@@ -190,7 +191,7 @@ class GitHubAssetsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "downloaded bytes"):
             self.verify_fixture(wrong, trace=wheel_trace, trace_label="changed-wheel", expected_prefix=prefix)
         self.assertEqual(wheel_trace, prefix)
-        for key, value in [("tag_name", "vwrong"), ("draft", True), ("prerelease", False), ("html_url", "https://example.invalid/release")]:
+        for key, value in [("tag_name", "vwrong"), ("draft", True), ("prerelease", not responses[rel]["prerelease"]), ("html_url", "https://example.invalid/release")]:
             with self.subTest(key=key):
                 wrong = copy.deepcopy(responses)
                 wrong[rel][key] = value

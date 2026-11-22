@@ -8,27 +8,42 @@ The installer uses only Python's standard library and Git. Receipt and card tool
 
 Run setup in a normal terminal on the machine holding the project. Claude's command sandbox protects `.claude/skills` and `.claude/agents`; adding a write allow rule does not lift those protections. Do not omit adapters, install hooks, or disable global sandbox settings to work around a failed AI-side install. The terminal installer uses the same shared engine as the source commands below.
 
-Install the verified alpha from PyPI. First follow [pipx installation and PATH setup](https://pipx.pypa.io/stable/how-to/install-pipx.html); pipx has its own prerequisites. Open a fresh shell after updating PATH so `flightcheck` is available:
+Install version `0.1.0` with pip in a dedicated tool environment outside the adopting project. Choose an unused directory and an existing Python 3.9+ interpreter:
 
 ```sh
-pipx install flightcheck==0.1.0a2
+flightcheck_tool="$HOME/.local/share/flightcheck/venvs/0.1.0"
+python3 -m venv "$flightcheck_tool"
+(
+  . "$flightcheck_tool/bin/activate"
+  python3 -m pip install flightcheck==0.1.0
+)
+```
+
+Activation ends with the subshell, so the tool environment does not replace your project's Python or remain on PATH. Keep this environment while using its command. Use `"$flightcheck_tool/bin/flightcheck"` wherever this guide shows `flightcheck`; no global PATH change is required. Select the adopting project's persistent Python during setup, never the disposable application environment.
+
+For an isolated `flightcheck` command on PATH, [install pipx and configure its executable directory](https://pipx.pypa.io/stable/how-to/install-pipx.html), then open a fresh shell:
+
+```sh
+pipx install flightcheck==0.1.0
+```
+
+Alternatively, install the persistent command with uv (install uv separately):
+
+```sh
+uv tool install --python /absolute/path/to/python3 --no-python-downloads \
+  --no-config --default-index https://pypi.org/simple flightcheck==0.1.0
+```
+
+Replace the Python path with an existing persistent Python 3.9+ executable on POSIX. Put uv's tool executable directory on PATH using its printed shell-update guidance, then open a fresh shell. These are installation frontends for the same distribution, not project dependencies. The retained public a2 observations used uv 0.13.9 and Python 3.13.18; those records do not qualify another release or every supported Python/platform combination.
+
+After your chosen installation, enter an existing project and explicitly configure it. For pip, use the full tool path above in place of `flightcheck`:
+
+```sh
 cd /path/to/your/project
 flightcheck inspect .
 flightcheck init . --agent claude
 flightcheck doctor .
 ```
-
-Alternative: install the persistent command with uv (install uv separately):
-
-```sh
-uv tool install --python /absolute/path/to/python3 --no-python-downloads \
-  --no-config --default-index https://pypi.org/simple \
-  --prerelease explicit flightcheck==0.1.0a2
-```
-
-Replace the Python path with an existing Python 3.9+ executable on POSIX. Git is also required for project setup. Put uv's tool executable directory on PATH; uv prints that directory after installation. Follow its shell-update guidance if needed, then open a fresh shell. This installs the persistent `flightcheck` tool, not project configuration. Choose a persistent project Python outside the disposable tool environment during setup. The retained public installation observations used uv 0.13.9 and Python 3.13.18; the compatibility floor does not qualify every Python/platform combination. Installation of uv itself has its own method-specific prerequisites.
-
-After either installation, use the same project setup commands above.
 
 Use `codex`, `claude`, or `both` explicitly. Installing the application only installs its tool environment and command; it does not configure a project. The CLI and its runtime helpers use Python's standard library. Build dependencies belong to the isolated tool/build environment. Project checks use the project's existing interpreter and dependencies: setup does not install or upgrade application dependencies, run native project checks, enable hooks, or grant provider/reviewer permissions.
 
@@ -36,9 +51,9 @@ Use `codex`, `claude`, or `both` explicitly. Installing the application only ins
 
 The preview lists every create/update/unchanged operation and content digest, with text diffs for changed instruction files. The full hash-bound plan is saved outside the project under owner-only installer state. No target files change until you confirm application. Successful setup/doctor returns `ready_for_client_probe`, source identity, the complete component count, and real Python-tool/loopback checks. These are not native client qualification or browser-rendering proof.
 
-### PyPI release status and earlier Git tool installs
+### Release records and earlier Git tool installs
 
-Published PyPI distribution: `flightcheck`, version `0.1.0a2` ([public release](https://pypi.org/project/flightcheck/0.1.0a2/)). Its public wheel and sdist match the retained approved release; fresh public-index pipx and uv installation and project setup were verified in the recorded alpha scope. Use the public pin above or the source fallback below. Maintainers retain the release identity and future-release safeguards in the separate [release guide](https://github.com/spring-labs-inc/FlightCheck/blob/main/docs/maintainers/releasing.md); local artifacts and loopback-index tests alone do not prove public availability. The published a2 archives and PyPI long description retain preparation-era wording from their release source. This online Setup guide gives current instructions; published bytes remain unchanged.
+Retained published PyPI checkpoint: `flightcheck`, version `0.1.0a2` ([public release](https://pypi.org/project/flightcheck/0.1.0a2/)). Its public wheel and sdist match the retained approved release; fresh public-index pipx and uv installation and project setup were verified in the recorded alpha scope. This checkpoint remains available by its explicit `0.1.0a2` pin; it does not establish public availability or verification of other release versions. Maintainers retain the release identity and future-release safeguards in the separate [release guide](https://github.com/spring-labs-inc/FlightCheck/blob/main/docs/maintainers/releasing.md); local artifacts and loopback-index tests alone do not prove public availability. The published a2 archives and PyPI long description retain preparation-era wording from their release source. This online Setup guide gives current instructions; published bytes remain unchanged.
 
 Earlier Git builds used distribution name `flightcheck-cli` while exposing the same `flightcheck` executable. Before installing the renamed tool, retain the old artifact for rollback and run `pipx uninstall flightcheck-cli`; this removes its tool environment and launcher, not project instructions, evidence or the selected project runtime. Install the new tool afterward. Do not overwrite an unrelated executable. Existing projects are not implicitly migrated: run `flightcheck doctor` and retain the supported fresh-setup/identical-repeat boundary below.
 
@@ -65,13 +80,9 @@ flightcheck doctor /path/to/project
 
 Recovery checks all affected files before restoration and refuses to overwrite changes made after interruption. Original backups remain available for manual reconciliation. Error messages identify the retained recovery information. The state location defaults to `$XDG_STATE_HOME/flightcheck/installer` or `~/.local/state/flightcheck/installer`; `FLIGHTCHECK_INSTALLER_STATE_DIR` can select another absolute private directory outside the project. Do not delete it while recovery is pending.
 
-This first CLI version supports fresh installations and identical repeats. It refuses implicit migrations, configuration changes, client changes and bundle upgrades to an existing installation. It is not a runtime manager or an active-flight upgrade coordinator. Upgrading/removing the global tool does not rewrite installed projects or their selected runtime; a disappeared/changed project interpreter is a blocker, not permission to substitute another. Explicit project removal and upgrades remain separate future work. Keep evidence and backups when uninstalling the tool.
+The CLI supports fresh installations and identical repeats. It refuses implicit migrations, configuration changes, client changes and bundle upgrades to an existing installation. It is not a runtime manager or an active-flight upgrade coordinator. Upgrading/removing the global tool does not rewrite installed projects or their selected runtime; a disappeared/changed project interpreter is a blocker, not permission to substitute another. Explicit project removal and upgrades remain separate future work. Keep evidence and backups when uninstalling the tool.
 
-Start a fresh client after setup, verify instructions/skill/reviewer discovery, and follow section 6 for a small first flight. [#14](https://github.com/spring-labs-inc/FlightCheck/issues/14) is closed within the [recorded four-interface native scope](https://github.com/spring-labs-inc/FlightCheck/blob/main/docs/claude-trial-report.md#accepted-native-app-scope), including the owner's acceptance of the manual prepare/check/footer procedure. Retained bypass failures and runtime, transcript and host limits remain explicit; automatic interception and universal transcript compliance are not promised. Browser publication, effective read-only reviewer boundaries, rendering and repair/resume still need actual observations for a new project/runtime. Those source observations alone do not qualify new release artifact bytes. Version `0.1.0a2` separately passed local and real SSH card startup, recovery and browser rendering with its exact retained wheel; future versions require their own release-byte observations. Python 3.9+/POSIX is the declared compatibility floor, not qualification of every Python/platform combination; native Windows is unsupported. The public command above applies to this verified alpha; other versions require their own publication and public-index verification.
-
-### Proposed first-flight interview
-
-The terminal interview above is deterministic and included in #66. The proposed AI-assisted first-flight interview is a separate scope decision for owner review: inspect resources, propose sourced editable defaults, batch missing answers, confirm the exact board/access with a permitted read-only probe, mark optional resources unavailable, and persist confirmed shared pointers separately from private host paths. It must preserve explicit activation/provider/reviewer grants and validate required-resource drift on resume. That resource-discovery/board/log interview is not implemented or claimed by this delivery; it needs its own scoped behavior and native acceptance checks.
+Start a fresh client after setup, verify instructions/skill/reviewer discovery, and follow section 6 for a small first flight. [#14](https://github.com/spring-labs-inc/FlightCheck/issues/14) is closed within the [recorded four-interface native scope](https://github.com/spring-labs-inc/FlightCheck/blob/main/docs/claude-trial-report.md#accepted-native-app-scope), including the owner's acceptance of the manual prepare/check/footer procedure. Retained bypass failures and runtime, transcript and host limits remain explicit; automatic interception and universal transcript compliance are not promised. Browser publication, effective read-only reviewer boundaries, rendering and repair/resume still need actual observations for a new project/runtime. Those source observations alone do not qualify new release artifact bytes. Version `0.1.0a2` separately passed local and real SSH card startup, recovery and browser rendering with its exact retained wheel; future versions require their own release-byte observations. Python 3.9+/POSIX is the declared compatibility floor, not qualification of every Python/platform combination; native Windows is unsupported. Each version requires its own publication, public-index installation and exact-wheel verification; retained a2 observations are historical, not a pass for other bytes.
 
 ## Choose your coding surface
 
@@ -172,7 +183,7 @@ Save reusable documentation, board, and log lookup pointers in a project-owned r
 
 At the first selected flight, consult the saved configuration and resource index. Resolve missing required information before freezing the flight. On later flights and resumes, reuse confirmed answers and revisit affected values when required resources or project policy have changed.
 
-These questions guide the assistant's configuration work. The current installer consumes the reviewed JSON configuration below; a built-in first-flight interview is proposed in [#66](https://github.com/spring-labs-inc/FlightCheck/issues/66).
+These questions guide the assistant's configuration work. The terminal installer provides the deterministic setup interview and consumes the reviewed JSON below. An AI-assisted resource-discovery or board/log interview is not implemented.
 
 Save the resulting configuration outside the source checkout, for example `/private/project-flightcheck.json`:
 
