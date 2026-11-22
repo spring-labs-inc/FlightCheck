@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import re
 import shutil
 import tarfile
 import subprocess
@@ -112,6 +113,18 @@ class ReleaseIntegrityTests(unittest.TestCase):
                     self.assertEqual(source.extractfile(name).read(), (self.source / name).read_bytes())
                 self.assertNotIn('release/release.py', names)
                 self.assertFalse(any(name.startswith('experiments/pypi-installer/') for name in names))
+        # Current docs and callers must use the canonical entrypoint/procedure.
+        # Commit-pinned history links are provenance, not live instructions.
+        for path in self.source.rglob('*'):
+            relative = path.relative_to(self.source)
+            if not path.is_file() or relative.parts[0] in ('.git', 'tests'):
+                continue
+            if path.suffix not in ('.py', '.md', '.yml', '.yaml', '.toml', '.sh'):
+                continue
+            content = re.sub(r'https://github\.com/[^\s)]+/(?:blob|tree)/[0-9a-f]{40}/[^\s)]+',
+                             '', path.read_text())
+            for obsolete in ('release/release.py', 'release/README.md'):
+                self.assertNotIn(obsolete, content, str(relative))
         decoy = self.root / 'unrelated'
         decoy.mkdir()
         (decoy / 'pyproject.toml').write_text('Invalid decoy metadata must never be read')
@@ -130,6 +143,7 @@ class ReleaseIntegrityTests(unittest.TestCase):
                 help_result = subprocess.run([sys.executable, '-B', str(self.script), '--help'],
                                              cwd=cwd, env=self.env, capture_output=True, text=True)
                 self.assertEqual(help_result.returncode, 0, help_result.stdout + help_result.stderr)
+                self.assertEqual({str(p.relative_to(decoy)): p.read_bytes() for p in decoy.rglob('*') if p.is_file()}, before)
 
 
 
