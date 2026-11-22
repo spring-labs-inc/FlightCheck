@@ -45,11 +45,21 @@ def source_layout_errors(root):
     errors = []
     # Adding a genuine example requires declaring its purpose here. Renaming a
     # competing production document/script must not evade the source boundary.
-    for file in sorted((root/'examples').rglob('*')):
-        if not file.is_file() or any(part in ('__pycache__', '.pytest_cache') for part in file.parts) or file.name == '.DS_Store':
-            continue
-        if str(file.relative_to(root/'examples')) not in allowed_examples:
-            errors.append('Competing workflow source: ' + str(file.relative_to(root)))
+    local_directories = {'.git', '.venv', 'venv', '.tox', '.nox', '__pycache__',
+                         '.pytest_cache', '.mypy_cache', '.ruff_cache'}
+    def local_file(name):
+        return (name == '.DS_Store' or name.endswith(('.pyc', '.pyo', '.swp', '.swo', '.swn', '~'))
+                or name.startswith('.#') or (name.startswith('#') and name.endswith('#')))
+    # Prune local environments/caches before walking them; they are not source
+    # examples. Ordinary untracked policy files still reach the boundary check.
+    for directory, directories, filenames in os.walk(root/'examples'):
+        directories[:] = sorted(name for name in directories if name not in local_directories)
+        for name in sorted(filenames):
+            if local_file(name):
+                continue
+            file = Path(directory)/name
+            if str(file.relative_to(root/'examples')) not in allowed_examples:
+                errors.append('Competing workflow source: ' + str(file.relative_to(root)))
     # Complete policy copies are competing sources even when renamed or put in
     # another documentation folder. Do not freeze unrelated documentation bytes.
     def normalized(text):
