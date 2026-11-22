@@ -24,12 +24,29 @@ class TerminalInstallerTests(unittest.TestCase):
         cls.env = dict(os.environ, FLIGHTCHECK_BUILD_DEVELOPMENT="1", PYTHONDONTWRITEBYTECODE="1",
                        GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull, GIT_TERMINAL_PROMPT="0", PIP_NO_INDEX="1")
         cls.env.pop("PYTHONPATH", None)
+        # Build from a disposable checkout, then remove it before any tool runs.
+        # Installed behavior must not depend on either this checkout or that copy.
+        cls.build_source = Path(cls.area.name).resolve() / "build-source"
+        cls.build_source.mkdir()
+        names = subprocess.check_output(["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], cwd=PRODUCT).decode().split("\0")
+        for name in set(names) - {""}:
+            source = PRODUCT / name
+            if source.is_file():
+                target = cls.build_source / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source, target)
+                target.chmod(stat.S_IMODE(source.stat().st_mode))
+        for args in (("init", "-q", "--template="), ("config", "core.hooksPath", os.devnull),
+                     ("add", "--force", "."), ("-c", "user.name=Terminal fixture", "-c", "user.email=fixture@example.invalid",
+                     "-c", "commit.gpgsign=false", "commit", "-qm", "Synthetic terminal build fixture")):
+            subprocess.run(["git", "-C", str(cls.build_source), *args], env=cls.env, check=True, capture_output=True)
         result = subprocess.run([sys.executable, "-B", "-m", "build", "--wheel", "--sdist", "--no-isolation",
-                                 "--outdir", str(cls.artifacts), str(PRODUCT)], env=cls.env, capture_output=True, text=True)
+                                 "--outdir", str(cls.artifacts), str(cls.build_source)], env=cls.env, capture_output=True, text=True)
         if result.returncode:
             raise AssertionError("Artifact build failed: " + result.stdout + result.stderr)
         cls.wheel = next(cls.artifacts.glob("*.whl"))
         cls.sdist = next(cls.artifacts.glob("*.tar.gz"))
+        shutil.rmtree(cls.build_source)
         cls.tool = Path(cls.area.name).resolve() / "tool"
         cls.install_tool(cls.tool, cls.wheel)
 
@@ -274,7 +291,50 @@ raise SystemExit(cli.main(['init',TARGET,'--apply',PLAN,'--json']))
         self.assertEqual(self.cli("recover", self.project)["status"], "rolled_back")
         self.assertEqual(self.files(), self.before)
 
+    def assert_installed_origin(self, tool):
+        self.assertFalse(self.build_source.exists(), "The producing checkout must already be gone")
+        code = """import hashlib,json,sys
+from pathlib import Path
+from importlib import metadata,resources
+import flightcheck_cli
+root=Path(TOOL).resolve()
+module=Path(flightcheck_cli.__file__).resolve()
+assert root in module.parents,(root,module)
+entry=next(e for e in metadata.distribution('flightcheck').entry_points if e.group=='console_scripts' and e.name=='flightcheck')
+assert entry.value=='flightcheck_cli.cli:main'
+assert entry.load().__module__=='flightcheck_cli.cli'
+for value in sys.path:
+ p=Path(value or '.').resolve()
+ for forbidden in FORBIDDEN:
+  f=Path(forbidden).resolve()
+  assert p!=f and f not in p.parents,(p,f)
+package=resources.files('flightcheck_cli')
+manifest=json.loads(package.joinpath('manifest.json').read_bytes())
+for name,digest in manifest['cli_files'].items():
+ assert hashlib.sha256(package.joinpath(name).read_bytes()).hexdigest()==digest,name
+assert hashlib.sha256(package.joinpath('source.tar').read_bytes()).hexdigest()==manifest['source_archive_sha256']
+assert hashlib.sha256(package.joinpath('source-commit.txt').read_bytes()).hexdigest()==manifest['source_commit_sha256']
+print(json.dumps({'module':str(module),'entrypoint':entry.value,'sys_path':sys.path,'cli_files':sorted(manifest['cli_files'])}))
+""".replace('TOOL',repr(str(tool))).replace('FORBIDDEN',repr([str(PRODUCT),str(self.build_source)]))
+        env = dict(self.environ)
+        env.pop('PYTHONPATH',None)
+        result = subprocess.run([str(tool/'bin/python'),'-I','-B','-c',code], cwd=self.root, env=env, capture_output=True, text=True)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertIn(str(tool),json.loads(result.stdout)['module'])
+        entry = tool/'bin/flightcheck'
+        self.assertTrue(entry.is_file())
+        self.assertIn(str(tool),entry.read_text().splitlines()[0])
+        help_result = subprocess.run([str(entry),'--help'],cwd=self.root,env=env,capture_output=True,text=True)
+        self.assertEqual(help_result.returncode,0,help_result.stdout+help_result.stderr)
+        # Deliberately break isolation so this assertion sees a REAL source import.
+        source_path = PRODUCT/'src' if (PRODUCT/'src/flightcheck_cli').is_dir() else PRODUCT
+        leaked = subprocess.run([str(tool/'bin/python'),'-B','-c',code],cwd=self.root,
+                                env={**env,'PYTHONPATH':str(source_path)},capture_output=True,text=True)
+        self.assertNotEqual(leaked.returncode,0,"The origin assertion must reject an actual checkout import")
+        self.assertIn('AssertionError',leaked.stderr)
+
     def test_wheel_sdist_offline_and_tool_removal(self):
+        self.assert_installed_origin(self.tool)
         with zipfile.ZipFile(self.wheel) as archive:
             metadata = archive.read(next(n for n in archive.namelist() if n.endswith("/METADATA"))).decode()
             self.assertIn("License-Expression: FSL-1.1-MIT", metadata)
@@ -292,7 +352,21 @@ raise SystemExit(cli.main(['init',TARGET,'--apply',PLAN,'--json']))
                            cwd=self.root, env={**self.environ, "PIP_NO_INDEX": "1"}, capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         tool = self.root / "offline-tool"
-        self.install_tool(tool, next(rebuilt.glob("*.whl")))
+        rebuilt_wheel = next(rebuilt.glob("*.whl"))
+        with zipfile.ZipFile(self.wheel) as direct, zipfile.ZipFile(rebuilt_wheel) as roundtrip:
+            members = {n for n in direct.namelist() if n.startswith('flightcheck_cli/')}
+            self.assertEqual(members,{n for n in roundtrip.namelist() if n.startswith('flightcheck_cli/')})
+            for name in members:
+                self.assertEqual(direct.read(name),roundtrip.read(name),name)
+        bad = self.root/'sdist-without-config'
+        shutil.copytree(source,bad)
+        (bad/'pyproject.toml').unlink()
+        denied = subprocess.run([sys.executable,'-B','-m','build','--wheel','--no-isolation','--outdir',str(self.root/'bad-wheel'),str(bad)],
+                                cwd=self.root,env=self.environ,capture_output=True,text=True)
+        self.assertNotEqual(denied.returncode,0,'Missing generated sdist configuration must not build silently')
+        shutil.rmtree(source)
+        self.install_tool(tool, rebuilt_wheel)
+        self.assert_installed_origin(tool)
         self.assert_inert_tool(tool)
         self.assertEqual(self.files(), self.before, "Installing/importing the package cannot configure a project")
         self.plan(tool=tool)
@@ -313,7 +387,7 @@ raise SystemExit(cli.main(['init',TARGET,'--apply',PLAN,'--json']))
 import subprocess,sys
 from flightcheck_cli.source import installer
 with installer() as (_,root,*rest):
-    path=root/'examples/existing-project/docs/project-resources.md'
+    path=root/'workflow/docs/project-resources.md'
     path.write_bytes(path.read_bytes()+b'\\nChanged source resource for stale-plan control.\\n')
     pyproject=root/'pyproject.toml'
     import re

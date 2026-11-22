@@ -168,7 +168,7 @@ When an AI assistant helps with setup, ask it to inspect the repository first an
 
 Validate required paths and configuration, and use permitted read-only probes to confirm repository and board access. An inferred value remains a suggestion until confirmed. Discovery does not authorize provider writes, permission changes, or installation of the adopting project's dependencies.
 
-Save reusable documentation, board, and log lookup pointers in a project-owned resource index, using the [resource-index example](../examples/existing-project/docs/project-resources.md) as a reference. Keep shared pointers repository-relative where possible and host-specific log locations in private local configuration. Use the existing credential store for credentials.
+Save reusable documentation, board, and log lookup pointers in a project-owned resource index, using the [resource-index example](../workflow/docs/project-resources.md) as a reference. Keep shared pointers repository-relative where possible and host-specific log locations in private local configuration. Use the existing credential store for credentials.
 
 At the first selected flight, consult the saved configuration and resource index. Resolve missing required information before freezing the flight. On later flights and resumes, reuse confirmed answers and revisit affected values when required resources or project policy have changed.
 

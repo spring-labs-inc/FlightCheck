@@ -54,7 +54,7 @@ Codex loads one nonempty instruction file from its home, then walks the project 
 [issue]: https://github.com/spring-labs-inc/FlightCheck/issues/1
 [adoption]: ../examples/existing-project/README.md
 [claude-example]: ../examples/existing-project/CLAUDE.md
-[workflow]: ../examples/existing-project/docs/development-workflow.md
+[workflow]: ../workflow/docs/development-workflow.md
 [config]: https://learn.chatgpt.com/docs/config-file/config-basic
 [advanced]: https://learn.chatgpt.com/docs/config-file/config-advanced
 [managed]: https://learn.chatgpt.com/docs/enterprise/managed-configuration

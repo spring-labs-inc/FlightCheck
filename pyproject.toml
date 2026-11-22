@@ -6,7 +6,7 @@ backend-path = ["."]
 [project]
 name = "flightcheck"
 version = "0.1.0a2"
-description = "Terminal-first project setup for the FlightCheck development workflow"
+description = "FlightCheck is a lightweight set of repository instructions that guides AI-assisted changes from request to landing."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "FSL-1.1-MIT"
@@ -22,6 +22,7 @@ flightcheck = "flightcheck_cli.cli:main"
 
 [tool.setuptools]
 packages = ["flightcheck_cli"]
+package-dir = {"" = "src"}
 include-package-data = false
 
 [tool.setuptools.package-data]

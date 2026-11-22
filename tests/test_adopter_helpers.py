@@ -14,7 +14,7 @@ import time
 import unittest
 
 PRODUCT = Path(os.environ.get("FLIGHTCHECK_PRODUCT_ROOT", Path(__file__).resolve().parents[1]))
-SCRIPTS = PRODUCT / "examples/existing-project/scripts"
+SCRIPTS = PRODUCT / "workflow/scripts"
 
 
 class AdopterHelperTests(unittest.TestCase):
@@ -161,7 +161,7 @@ class Cases(unittest.TestCase):
 
     def test_shared_contract_tests_use_configured_scripts_root(self):
         scripts=self.root/'configured scripts';shutil.copytree(SCRIPTS,scripts)
-        tests=self.root/'portable tests';shutil.copytree(PRODUCT/'examples/existing-project/tests',tests)
+        tests=self.root/'portable tests';shutil.copytree(PRODUCT/'workflow/tests',tests)
         env=dict(self.env,FLIGHTCHECK_SCRIPTS_ROOT=str(scripts))
         env.pop('FLIGHTCHECK_PRODUCT_ROOT',None)
         result=subprocess.run([sys.executable,'-B','-m','unittest','discover','-s',str(tests),'-v'],cwd=self.project,

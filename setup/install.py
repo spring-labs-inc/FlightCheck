@@ -179,12 +179,17 @@ def render(data, source_name, destination, config):
     for name in SCRIPTS:
         text = re.sub(r"(?<!\.flightcheck/)scripts/" + re.escape(name) + r"\.py",
                       ".flightcheck/scripts/" + name + ".py", text)
-    text = text.replace("../../../docs/development-workflow.md", "../../../.flightcheck/docs/development-workflow.md")
-    text = text.replace("docs/development-workflow.md when", ".flightcheck/docs/development-workflow.md when")
+    text = text.replace("workflow/docs/development-workflow.md", ".flightcheck/docs/development-workflow.md")
     if destination.endswith("docs/development-workflow.md"):
+        text = text.replace("](../../examples/existing-project/docs/first-flight.md)", "](first-flight.md)")
+        text = text.replace("](../../examples/existing-project/examples/evidence-bootstrap/README.md)", "](../examples/evidence-bootstrap/README.md)")
         text = text.replace("](../.flightcheck/scripts/", "](../scripts/")
         text = text.replace("separate read-only Codex session", "separate read-only session in the selected client")
         text += "\n## Installed project configuration\n\nUse `.flightcheck/project.json` for the recorded project choices. Configure each flight's task contract and evidence gates using this guide; installation does not manufacture receipts or reviewer approval.\n"
+    if destination.endswith("examples/evidence-bootstrap/README.md"):
+        text = text.replace("](../../../../.flightcheck/docs/development-workflow.md", "](../../docs/development-workflow.md")
+    if destination.endswith("docs/first-flight.md"):
+        text = text.replace("](../../../.flightcheck/docs/development-workflow.md", "](development-workflow.md")
     if destination.endswith("SKILL.md"):
         if "/.claude/" in "/" + destination and config["activation"] == "opt-in":
             text = text.replace("description: Run", "disable-model-invocation: true\ndescription: Run", 1)
@@ -200,7 +205,7 @@ def render(data, source_name, destination, config):
                 + "\n\nReturn the native JSON object as your entire final message. The controller retains the original response; do not write it yourself.\n")
     if destination.endswith("docs/setup.md"):
         text = text.replace("](manifest.json)", "](../manifest.json)")
-        text = text.replace("](../examples/existing-project/docs/project-resources.md)", "](project-resources.md)")
+        text = text.replace("](../workflow/docs/project-resources.md)", "](project-resources.md)")
     return text.encode()
 
 

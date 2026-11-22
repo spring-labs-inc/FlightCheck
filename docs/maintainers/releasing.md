@@ -4,6 +4,13 @@
 
 The README uses the verified PyPI pin; shared Setup retains the Git/source alternative. Do not recommend an index package based only on its name. Existing project files and the selected project Python survive uninstalling the global CLI. This alpha supports fresh setup and identical repeats; project upgrades, removal, runtime management and the proposed AI resource interview remain separate work.
 
+## Source layout and local builds
+
+The importable application lives in `src/flightcheck_cli/`; its installed import remains `flightcheck_cli` and its console command remains `flightcheck`. Canonical workflow assets live in [`workflow/`](../../workflow/), separate from genuine adoption examples. The existing custom `build_backend.py` binds the complete immutable source archive and CLI hashes, stages the package under `src/`, and generates a setuptools-backed sdist configuration. Builds do not write generated package resources into the checkout.
+
+Use the declared build dependencies in the isolated contributor/tools environment. Standard frontend builds use `python3 -B -m build --wheel --sdist`; the release preparation command below additionally verifies artifacts and records their provenance. An unpacked sdist builds its wheel with setuptools without the original checkout or `.git`. Verify both wheels in separate fresh tool environments, from outside the checkout with `PYTHONPATH` excluded, and check the actual module and entrypoint origins. Contributor discovery remains `python3 -B -m unittest discover -s tests`, with pytest installed and loopback permission for card tests. Editable installation is not a verified workflow; broader packaging architecture remains [#99](https://github.com/spring-labs-inc/FlightCheck/issues/99).
+
+
 ## Local owner review
 
 Use Python 3.11+ for these maintainer scripts (tested here on macOS/Python 3.13). The application's declared minimum remains Python 3.9 on POSIX; other interpreter/platform and native client combinations are not qualified by this preparation.

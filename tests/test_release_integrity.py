@@ -147,5 +147,51 @@ class ReleaseIntegrityTests(unittest.TestCase):
 
 
 
+    def test_src_layout_and_sdist_configuration(self):
+        import tomllib
+        with zipfile.ZipFile(next((self.artifacts/'dist').glob('*.whl'))) as wheel:
+            manifest=json.loads(wheel.read('flightcheck_cli/manifest.json'))
+            with tarfile.open(fileobj=io.BytesIO(wheel.read('flightcheck_cli/source.tar'))) as archive:
+                source={item.name:archive.extractfile(item).read() for item in archive if item.isfile()}
+            expected={name.removeprefix('src/flightcheck_cli/'):hashlib.sha256(body).hexdigest()
+                      for name,body in source.items() if name.startswith('src/flightcheck_cli/') and name.count('/')==2 and name.endswith('.py')}
+            self.assertTrue(expected)
+            self.assertEqual(manifest['cli_files'],expected)
+            self.assertFalse(any(name.startswith('src/') for name in wheel.namelist()))
+            config=tomllib.loads(source['pyproject.toml'].decode())
+            self.assertEqual(config['tool']['setuptools']['package-dir'],{'':'src'})
+            self.assertEqual(config['project']['description'],'FlightCheck is a lightweight set of repository instructions that guides AI-assisted changes from request to landing.')
+        with tarfile.open(next((self.artifacts/'dist').glob('*.tar.gz'))) as archive:
+            members={item.name.split('/',1)[1]:archive.extractfile(item).read() for item in archive if item.isfile()}
+        staged=tomllib.loads(members['pyproject.toml'].decode())
+        config['build-system']['build-backend']='setuptools.build_meta'
+        config['build-system'].pop('backend-path')
+        self.assertEqual(staged,config)
+        self.assertEqual({n.removeprefix('src/flightcheck_cli/') for n in members if n.startswith('src/flightcheck_cli/') and n.endswith('.py')},set(expected))
+        self.command('verify','--artifacts',self.artifacts,'--require-release')
+
+    def test_dynamic_cli_inventory_uses_declared_source(self):
+        changed=self.root/'dynamic-source'
+        shutil.copytree(self.source,changed)
+        package=changed/'src/flightcheck_cli' if (changed/'src/flightcheck_cli').is_dir() else changed/'flightcheck_cli'
+        body=b'"""Legitimate dynamic CLI module fixture."""\nVALUE = 89\n'
+        (package/'added_contract.py').write_bytes(body)
+        if package.parent.name=='src':
+            stale=changed/'flightcheck_cli';stale.mkdir();(stale/'cli.py').write_bytes(b'raise RuntimeError("stale source must not be packaged")\n')
+        subprocess.run(['git','-C',str(changed),'add','--force','.'],env=self.env,check=True,capture_output=True)
+        folder=self.root/'dynamic-artifacts'
+        script=changed/'tools/release.py'
+        self.command('prepare','--output',folder,'--review',script=script)
+        self.command('verify','--artifacts',folder,script=script)
+        with zipfile.ZipFile(next((folder/'dist').glob('*.whl'))) as wheel:
+            manifest=json.loads(wheel.read('flightcheck_cli/manifest.json'))
+            self.assertEqual(wheel.read('flightcheck_cli/added_contract.py'),body)
+            self.assertEqual(manifest['cli_files']['added_contract.py'],hashlib.sha256(body).hexdigest())
+            self.assertNotIn(b'stale source must not be packaged',wheel.read('flightcheck_cli/cli.py'))
+        prefix='src/flightcheck_cli/' if package.parent.name=='src' else 'flightcheck_cli/'
+        with tarfile.open(next((folder/'dist').glob('*.tar.gz'))) as archive:
+            members={item.name.split('/',1)[1]:archive.extractfile(item).read() for item in archive if item.isfile()}
+        self.assertEqual(members[prefix+'added_contract.py'],body)
+
 if __name__ == '__main__':
     unittest.main()
