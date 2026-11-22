@@ -68,7 +68,9 @@ The verification job reads fresh GitHub run, workflow, artifact and environment 
 
 These workflow/publisher/environment interactions cannot be qualified locally without the later account setup, landed workflow, tag, actual Actions runs and explicit upload grant. Local tests exercise the policy evaluator, configuration and artifact behavior, not a real OIDC exchange or an enforced GitHub approval.
 
-## Verify actual PyPI before changing the visitor quickstart
+## Verify the published pin before announcing the release
+
+Prepare and independently review the visitor quickstart for the intended version with the source. Source, tag and artifact freeze and explicit publication authorization remain separate gates.
 
 After successful authorized publication, use the retained clean release directory. Follow the separately reviewed [Setup](../../setup/README.md) instructions for the exact approved public version in a fresh isolated application/tool environment before running the project checks below:
 
@@ -83,7 +85,7 @@ flightcheck doctor .
 
 `verify-index` performs only GET requests to the exact public project/version and approved file URLs. It binds the retained manifest to the approved digest before parsing or network requests, checks filenames, hashes, lengths, yanked status and actual downloaded bytes, and rechecks the same retained identity before success. Registry redirects and nondefault public artifact origins are rejected before a destination request. Its output explicitly leaves a **fresh public-index installation** pending; metadata agreement alone does not prove installation. `--test-index http://127.0.0.1:PORT` is only for fixtures and produces `simulated_registry_match`, never public qualification.
 
-In the reviewed isolated installation routes, verify both adapters as applicable, complete inventory, preservation of instructions/settings/dependencies, identical repeat, conflict/failure recovery, and installed runtime after global CLI removal. Retain the observed PyPI file digests and attestations. Then independently review the documentation update and record that its published install commands work on that exact public version. Apply a legacy proposal only when its guarded historical input actually applies; preserve its expected old digest. Keep a source-install alternative in shared Setup. Another package or unpublished candidate with the same proposed name does not satisfy this step.
+In the reviewed isolated installation routes, verify both adapters as applicable, complete inventory, preservation of instructions/settings/dependencies, identical repeat, conflict/failure recovery, and installed runtime after global CLI removal. Retain the observed PyPI file digests and attestations. After publication, record that the reviewed install commands and actual PyPI rendering work on that exact public version before announcing or accepting the release as verified. Apply a legacy proposal only when its guarded historical input actually applies; preserve its expected old digest. Keep a source-install alternative in shared Setup. Another package or unpublished candidate with the same proposed name does not satisfy this step.
 
 For existing early Git installs whose tool distribution was `flightcheck-cli`, retain the old artifact for rollback, uninstall that old tool, then install the new `flightcheck` distribution; both supply the same executable and can conflict on PATH. Do not force-overwrite an unrelated command. Existing project installations are not implicitly upgraded; use `doctor` to inspect them and keep unsupported migration explicit. No project dependency reinstall is required by the distribution-name change.
 
