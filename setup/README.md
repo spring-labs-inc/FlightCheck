@@ -8,7 +8,7 @@ The installer uses only Python's standard library and Git. Receipt and card tool
 
 Run setup in a normal terminal on the machine holding the project. Claude's command sandbox protects `.claude/skills` and `.claude/agents`; adding a write allow rule does not lift those protections. Do not omit adapters, install hooks, or disable global sandbox settings to work around a failed AI-side install. The terminal installer uses the same shared engine as the source commands below.
 
-Install the intended `0.1.0` release with pip in a dedicated tool environment outside the adopting project. Choose an unused directory and an existing Python 3.9+ interpreter:
+Install version `0.1.0` with pip in a dedicated tool environment outside the adopting project. Choose an unused directory and an existing Python 3.9+ interpreter:
 
 ```sh
 flightcheck_tool="$HOME/.local/share/flightcheck/venvs/0.1.0"
@@ -53,7 +53,7 @@ The preview lists every create/update/unchanged operation and content digest, wi
 
 ### Release records and earlier Git tool installs
 
-Retained published PyPI checkpoint: `flightcheck`, version `0.1.0a2` ([public release](https://pypi.org/project/flightcheck/0.1.0a2/)). Its public wheel and sdist match the retained approved release; fresh public-index pipx and uv installation and project setup were verified in the recorded alpha scope. This checkpoint remains available by its explicit `0.1.0a2` pin; it does not establish public availability or verification of the intended `0.1.0` release. Maintainers retain the release identity and future-release safeguards in the separate [release guide](https://github.com/spring-labs-inc/FlightCheck/blob/main/docs/maintainers/releasing.md); local artifacts and loopback-index tests alone do not prove public availability. The published a2 archives and PyPI long description retain preparation-era wording from their release source. This online Setup guide gives current instructions; published bytes remain unchanged.
+Retained published PyPI checkpoint: `flightcheck`, version `0.1.0a2` ([public release](https://pypi.org/project/flightcheck/0.1.0a2/)). Its public wheel and sdist match the retained approved release; fresh public-index pipx and uv installation and project setup were verified in the recorded alpha scope. This checkpoint remains available by its explicit `0.1.0a2` pin; it does not establish public availability or verification of other release versions. Maintainers retain the release identity and future-release safeguards in the separate [release guide](https://github.com/spring-labs-inc/FlightCheck/blob/main/docs/maintainers/releasing.md); local artifacts and loopback-index tests alone do not prove public availability. The published a2 archives and PyPI long description retain preparation-era wording from their release source. This online Setup guide gives current instructions; published bytes remain unchanged.
 
 Earlier Git builds used distribution name `flightcheck-cli` while exposing the same `flightcheck` executable. Before installing the renamed tool, retain the old artifact for rollback and run `pipx uninstall flightcheck-cli`; this removes its tool environment and launcher, not project instructions, evidence or the selected project runtime. Install the new tool afterward. Do not overwrite an unrelated executable. Existing projects are not implicitly migrated: run `flightcheck doctor` and retain the supported fresh-setup/identical-repeat boundary below.
 

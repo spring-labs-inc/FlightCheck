@@ -71,7 +71,7 @@ python3 -m venv "$flightcheck_tool"
 
 The full tool path below avoids changing your project's Python or PATH. The [setup guide](https://github.com/spring-labs-inc/FlightCheck/blob/main/setup/README.md) covers pipx, uv, source installation, configuration, and remote/browser details.
 
-From an existing project checkout:
+In the same shell, from an existing project checkout:
 
 ```sh
 cd /path/to/your/project
