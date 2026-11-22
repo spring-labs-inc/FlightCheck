@@ -98,6 +98,43 @@ class TerminalInstallerTests(unittest.TestCase):
     def apply(self, expected=0, tool=None):
         return self.cli("init", self.project, "--apply", self.plan_path, expected=expected, tool=tool)
 
+    def assert_inert_tool(self, tool):
+        label = tool.name
+        home = self.root / ('inert-home-' + label)
+        work = self.root / ('inert-cwd-' + label)
+        guard = self.root / ('inert-guard-' + label)
+        for path in (home, work, guard):path.mkdir()
+        (home / 'owner-policy').write_text('Existing global owner policy\n')
+        attempts = guard / 'network-attempts'
+        attempts.write_text('')
+        (guard / 'sitecustomize.py').write_text(
+            'import sys\n'
+            'def guard(event,args):\n'
+            " if event in ('socket.connect','socket.connect_ex','socket.getaddrinfo','socket.bind','subprocess.Popen','os.system','os.posix_spawn','os.exec','os.spawn'):\n"
+            '  with open(' + repr(str(attempts)) + ',"a") as log:log.write(event+"\\n")\n'
+            '  raise RuntimeError("Network and child processes are blocked during inert import/help")\n'
+            'sys.addaudithook(guard)\n')
+        def snapshot(root):
+            return {str(p.relative_to(root)):
+                    (("symlink", os.readlink(p), stat.S_IMODE(p.lstat().st_mode)) if p.is_symlink()
+                     else ("directory", stat.S_IMODE(p.stat().st_mode)) if p.is_dir()
+                     else (p.read_bytes(), stat.S_IMODE(p.stat().st_mode)))
+                    for p in [root, *root.rglob('*')]}
+        original_home, original_work, original_project = snapshot(home), snapshot(work), snapshot(self.project)
+        env = {**self.environ, 'HOME': str(home), 'PYTHONPATH': str(guard)}
+        commands = ([str(tool / 'bin/python'), '-B', '-c', 'import flightcheck_cli; import flightcheck_cli.cli'],
+                    [str(tool / 'bin/flightcheck'), '--help'])
+        for command in commands:
+            result = subprocess.run(command, cwd=work, env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(snapshot(home), original_home)
+            self.assertEqual(snapshot(work), original_work)
+            self.assertEqual(snapshot(self.project), original_project)
+            self.assertEqual(attempts.read_text(), '', 'Import/help must not attempt network access or child-process execution')
+
+    def test_import_and_help_preserve_project_and_user_state(self):
+        self.assert_inert_tool(self.tool)
+
     def test_preview_complete_install_and_preservation(self):
         plan = self.plan()
         self.assertEqual(self.files(), self.before, "Preview must not write the project")
@@ -256,6 +293,7 @@ raise SystemExit(cli.main(['init',TARGET,'--apply',PLAN,'--json']))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         tool = self.root / "offline-tool"
         self.install_tool(tool, next(rebuilt.glob("*.whl")))
+        self.assert_inert_tool(tool)
         self.assertEqual(self.files(), self.before, "Installing/importing the package cannot configure a project")
         self.plan(tool=tool)
         self.apply(tool=tool)

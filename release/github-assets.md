@@ -7,7 +7,7 @@ fresh installation or native client qualification.
 
 Use the **same retained wheel and sdist** downloaded from #67's reviewed,
 successful Actions prepare run and immutable artifact ID. Follow
-[the release guide](README.md) first. Record the run ID, immutable artifact ID,
+[the release guide](../docs/maintainers/releasing.md) first. Record the run ID, immutable artifact ID,
 tag, full source SHA, `release.json` SHA-256 and distribution hashes together
 in the release approval. Integrate preparation before freezing that release
 source. A later documentation commit does not authorize rebuilding its version.

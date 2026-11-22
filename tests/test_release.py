@@ -51,7 +51,7 @@ class ReleaseTests(unittest.TestCase):
                      ['-c', 'user.name=Release test fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'Synthetic release source fixture'],
                      ['tag', cls.tag]):
             subprocess.run(['git', '-C', str(cls.source), *args], env=cls.env, check=True, capture_output=True)
-        cls.script = cls.source / 'release/release.py'
+        cls.script = cls.source / 'tools/release.py'
         cls.artifacts = cls.scratch / 'release'
         cls.command('prepare', '--output', cls.artifacts, '--tag', cls.tag)
         cls.record = json.loads((cls.artifacts / 'release.json').read_text())
@@ -226,8 +226,8 @@ class ReleaseTests(unittest.TestCase):
 
         # Exercise the proposal's unpromoted input without changing the shared source.
         docs_source = self.root / 'docs-source'
-        (docs_source / 'release').mkdir(parents=True)
-        docs_script = docs_source / 'release/release.py'
+        (docs_source / 'tools').mkdir(parents=True)
+        docs_script = docs_source / 'tools/release.py'
         shutil.copyfile(self.script, docs_script)
         shutil.copyfile(self.source / 'pyproject.toml', docs_source / 'pyproject.toml')
         public_pin = ('pipx install flightcheck==' + self.version).encode()
@@ -524,7 +524,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertNotIn('pipx install "git+https://github.com/spring-labs-inc/FlightCheck.git"', quickstart)
         rows = [line.split(']')[0].split('[')[-1] for line in readme.splitlines() if line.startswith('| [')]
         self.assertEqual(rows, ['Status Card', 'Workflow', 'Verdict', 'Setup', 'Benchmarks', 'Contributing'])
-        guide = (ROOT / 'release/README.md').read_text()
+        guide = (ROOT / 'docs/maintainers/releasing.md').read_text()
         for phrase in ('Published alpha', 'required human reviewers', 'same bytes', 'actual PyPI', 'simulated_registry_match', '#14'):
             self.assertIn(phrase, guide)
         shared = (ROOT / 'setup/README.md').read_text()
@@ -648,7 +648,7 @@ class ReleaseTests(unittest.TestCase):
 
     def test_preparation_candidate_version_consistency(self):
         metadata = tomllib.loads((ROOT / 'pyproject.toml').read_text())['project']
-        self.assertEqual(metadata['version'], '0.1.0a2', 'Keep explicit next-candidate intent independent of derived fixture values')
+        self.assertEqual(metadata['version'], '0.1.0a2', 'Keep explicit published a2 identity unchanged through cleanup, independent of derived fixture values')
         self.assertEqual(metadata['name'], 'flightcheck')
         self.assertEqual(metadata['license'], 'FSL-1.1-MIT')
         workflow = self.workflow()
@@ -666,13 +666,15 @@ class ReleaseTests(unittest.TestCase):
         distribution_status = [line for line in (ROOT / 'docs/pypi-distribution.md').read_text().splitlines() if line.startswith('Current release:')]
         self.assertEqual(len(distribution_status), 1, 'Expected one current published status sentence in docs/pypi-distribution.md')
         self.assertIn('`0.1.0a2`', distribution_status[0])
-        guide = (ROOT / 'release/README.md').read_text()
+        guide = (ROOT / 'docs/maintainers/releasing.md').read_text()
         release_status = [line for line in guide.splitlines() if line.startswith('**Published alpha.**')]
-        self.assertEqual(len(release_status), 1, 'Expected one current published status sentence in release/README.md')
+        self.assertEqual(len(release_status), 1, 'Expected one current published status sentence in docs/maintainers/releasing.md')
         self.assertIn('version `0.1.0a2`', release_status[0])
-        self.assertIn('--ref v0.1.0a2 -f mode=prepare -f tag=v0.1.0a2', guide)
-        self.assertIn('--ref v0.1.0a2 -f mode=publish -f tag=v0.1.0a2', guide)
-        self.assertIn("pipx install 'flightcheck==0.1.0a2'", guide)
+        self.assertIn('--ref APPROVED_VERSION_TAG -f mode=prepare -f tag=APPROVED_VERSION_TAG', guide)
+        self.assertIn('--ref APPROVED_VERSION_TAG -f mode=publish -f tag=APPROVED_VERSION_TAG', guide)
+        self.assertIn('instructions for the exact approved public version in a fresh isolated application/tool environment', guide)
+        self.assertNotIn("pipx install 'flightcheck==0.1.0a2'", guide)
+        self.assertIn('Never rebuild or republish a2', guide)
         self.assertIn('Keep it disabled during preparation.', guide)
 
 

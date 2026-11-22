@@ -20,7 +20,6 @@ from unittest.mock import patch
 import test_release as release_fixture
 
 ROOT = Path(os.environ.get("FLIGHTCHECK_PRODUCT_ROOT", Path(__file__).resolve().parents[1])).resolve()
-sys.path.insert(0, str(ROOT / "release"))
 spec = importlib.util.spec_from_file_location("github_assets", ROOT / "release/github_assets.py")
 assets = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(assets)
@@ -424,7 +423,7 @@ class GitHubAssetsTests(unittest.TestCase):
             subprocess.run(["git", "-C", str(source), *args], env=self.env,
                            check=True, capture_output=True)
         folder = self.root / "release-b"
-        self.command("prepare", "--output", folder, "--tag", self.tag, script=source / "release/release.py")
+        self.command("prepare", "--output", folder, "--tag", self.tag, script=source / "tools/release.py")
         return folder
 
     def development_release(self):
@@ -432,7 +431,7 @@ class GitHubAssetsTests(unittest.TestCase):
         shutil.copytree(self.source, source)
         (source / "uncommitted-review-source.txt").write_text("Genuine embedded development snapshot.\n")
         folder = self.root / "development-artifacts"
-        self.command("prepare", "--review", "--output", folder, script=source / "release/release.py")
+        self.command("prepare", "--review", "--output", folder, script=source / "tools/release.py")
         record = json.loads((folder / "release.json").read_text())
         self.assertTrue(record["source"]["development"])
         record.update(kind="release", release_eligible=True, tag="v" + record["version"])
