@@ -57,6 +57,55 @@ Retained published PyPI checkpoint: `flightcheck`, version `0.1.0a2` ([public re
 
 Earlier Git builds used distribution name `flightcheck-cli` while exposing the same `flightcheck` executable. Before installing the renamed tool, retain the old artifact for rollback and run `pipx uninstall flightcheck-cli`; this removes its tool environment and launcher, not project instructions, evidence or the selected project runtime. Install the new tool afterward. Do not overwrite an unrelated executable. Existing projects are not implicitly migrated: run `flightcheck doctor` and retain the supported fresh-setup/identical-repeat boundary below.
 
+### Version-pinned GitHub release assets
+
+Use this route only after the corresponding GitHub release has been published
+and its public assets and installations verified. Private preparation does not
+make the channel available. PyPI/pip above remains the recommended route.
+
+For `0.1.0`, download all four named assets from the versioned `v0.1.0` release:
+`flightcheck-0.1.0-py3-none-any.whl`, `flightcheck-0.1.0.tar.gz`, `release.json`
+and `SHA256SUMS`. GitHub's automatically generated source-code archives are
+not the published sdist. Put the four files together in a fresh download
+directory outside your project. Compare the version and immutable source/tag
+with your retained approval. Cross-check both distribution SHA-256 digests
+against [PyPI's published file digests for `0.1.0`](https://pypi.org/pypi/flightcheck/0.1.0/json)
+or a separately retained trusted release approval. GitHub release notes and
+`SHA256SUMS` are same-host information, not independent trust anchors. Then,
+in that directory, run:
+
+```sh
+shasum -a 256 -c SHA256SUMS
+```
+
+On systems with GNU coreutils, `sha256sum -c SHA256SUMS` is equivalent.
+
+Continue only if all three listed files report `OK`; a missing file or failed
+checksum must stop installation. The checksum manifest covers the wheel,
+sdist and original `release.json`, without a self-entry. Use the exact local
+wheel in a new dedicated tool environment:
+
+```sh
+flightcheck_asset_tool="$HOME/.local/share/flightcheck/venvs/github-0.1.0"
+python3 -m venv "$flightcheck_asset_tool"
+"$flightcheck_asset_tool/bin/python" -m pip install ./flightcheck-0.1.0-py3-none-any.whl
+"$flightcheck_asset_tool/bin/flightcheck" --version
+```
+
+Choose an unused environment path and an existing Python 3.9+ on POSIX. To
+install the sdist instead, use a separate fresh tool environment and replace
+the pip argument with `./flightcheck-0.1.0.tar.gz`. Its build requires the
+declared `[build-system].requires`: `setuptools==80.9.0`, `wheel==0.45.1` and
+`packaging==26.3`. Pip may obtain these online in an isolated build environment;
+this is not a verified fully offline route.
+
+Use the installed command's full path for the shared `inspect`, interactive
+`init` and `doctor` sequence above, selecting the persistent project Python.
+Updating or uninstalling this global tool does not update, migrate or remove
+an existing project's pinned workflow/runtime. Project migration/removal
+remains unsupported. Maintainers use the separately authorized,
+[no-replacement publication and public-readback procedure](../release/github-assets.md).
+
 ### Reviewed configuration and headless setup
 
 For repeated automation or multiple checks, use the configuration JSON described in section 3. Existing confirmed project choices are reused for identical setup; otherwise headless operation requires explicit inputs. Store the plan in an owner-only directory outside the target:
