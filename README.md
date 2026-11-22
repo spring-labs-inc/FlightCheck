@@ -58,7 +58,9 @@ Handoffs carry check receipts and original output between stages. Fingerprints t
 
 **Supported environments:** Claude Desktop, Claude Code TUI, Codex Desktop, and Codex CLI/TUI. FlightCheck has been verified in all four environments.
 
-Use an installed supported coding client, Git, and Python 3.9+ on POSIX. Install with pip in an unused tool environment outside your project:
+Use an installed supported coding client, Git, and Python 3.9+ on POSIX. Choose one tool installation outside your project.
+
+**PyPI/pip (recommended):**
 
 ```sh
 flightcheck_tool="$HOME/.local/share/flightcheck/venvs/0.1.0"
@@ -69,9 +71,19 @@ python3 -m venv "$flightcheck_tool"
 )
 ```
 
-The full tool path below avoids changing your project's Python or PATH. The [setup guide](https://github.com/spring-labs-inc/FlightCheck/blob/main/setup/README.md) covers pipx, uv, source installation, configuration, and remote/browser details.
+**Homebrew 7 on macOS Apple silicon:** inspect the first-party formula before trusting it. The [Setup guide](https://github.com/spring-labs-inc/FlightCheck/blob/main/setup/README.md#homebrew-macos-apple-silicon) records prerequisites and the tested platform limits.
 
-In the same shell, from an existing project checkout:
+```sh
+brew tap spring-labs-inc/tap
+brew cat spring-labs-inc/tap/flightcheck
+brew trust --formula spring-labs-inc/tap/flightcheck
+brew install spring-labs-inc/tap/flightcheck
+flightcheck_tool="$(brew --prefix)"
+```
+
+Other supported methods—pipx, uv and source installation—are in the [Setup guide](https://github.com/spring-labs-inc/FlightCheck/blob/main/setup/README.md), along with configuration, PATH and remote/browser details.
+
+After either installation, in the same shell, enter an existing project checkout:
 
 ```sh
 cd /path/to/your/project

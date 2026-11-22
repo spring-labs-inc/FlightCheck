@@ -21,6 +21,40 @@ python3 -m venv "$flightcheck_tool"
 
 Activation ends with the subshell, so the tool environment does not replace your project's Python or remain on PATH. Keep this environment while using its command. Use `"$flightcheck_tool/bin/flightcheck"` wherever this guide shows `flightcheck`; no global PATH change is required. Select the adopting project's persistent Python during setup, never the disposable application environment.
 
+### Homebrew (macOS Apple silicon)
+
+The first-party, owner-maintained [tap](https://github.com/spring-labs-inc/homebrew-tap) installs the same verified `0.1.0` wheel as pip. The formula uses an isolated Homebrew Python 3.13 environment and macOS Git, links only the CLI, and retains FSL-1.1-MIT notices. It does not configure a project or install its dependencies. There is one formula, with no bottle, cask or homebrew/core submission.
+
+Install Homebrew separately and ensure Command Line Tools provide working Git. The verified initial target is macOS 27.2.1 on Apple silicon, Homebrew 7.0.13 and Python 3.13.18. Intel, Linux and other platform/version combinations are not qualified by these checks. The formula is restricted to macOS/arm64; these records do not extend the separate supported-client qualification.
+
+Homebrew 7 requires explicit formula trust. Read the formula from the canonical tap before approving that formula, then install:
+
+```sh
+brew tap spring-labs-inc/tap
+brew cat spring-labs-inc/tap/flightcheck
+brew trust --formula spring-labs-inc/tap/flightcheck
+brew install spring-labs-inc/tap/flightcheck
+flightcheck_command="$(brew --prefix)/bin/flightcheck"
+"$flightcheck_command" --version
+```
+
+Check that the formula names `0.1.0`, the versioned GitHub release wheel and SHA-256 `3cc62c2ba5360d761aa532b614045cd5369e69cad9f8dba7c032f4e8124bfe54`. Approve only this formula through Homebrew's normal trust command; do not disable trust globally. A checksum or trust failure must stop installation rather than lead to a different artifact or local formula path.
+
+If `flightcheck` is not on PATH, use `"$(brew --prefix)/bin/flightcheck"`, or follow the shell configuration printed by `brew shellenv`. A conflicting existing executable or package must be reconciled before installing; do not overwrite it. Choose your project's existing persistent Python during the shared setup below, never `flightcheck`'s `libexec` interpreter. Keep that project runtime installed independently of the global tool; replacing it changes its recorded pin and requires explicit reconciliation.
+
+For later tool maintenance, use the same formula name:
+
+```sh
+brew update
+brew upgrade spring-labs-inc/tap/flightcheck
+brew reinstall spring-labs-inc/tap/flightcheck
+brew uninstall spring-labs-inc/tap/flightcheck
+```
+
+The `0.1.0` upgrade invocation is a same-version no-op, not cross-version upgrade qualification. Tool maintenance does not migrate or remove an existing project's pinned workflow/runtime/evidence. Project migrations remain unsupported; preserve project files and the selected Python. Future formula updates require a separately verified immutable release, synchronized version/URL/SHA-256 and notices, scoped checks/review and explicit publication authority; never move a published tag or replace release assets.
+
+### Other terminal installation methods
+
 For an isolated `flightcheck` command on PATH, [install pipx and configure its executable directory](https://pipx.pypa.io/stable/how-to/install-pipx.html), then open a fresh shell:
 
 ```sh
@@ -36,7 +70,7 @@ uv tool install --python /absolute/path/to/python3 --no-python-downloads \
 
 Replace the Python path with an existing persistent Python 3.9+ executable on POSIX. Put uv's tool executable directory on PATH using its printed shell-update guidance, then open a fresh shell. These are installation frontends for the same distribution, not project dependencies. The retained public a2 observations used uv 0.13.9 and Python 3.13.18; those records do not qualify another release or every supported Python/platform combination.
 
-After your chosen installation, enter an existing project and explicitly configure it. For pip, use the full tool path above in place of `flightcheck`:
+After your chosen installation, enter an existing project and explicitly configure it. For pip, use the full tool path above in place of `flightcheck`; for Homebrew, use the selected command or its full Homebrew path if needed:
 
 ```sh
 cd /path/to/your/project
