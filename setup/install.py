@@ -190,7 +190,6 @@ def render(data, source_name, destination, config):
         text = text.replace("](../../../../.flightcheck/docs/development-workflow.md", "](../../docs/development-workflow.md")
     if destination.endswith("docs/first-flight.md"):
         text = text.replace("](../../../.flightcheck/docs/development-workflow.md", "](development-workflow.md")
-        text = text.replace("](../../../workflow/scripts/", "](../scripts/")
     if destination.endswith("SKILL.md"):
         if "/.claude/" in "/" + destination and config["activation"] == "opt-in":
             text = text.replace("description: Run", "disable-model-invocation: true\ndescription: Run", 1)
