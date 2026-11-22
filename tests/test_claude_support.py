@@ -46,9 +46,30 @@ def source_layout_errors(root):
     # Adding a genuine example requires declaring its purpose here. Renaming a
     # competing production document/script must not evade the source boundary.
     for file in sorted((root/'examples').rglob('*')):
-        if file.is_file() and file.suffix in ('.md', '.toml', '.py'):
-            if str(file.relative_to(root/'examples')) not in allowed_examples:
-                errors.append('Competing workflow source: ' + str(file.relative_to(root)))
+        if not file.is_file() or any(part in ('__pycache__', '.pytest_cache') for part in file.parts) or file.name == '.DS_Store':
+            continue
+        if str(file.relative_to(root/'examples')) not in allowed_examples:
+            errors.append('Competing workflow source: ' + str(file.relative_to(root)))
+    # Complete policy copies are competing sources even when renamed or put in
+    # another documentation folder. Do not freeze unrelated documentation bytes.
+    def normalized(text):
+        return ' '.join(text.replace('examples/existing-project/docs/', 'docs/').replace('workflow/docs/', 'docs/').split())
+    policies = [(str(file.relative_to(root)), normalized(file.read_text())) for file in (root/'workflow/docs').glob('*.md')]
+    skill = root/'workflow/skills/develop-change/SKILL.md'
+    policies.append((str(skill.relative_to(root)), normalized(skill.read_text().split('---\n', 2)[-1])))
+    for file in (root/'workflow/reviewers').glob('*.toml'):
+        body = ast.literal_eval(re.search(r'developer_instructions = (""".*""")\s*$', file.read_text(), re.S).group(1))
+        policies.append((str(file.relative_to(root)), normalized(body)))
+    for file in (root/'docs').rglob('*'):
+        if not file.is_file():
+            continue
+        try:
+            text = normalized(file.read_text())
+        except UnicodeError:
+            continue
+        for source, body in policies:
+            if body and body in text:
+                errors.append('Competing policy copy: ' + str(file.relative_to(root)) + ' from ' + source)
     def target(file, value, expected):
         if (file.parent/value).resolve() != expected.resolve() or not expected.is_file():
             errors.append('Adapter target is not canonical: ' + str(file.relative_to(root)))
@@ -118,6 +139,12 @@ class ClaudeSupportTests(unittest.TestCase):
     def test_source_layout_keeps_examples_and_all_adapters_thin(self):
         errors=source_layout_errors(ROOT)
         self.assertFalse(errors,'\n'.join(errors))
+        pins=[]
+        for path in (ROOT/'requirements.dev.txt', ROOT/'examples/existing-project/requirements.dev.txt'):
+            values=re.findall(r'(?m)^pytest==[^\s#]+$',path.read_text())
+            self.assertEqual(len(values),1,'Expected one explicit pytest pin: '+str(path.relative_to(ROOT)))
+            pins.append(values[0])
+        self.assertEqual(*pins,'Pytest pins drift: requirements.dev.txt / examples/existing-project/requirements.dev.txt')
 
     def test_entry_points_keep_maintainer_and_adopter_routing(self):
         self.assertEqual((ROOT/'CLAUDE.md').read_text().splitlines()[0], '@AGENTS.md')
