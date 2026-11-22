@@ -39,9 +39,10 @@ Review the proposed notes against actual supported platforms, client/runtime
 limits and the [bounded native observations](../docs/claude-trial-report.md#accepted-native-app-scope).
 Add the approved Actions run/artifact and available PyPI attestation references
 from their actual provider records. Do not invent attestations or extend the
-manual guard scope to automatic interception. Qualify both local and supported
-SSH cards on the browser machine with this exact retained release wheel before
-enabling any publication.
+manual guard scope to automatic interception. Reuse accepted local and supported
+SSH card observations on the browser machine when their exact retained wheel
+bytes and effective inputs are unchanged; a new download host alone does not
+require another client qualification. New bytes require their own qualification.
 
 ## Publish only after explicit authorization
 
@@ -49,14 +50,26 @@ The overseer owns provider writes. Before asking for the held grant, present
 the exact reviewed identities, byte hashes, successful prepare run, protected
 environment policy, local/SSH card observations and proposed notes. Confirm
 the agreed PyPI release and fresh uv/pipx install/setup checks under #67/#70.
-Keep #72 blocked until its actual public PyPI prerequisite clears.
+Require verified actual PyPI bytes for the selected version; the accepted
+`0.1.0` baseline satisfies that prerequisite only for `0.1.0`. #72 still
+requires its own separate authorization. Keep PyPI publication disabled
+throughout a GitHub channel flight and preserve its required human protection.
+
+Before requesting the release publication grant, land the reviewed channel
+documentation through its authorized delivery process and read back both this
+procedure and the checksum/pinned-asset instructions in canonical Setup on
+`main`. Proposed release notes link there; local edits alone do not make those
+instructions available. Keep the publication grant blocked until that readback
+matches the reviewed content. Documentation landing does not authorize release
+creation or asset upload.
 
 Read the **current** remote tag/release/assets before creating anything. The
 tag must already resolve to the reviewed full source commit. Refuse a tag or
 release mismatch. A missing release permits creation only under the explicit
 publication grant. Attach exactly the wheel, sdist, original `release.json` and
 `SHA256SUMS`, using the reviewed notes; do not upload `release-notes.md` as an
-extra asset. Mark alpha versions as prereleases. Never use overwrite/clobber,
+extra asset. Mark alpha versions as prereleases and stable `0.1.0` as
+`draft=false`, `prerelease=false` on final readback. Never use overwrite/clobber,
 delete-and-recreate, `skip-existing` or another build to hide a conflict.
 
 If a release or any asset already exists, download and compare it before any
