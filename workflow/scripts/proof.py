@@ -17,6 +17,7 @@ from capture_check import digest, write_json
 IDENTIFIER = re.compile(r"[a-zA-Z0-9_-]+")
 PASS = {"passed", "reused", "reusable"}
 OUTCOMES = {"passed", "skipped", "expected_failures", "failed"}
+INCREMENTAL_PROTOCOL = "incremental-v1"
 
 
 def identifier(value):
@@ -108,18 +109,58 @@ def preserves_gates(previous, current):
     return isinstance(frozen, dict) and all(current.get(key) == value for key, value in frozen.items())
 
 
+def review_protocol(root):
+    """Only a retained pre-marker contract selects the legacy default."""
+    path = root / "acceptance-contract.json" if root is not None else None
+    if path is None or not path.exists():
+        return INCREMENTAL_PROTOCOL
+    contract = read(path)
+    if "review_protocol" not in contract:
+        return "legacy"
+    if contract["review_protocol"] != INCREMENTAL_PROTOCOL:
+        raise ValueError("Unknown frozen review_protocol")
+    return INCREMENTAL_PROTOCOL
+
+
+def incremental_configuration(task, root):
+    protocol = review_protocol(root)
+    if protocol == "legacy" and "incremental" not in task:
+        return None
+    configured = task.get("incremental", {})
+    if not isinstance(configured, dict):
+        raise ValueError("incremental must be an object")
+    result = {"access_report": "reviewer-access.json", **configured}
+    if (protocol == INCREMENTAL_PROTOCOL and root is not None
+            and (root / "acceptance-contract.json").exists()
+            and "accepted_validation" not in configured and "review_validation" in task):
+        result["accepted_validation"] = {"record": task["review_validation"]}
+    return result
+
+
+def declared_dependencies(task):
+    """Initial claim bindings are declarations, never accepted proof."""
+    return [{"id": "criterion-" + item["id"], "criterion": item["id"],
+             "gates": sorted({proof["gate"] for proof in item["proofs"] if proof["kind"] == "check"}),
+             "claim_sha256": content_hash(item), "state": "new"} for item in criteria(task)]
+
+
 def freeze(task, root, amendment=None):
     """Do not silently erase or weaken an earlier task contract on resume."""
     from configuration import validate_config
     validate_config(task, root)
     path = root / "acceptance-contract.json"
     previous = read(path) if path.exists() else None
+    incremental_configuration(task, root)
     baseline = task.get("baseline_candidate", (previous or {}).get("baseline_candidate", task["candidate"]))
     nonempty(baseline)
     if previous is not None and "baseline_candidate" not in previous and "baseline_candidate" not in task:
         raise ValueError("Legacy flight needs its retained original baseline_candidate for explicit contract migration")
     contract = {"acceptance": criteria(task), "required_gates": sorted(g["id"] for g in task["gates"]),
                 "gates": gate_contracts(task), "baseline_candidate": baseline}
+    if previous is None:
+        contract["review_protocol"] = INCREMENTAL_PROTOCOL
+    elif "review_protocol" in previous:
+        contract["review_protocol"] = previous["review_protocol"]
     for item in contract["acceptance"]:
         for proof in item["proofs"]:
             if proof["kind"] == "check" and proof["gate"] not in contract["required_gates"]:
@@ -147,6 +188,7 @@ def contract_status(task, root):
     try:
         items = criteria(task)
         contract = read(root / "acceptance-contract.json")
+        review_protocol(root)
         valid = (contract["acceptance"] == items
                  and preserves_gates(contract, gate_contracts(task))
                  and isinstance(contract.get("baseline_candidate"), str)
@@ -242,6 +284,16 @@ def _record_review(task, root, path):
     if review.get("phase") not in (None, "code", "final", "disposition"):
         raise ValueError("Unknown native review phase")
     known = {c["id"] for c in criteria(task)}
+    if incremental_configuration(task, root) is not None:
+        from handoff import build_packet, code_review_packet
+        packet = (code_review_packet(task, root) if review.get("phase") == "code"
+                  else build_packet(task, root, final=True))
+        if review.get("decision_basis_sha256") != packet["incremental_evidence"]["decision_basis_sha256"]:
+            raise ValueError("Native incremental review needs the current decision_basis_sha256")
+    dependencies = {"criterion-" + key for key in known}
+    for item in review["findings"] + review["test_requests"]:
+        if any(key not in dependencies for key in item.get("dependency_ids", [])):
+            raise ValueError("Review dependency_ids names an unknown accepted dependency")
     state = ledger(root)
     source = hashlib.sha256(raw).hexdigest()
     additions = {"requests": [], "findings": []}
@@ -383,19 +435,22 @@ def obligations_status(task, root, checks, code=False):
                      and tests <= report_tests(after_report, "passed"))
         except (OSError, KeyError, TypeError, ValueError):
             pass
-        rows.append({"id": key, "kind": "functional-finding", "verified": bool(valid),
+        rows.append({"id": key, "kind": "functional-finding", "spec": finding["spec"], "verified": bool(valid),
                      "refutation": refutation(task, root, state, "functional-finding", key)})
         if not valid:
             blockers.append("regression:" + key)
     return {"obligations": rows, "blockers": blockers, "owner_exceptions": exceptions}
 
 
-def verdict_status(task, root, packet, review):
+def verdict_status(task, root, packet, review, native_review_sha256=None):
     blockers = list(packet["blockers"])
     if review.get("role") != "EVIDENCE" or review.get("candidate") != task["candidate"]:
         blockers.append("current independent EVIDENCE review")
     if review.get("phase") in ("code", "disposition"):
         blockers.append("full independent final review")
+    if incremental_configuration(task, root) is not None:
+        if review.get("decision_basis_sha256") != packet["incremental_evidence"]["decision_basis_sha256"]:
+            blockers.append("current incremental decision basis")
     expected_ids = {c["id"] for c in criteria(task)}
     assessments = review.get("criteria", [])
     if (not isinstance(assessments, list) or len(assessments) != len(expected_ids)
@@ -426,6 +481,264 @@ def verdict_status(task, root, packet, review):
             owner_decision(root, task["observation_approval"], task["candidate"], "observations_sha256", observation_hash)
         except (OSError, KeyError, TypeError, ValueError):
             blockers.append("explicit owner approval of observations")
-    return {"candidate": task["candidate"], "verdict": routed, "blockers": sorted(set(blockers)),
+    result = {"candidate": task["candidate"], "verdict": routed, "blockers": sorted(set(blockers)),
             "ready_for_approval": not blockers, "owner_approval_required": routed == "APPROVE_WITH_OBSERVATIONS",
             "observations_sha256": observation_hash if routed == "APPROVE_WITH_OBSERVATIONS" else None}
+    if incremental_configuration(task, root) is not None and not blockers:
+        if not native_review_sha256:
+            raise ValueError("Incremental acceptance needs the retained native review digest")
+        result["incremental_context"] = {
+            "decision_basis": packet["incremental_evidence"]["decision_basis"],
+            "decision_basis_sha256": packet["incremental_evidence"]["decision_basis_sha256"],
+            "native_review": {"reference": "reviews/" + native_review_sha256 + ".json",
+                              "sha256": native_review_sha256}}
+    return result
+
+
+def content_hash(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def accepted_context(root, configuration):
+    """Read a controller-retained successful verdict; never reconstruct an archive."""
+    reference = configuration.get("accepted_validation")
+    if reference is None:
+        return None
+    if "record" in reference:
+        result = reference["record"]
+    else:
+        path = inside(root, reference["reference"])
+        if digest(path) != reference["sha256"]:
+            raise ValueError("Accepted validation digest does not match")
+        result = read(path)
+    context = result["incremental_context"]
+    basis = context["decision_basis"]
+    native = context["native_review"]
+    original = inside(root, native["reference"])
+    review = read(original)
+    if (result.get("ready_for_approval") is not True
+            or result["candidate"] != basis["candidate"]
+            or basis["target"] != "final" or basis.get("prerequisite_blockers")
+            or content_hash(basis) != context["decision_basis_sha256"]
+            or native["reference"] != "reviews/" + native["sha256"] + ".json"
+            or digest(original) != native["sha256"]
+            or review.get("decision_basis_sha256") != context["decision_basis_sha256"]
+            or review["candidate"] != basis["candidate"] or review["role"] != "EVIDENCE"
+            or review["verdict"] != result["verdict"] or review["verdict"] == "REVISE"
+            or review.get("phase") in ("code", "disposition")):
+        raise ValueError("Accepted validation is not bound to a successful native final review")
+    for field, expected in (("criteria", {item["id"] for item in basis["acceptance"]}),
+                            ("case_assessments", {item["id"] for item in basis["cases"]})):
+        assessments = review.get(field, [])
+        if (len(assessments) != len(expected) or {row["id"] for row in assessments} != expected
+                or any(row["sufficient"] is not True or not nonempty(row["reason"]) for row in assessments)):
+            raise ValueError("Accepted validation lacks independent acceptance assessments")
+    return context
+
+
+def incremental_status(task, root, packet, target="final"):
+    """Derive current proof dependencies and a bounded actual-client access contract.
+
+    This is additive to receipt, case and obligation validation. An accepted
+    dependency summarizes previously judged proof; it cannot turn a stale gate
+    or an unresolved obligation into a pass.
+    """
+    configuration = incremental_configuration(task, root)
+    if configuration is None:
+        raise ValueError("Incremental evidence is not selected by the retained contract")
+    blockers, files = [], {}
+
+    def require(reference):
+        path = inside(root, str(reference))
+        name = str(path)
+        try:
+            sha = digest(path)
+        except OSError:
+            sha = None
+            blockers.append("incremental access:" + name)
+        files[name] = {"path": name, "sha256": sha}
+        return sha
+
+    def receipt(reference, expand=True):
+        sha = require(reference)
+        path = inside(root, str(reference))
+        try:
+            value = read(path)
+            if expand:
+                require(str(path.parent / "output.log"))
+                for index, _ in enumerate(value["request"]["artifacts"]):
+                    require(str(path.parent / f"artifact-{index}"))
+            return sha
+        except (OSError, KeyError, TypeError, ValueError):
+            blockers.append("incremental evidence:" + str(reference))
+            return sha
+
+    prior = None
+    try:
+        if contract_status(task, root)[1] is None:
+            prior = accepted_context(root, configuration)
+    except (OSError, KeyError, TypeError, ValueError) as error:
+        blockers.append("incremental accepted validation:" + str(error))
+    accepted = configuration.get("accepted_validation")
+    if accepted:
+        if "reference" in accepted:
+            require(accepted["reference"])
+        if prior:
+            require(prior["native_review"]["reference"])
+    previous = {row["id"]: row for row in (prior or {}).get("decision_basis", {}).get("dependencies", [])}
+    all_checks = {row["id"]: row for row in packet.get("checks", [])}
+    state = ledger(root)
+    obligations = packet.get("review_obligations", {}).get("obligations", [])
+    unresolved = [row for row in obligations if not row["verified"]]
+    relevant = {gate["id"] for gate in task["gates"]
+                if target == "final" or gate.get("phase") == "cheap"}
+    for group, mapping, gate_key in (("requests", "request_checks", "gate"),
+                                     ("findings", "regressions", "after_gate")):
+        for key, item in state[group].items():
+            if target == "code" and item["role"] != "CODE":
+                continue
+            gate = task.get(mapping, {}).get(key, {}).get(gate_key)
+            if gate:
+                relevant.add(gate)
+    checks = {key: value for key, value in all_checks.items() if key in relevant}
+    required_evidence = []
+    known_criteria = {item["id"] for item in criteria(task)}
+    declarations = configuration.get("required_evidence", [])
+    if not isinstance(declarations, list):
+        raise ValueError("incremental.required_evidence must be an array")
+    for declaration in declarations:
+        phase = declaration.get("phase", "both")
+        selected = declaration.get("criteria", sorted(known_criteria))
+        if (phase not in ("code", "final", "both") or not isinstance(selected, list) or not selected
+                or len(set(selected)) != len(selected) or not set(selected) <= known_criteria
+                or not isinstance(declaration.get("sha256"), str)
+                or not re.fullmatch(r"[a-f0-9]{64}", declaration["sha256"])):
+            raise ValueError("Invalid incremental required evidence phase, criteria or digest")
+        if phase not in ("both", target):
+            continue
+        observed = require(declaration["reference"])
+        if observed != declaration["sha256"]:
+            blockers.append("incremental required evidence:" + declaration["reference"])
+        required_evidence.append({"sha256": declaration["sha256"], "observed_sha256": observed,
+                                  "criteria": sorted(selected), "phase": phase})
+    required_evidence.sort(key=content_hash)
+    current = []
+    for item in criteria(task):
+        gate_ids = sorted({proof["gate"] for proof in item["proofs"] if proof["kind"] == "check"})
+        evidence = []
+        for gate_id in gate_ids:
+            check = checks.get(gate_id, {})
+            binding = {"gate": gate_id, "inputs": check.get("effective_inputs"),
+                       "verified": check.get("status") in PASS}
+            if check.get("receipt"):
+                binding["receipt_sha256"] = digest(inside(root, check["receipt"]))
+            evidence.append(binding)
+        for proof in item["proofs"]:
+            if proof["kind"] == "owner":
+                try:
+                    evidence.append({"owner_sha256": digest(inside(root, proof["reference"]))})
+                except OSError:
+                    evidence.append({"owner_sha256": None})
+        cases = [row for row in packet.get("behavior_evidence", {}).get("cases", [])
+                 if row["criterion"] == item["id"]]
+        case_bindings = []
+        for case in cases:
+            control = task.get("case_controls", {}).get(case["id"], {})
+            binding = {key: value for key, value in case.items()
+                       if key not in ("receipt", "control", "recorded_at", "reason")}
+            if control.get("receipt"):
+                try:
+                    binding["control_sha256"] = digest(inside(root, control["receipt"]))
+                except OSError:
+                    binding["control_sha256"] = None
+            case_bindings.append(binding)
+        row = {"id": "criterion-" + item["id"], "criterion": item["id"], "gates": gate_ids,
+               "claim_sha256": content_hash(item), "evidence_sha256": content_hash([evidence, case_bindings,
+                   [source for source in required_evidence if item["id"] in source["criteria"]]])}
+        old = previous.get(row["id"])
+        unchanged = old is not None and all(old.get(key) == value for key, value in row.items())
+        linked = [obligation for obligation in unresolved
+                  if row["id"] in obligation.get("spec", {}).get("dependency_ids", [])]
+        status = "reopened" if linked else "accepted" if unchanged else "changed" if old else "new"
+        current.append(dict(row, state=status))
+        for gate_id in gate_ids:
+            if gate_id not in relevant:
+                continue
+            check = checks.get(gate_id, {})
+            if check.get("receipt"):
+                receipt(check["receipt"], expand=status != "accepted")
+                if check.get("reuse"):
+                    require(check["reuse"])
+                gate = next(gate for gate in task["gates"] if gate["id"] == gate_id)
+                if "coverage" in gate and status != "accepted":
+                    require(gate["coverage"]["baseline"])
+            if status != "accepted":
+                for case in cases:
+                    control = task.get("case_controls", {}).get(case["id"], {})
+                    if control.get("receipt"):
+                        receipt(control["receipt"])
+        for proof in item["proofs"]:
+            if proof["kind"] == "owner":
+                require(proof["reference"])
+    governing_checks = []
+    for gate_id, check in sorted(checks.items()):
+        binding = {"id": gate_id, "inputs": check.get("effective_inputs"),
+                   "verified": check.get("status") in PASS}
+        if check.get("receipt"):
+            accepted_gate = any(row["state"] == "accepted" and gate_id in row["gates"] for row in current)
+            changed_gate = any(row["state"] != "accepted" and gate_id in row["gates"] for row in current)
+            binding["receipt_sha256"] = receipt(check["receipt"], expand=not accepted_gate or changed_gate)
+        if check.get("reuse"):
+            require(check["reuse"])
+        governing_checks.append(binding)
+    require(task["diff"])
+    require("acceptance-contract.json")
+    for name in ("review-obligations.json", "challenge-plan.json"):
+        if (root / name).exists() and (name != "review-obligations.json" or any(state.values())):
+            require(name)
+    for obligation in unresolved:
+        group = "requests" if obligation["kind"] == "test-request" else "findings"
+        original = state[group][obligation["id"]]
+        require("reviews/" + original["review_sha256"] + ".json")
+        proof = task.get("regressions", {}).get(obligation["id"], {})
+        if proof.get("before"):
+            receipt(proof["before"])
+        if proof.get("exception"):
+            require(proof["exception"])
+    dependencies = [{key: value for key, value in row.items() if key != "state"} for row in current]
+    cases = [{key: value for key, value in row.items() if key not in ("receipt", "control", "recorded_at")}
+             for row in packet.get("behavior_evidence", {}).get("cases", [])]
+    basis = {"candidate": task["candidate"], "target": target, "review_protocol": review_protocol(root),
+             "diff_sha256": digest(inside(root, task["diff"])), "scope": task.get("scope"),
+             "acceptance": criteria(task), "gates": gate_contracts(task), "dependencies": dependencies,
+             "governing_checks": governing_checks, "required_evidence": required_evidence,
+             "cases": cases, "obligations": state, "request_checks": task.get("request_checks", {}),
+             "regressions": task.get("regressions", {}), "case_controls": task.get("case_controls", {}),
+             "decisions": task.get("decisions", []), "preview": task.get("preview"),
+             "delivery": task["delivery"], "prerequisite_blockers": list(packet.get("blockers", []))}
+    manifest = {"candidate": task["candidate"], "target": target,
+                "decision_basis_sha256": content_hash(basis),
+                "accepted_validation_sha256": content_hash(accepted["record"]) if accepted and "record" in accepted else None,
+                "files": [files[key] for key in sorted(files)]}
+    manifest_sha = content_hash(manifest)
+    access_status = "pending"
+    try:
+        report = read(inside(root, configuration["access_report"]))
+        entries = report["files"]
+        access = {entry["path"]: entry for entry in entries}
+        if (report["manifest_sha256"] != manifest_sha or not nonempty(report["session"])
+                or report["boundary"]["read_only"] is not True or report["boundary"]["write_rejected"] is not True
+                or len(access) != len(entries)
+                or any(not row["sha256"] or access.get(row["path"], {}).get("readable") is not True
+                       or access.get(row["path"], {}).get("sha256") != row["sha256"]
+                       for row in manifest["files"])):
+            raise ValueError("Actual reviewer access does not cover the current manifest")
+        access_status = "verified"
+    except (OSError, KeyError, TypeError, ValueError):
+        blockers.append("incremental reviewer access")
+    return {"accepted_context": prior, "access_report": configuration["access_report"],
+            "dependencies": current, "delta": [row for row in current if row["state"] != "accepted"],
+            "unresolved_obligations": unresolved, "decision_basis": basis,
+            "decision_basis_sha256": content_hash(basis), "access_manifest": manifest,
+            "access_manifest_sha256": manifest_sha, "access_status": access_status,
+            "blockers": sorted(set(blockers)), "navigation": configuration.get("navigation", [])}

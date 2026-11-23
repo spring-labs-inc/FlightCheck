@@ -40,6 +40,7 @@ def schema(kind):
                       "scope_sha256": {"type": "string", "pattern": r"^[a-f0-9]{64}$"},
                       "coverage": TEXT, "cases": {**array(case), "minItems": 1}})
     elif kind == "review":
+        dependencies = {"type": "array", "uniqueItems": True, "items": ID}
         assessment = obj({"id": ID, "sufficient": {"type": "boolean"}, "reason": TEXT})
         withdrawal = obj({"kind": {"enum": ["functional-finding", "test-request", "challenge-case"]},
                           "id": ID, "proposal_sha256": TEXT, "reason": TEXT, "supersedes": TEXT},
@@ -48,11 +49,15 @@ def schema(kind):
                       "verdict": {"enum": ["APPROVE", "APPROVE_WITH_NITS", "APPROVE_WITH_OBSERVATIONS", "REVISE"]},
                       "coverage": TEXT, "challenge": {"type": "string"}, "criteria": array(assessment),
                       "findings": array(obj({"id": ID, "kind": {"enum": ["functional", "process", "nit"]},
-                          "severity": {"enum": ["BLOCKER", "CONCERN", "NIT"]}, "reference": TEXT, "impact": TEXT})),
-                      "test_requests": array(obj({"id": ID, "criterion": ID, "input": TEXT, "expected": TEXT, "reason": TEXT})),
+                          "severity": {"enum": ["BLOCKER", "CONCERN", "NIT"]}, "reference": TEXT, "impact": TEXT,
+                          "dependency_ids": dependencies}, ["id", "kind", "severity", "reference", "impact"])),
+                      "test_requests": array(obj({"id": ID, "criterion": ID, "input": TEXT, "expected": TEXT, "reason": TEXT,
+                                                 "dependency_ids": dependencies},
+                                                ["id", "criterion", "input", "expected", "reason"])),
+                      "decision_basis_sha256": {"type": "string", "pattern": r"^[a-f0-9]{64}$"},
                       "case_assessments": array(assessment), "withdrawals": array(withdrawal),
                       "phase": {"enum": [None, "code", "final", "disposition"]}}
-        result = obj(properties, [key for key in properties if key not in ("case_assessments", "withdrawals", "phase")])
+        result = obj(properties, [key for key in properties if key not in ("case_assessments", "withdrawals", "phase", "decision_basis_sha256")])
     elif kind == "coverage":
         result = obj({name: {"type": "array", "items": TEXT, "uniqueItems": True}
                       for name in ("passed", "skipped", "expected_failures", "failed")})

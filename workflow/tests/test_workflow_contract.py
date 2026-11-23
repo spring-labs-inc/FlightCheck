@@ -71,6 +71,12 @@ class FlightFixture(unittest.TestCase):
                         "description": "The native evidence preserves both named results",
                         "proofs": [{"kind": "check", "gate": "operation", "tests": ["case.a", "case.b"],
                                     "assertion": "Both identities have actual passing native outcomes"}]}]}
+        # These existing workflow witnesses resume the literal retained legacy
+        # schema. Fresh default-new flights are covered without such a seed.
+        (self.evidence / "acceptance-contract.json").write_text(json.dumps({
+            "acceptance": self.task["acceptance"], "required_gates": ["operation"],
+            "gates": {"operation": {"request": self.request, "coverage": self.gate["coverage"],
+                                    "phase": "authoritative"}}, "baseline_candidate": self.task["candidate"]}))
         self.ctl("preflight")
 
     @staticmethod
@@ -217,6 +223,167 @@ class FlightFixture(unittest.TestCase):
 
 
 class RecoveryPlannerTests(FlightFixture):
+    def incremental_probe(self, packet):
+        incremental = packet["incremental_evidence"]
+        path = self.evidence / "client-access.json"
+        path.write_text(json.dumps({"manifest_sha256": incremental["access_manifest_sha256"],
+            "session": "synthetic-readonly-evidence-session",
+            "boundary": {"read_only": True, "write_rejected": True},
+            "files": [dict(row, readable=True) for row in incremental["access_manifest"]["files"]]}))
+        self.task["incremental"]["access_report"] = path.name
+
+    def test_incremental_contradiction_reopens_dependency(self):
+        # Bind the second accepted dependency to separate inputs, fixtures and
+        # native execution, so a real failure of operation cannot stale it.
+        independent_input = self.checkout / "independent-product"
+        independent_input.write_text("good independent result")
+        independent_fixture = self.checkout / "independent-fixture.json"
+        independent_fixture.write_text('{"contract":"independent public result"}\n')
+        independent_producer = self.checkout / "independent-probe.py"
+        independent_producer.write_text(
+            "import json,os,sys\nfrom pathlib import Path\n"
+            "out=Path(os.environ['FLIGHTCHECK_REPORT_DIR'])\n"
+            "bad=not Path('independent-product').read_text().startswith('good')\n"
+            "report={'passed':[] if bad else ['independent.case'],'skipped':[],"
+            "'expected_failures':[],'failed':['independent.case'] if bad else []}\n"
+            "(out/'coverage.json').write_text(json.dumps(report))\n"
+            "(out/'fixture.json').write_bytes(Path('independent-fixture.json').read_bytes())\n"
+            "print(report)\nsys.exit(int(bad))\n")
+        independent_request = copy.deepcopy(self.request)
+        independent_request.update(command=[sys.executable, "-B", str(independent_producer)],
+            scope="Independent public result on separate effective inputs",
+            fingerprint_command=[sys.executable, "-B", "-c",
+                "import hashlib;from pathlib import Path;"
+                "print([(n,hashlib.sha256(Path(n).read_bytes()).hexdigest()) for n in "
+                "['independent-product','independent-probe.py','independent-fixture.json']])"])
+        independent_gate = {"id": "independent", "request": independent_request, "owner": "controller",
+                            "coverage": copy.deepcopy(self.gate["coverage"])}
+        self.task["gates"].append(independent_gate)
+        self.task["acceptance"].append({"id": "independent", "kind": "policy",
+            "description": "An independently bound public result stays accepted",
+            "proofs": [{"kind": "check", "gate": "independent", "tests": ["independent.case"],
+                        "assertion": "The separately executed native result passes"}]})
+        self.amend()
+        invocation = [sys.executable, "-B", str(SCRIPTS / "capture_check.py"),
+            "--evidence-dir", str(self.evidence), "--candidate", self.task["candidate"],
+            "--gate", "independent", "--owner", "controller", "--scope", independent_request["scope"],
+            "--fingerprint-command", json.dumps(independent_request["fingerprint_command"]),
+            "--isolated-reports", "--artifact", "coverage.json", "--artifact", "fixture.json",
+            "--refresh", "--", *independent_request["command"]]
+        recorded = subprocess.run(invocation, cwd=self.checkout, capture_output=True, text=True, timeout=15)
+        self.assertEqual(recorded.returncode, 0, recorded.stdout + recorded.stderr)
+        independent_run = (self.evidence / json.loads((self.evidence / "gate-independent.json").read_text())).resolve()
+        independent_originals = {str(independent_run / name): self.sha(independent_run / name)
+                                for name in ("output.log", "artifact-0", "artifact-1")}
+        independent_receipt_sha = self.sha(independent_run / "run.json")
+
+        def assert_independent_carried(packet):
+            evidence = packet["incremental_evidence"]
+            dependencies = {row["id"]: row for row in evidence["dependencies"]}
+            self.assertEqual(dependencies["criterion-independent"]["state"], "accepted")
+            manifest_paths = {row["path"] for row in evidence["access_manifest"]["files"]}
+            self.assertTrue(set(independent_originals).isdisjoint(manifest_paths))
+            check = next(row for row in packet["checks"] if row["id"] == "independent")
+            self.assertEqual(check["receipt"], str(independent_run / "run.json"))
+            self.assertEqual(self.sha(independent_run / "run.json"), independent_receipt_sha)
+            for path, sha in independent_originals.items():
+                self.assertEqual(self.sha(Path(path)), sha)
+
+        self.record()
+        self.task["incremental"] = {}
+        self.incremental_probe(self.ctl("review", 1))
+        ready = self.ctl("review")
+        native = self.native_review(decision_basis_sha256=ready["incremental_evidence"]["decision_basis_sha256"])
+        verdict = self.ctl("verdict", review=native)
+        accepted = self.evidence / "final-verdict.json"
+        accepted.write_text(json.dumps(verdict))
+        self.task["incremental"]["accepted_validation"] = {"reference": accepted.name, "sha256": self.sha(accepted)}
+        self.incremental_probe(self.ctl("review", 1))
+        ready = self.ctl("review")
+        self.assertEqual(ready["incremental_evidence"]["dependencies"][0]["state"], "accepted")
+        assert_independent_carried(ready)
+        request = {"id": "alternate-caller", "criterion": "operation", "input": "Call through the alternate entry point",
+            "expected": "Both public results remain valid", "reason": "Accepted primary-caller proof does not establish this path",
+            "dependency_ids": ["criterion-operation"]}
+        native = self.native_review("EVIDENCE", "REVISE", requests=[request],
+            decision_basis_sha256=ready["incremental_evidence"]["decision_basis_sha256"])
+        self.ctl("requests", review=native)
+        reopened = self.ctl("review", 1)
+        self.assertEqual(reopened["incremental_evidence"]["dependencies"][0]["state"], "reopened")
+        assert_independent_carried(reopened)
+        self.assertEqual([row["id"] for row in reopened["incremental_evidence"]["unresolved_obligations"]], [request["id"]])
+        plan = self.ctl("next-action", target="final")
+        self.assertTrue(any(row["action"] == "configure_proof" and row["obligation"] == request["id"]
+                            for row in plan["actions"]))
+        # Omission after a fresh process cannot erase the original contradiction.
+        self.ctl("requests", review=self.native_review(
+            decision_basis_sha256=reopened["incremental_evidence"]["decision_basis_sha256"]))
+        self.assertEqual(self.ctl("review", 1)["incremental_evidence"]["dependencies"][0]["state"], "reopened")
+        unknown = dict(request, id="unknown-link", dependency_ids=["criterion-absent"])
+        self.ctl("requests", 2, review=self.native_review("EVIDENCE", "REVISE", requests=[unknown],
+            decision_basis_sha256=reopened["incremental_evidence"]["decision_basis_sha256"]))
+        self.task["request_checks"] = {request["id"]: {"gate": "operation", "tests": ["case.a", "case.b"],
+                                                       "assertion": "The requested alternate caller preserves both results"}}
+        self.assertEqual(self.ctl("next-action", target="final")["state"], "needs_checks")
+        original_obligation = json.loads((self.evidence / "review-obligations.json").read_text())["requests"][request["id"]]
+        self.product.write_text("bad current affected operation")
+        failed_receipt = self.record(1)
+        failed_plan = self.ctl("next-action", target="final")
+        self.assertEqual((failed_plan["state"], failed_plan["action"]), ("needs_repair", "repair"))
+        self.assertEqual([(row["action"], row.get("gate")) for row in failed_plan["actions"]],
+                         [("repair", "operation")])
+        failed = self.ctl("review", 1)
+        self.assertEqual(failed["checks"][0]["status"], "failed")
+        self.assertEqual(failed["incremental_evidence"]["dependencies"][0]["state"], "reopened")
+        assert_independent_carried(failed)
+        resumed = self.ctl("resume")
+        self.assertEqual(resumed["route"], "resume_work")
+        self.assertEqual(resumed["incremental_evidence"]["dependencies"][0]["state"], "reopened")
+        self.assertEqual([row["id"] for row in resumed["incremental_evidence"]["unresolved_obligations"]],
+                         [request["id"]])
+        self.assertEqual(resumed["incremental_evidence"]["unresolved_obligations"][0]["spec"], request)
+        self.assertEqual(json.loads((self.evidence / "review-obligations.json").read_text())["requests"][request["id"]],
+                         original_obligation)
+        self.assertEqual(self.ctl("next-action", target="final")["action"], "repair")
+        assert_independent_carried(resumed)
+        self.assertEqual(json.loads((self.evidence / failed_receipt).read_text())["exit_code"], 1)
+        self.product.write_text("good repaired alternate caller")
+        self.record()
+        self.assertEqual(self.ctl("next-action", target="final")["state"], "ready")
+        self.incremental_probe(self.ctl("review", 1))
+        repaired = self.ctl("review")
+        self.assertEqual(repaired["incremental_evidence"]["unresolved_obligations"], [])
+        self.assertNotEqual(repaired["incremental_evidence"]["dependencies"][0]["state"], "reopened")
+        assert_independent_carried(repaired)
+        self.assertFalse(self.ctl("verdict", 1, review=self.native_review(criteria=[],
+            decision_basis_sha256=repaired["incremental_evidence"]["decision_basis_sha256"]))["ready_for_approval"])
+
+    def test_incremental_failure_and_obligations_survive_resume(self):
+        # Compatibility control: this is existing failure/obligation routing,
+        # exercised unchanged by the original runtime with the same overlay.
+        self.obligation()
+        original = json.loads((self.evidence / "review-obligations.json").read_text())
+        self.task["incremental"] = {}
+        self.product.write_text("bad newest governing attempt")
+        self.record(1)
+        self.assertEqual(self.ctl("next-action")["action"], "repair")
+        self.ctl("resume")
+        pending = self.ctl("review", 1)
+        basis = pending.get("incremental_evidence", {}).get("decision_basis_sha256", "0" * 64)
+        self.ctl("requests", review=self.native_review("CODE", decision_basis_sha256=basis))
+        state = json.loads((self.evidence / "review-obligations.json").read_text())
+        for group in ("requests", "findings"):
+            self.assertEqual(state[group], original[group])
+        self.assertEqual(self.ctl("next-action")["action"], "repair")
+        self.task["candidate"] = "B-repaired"
+        self.product.write_text("good repaired candidate")
+        self.record()
+        self.assertEqual(self.ctl("next-action", target="final")["state"], "ready")
+        resumed = self.ctl("resume")
+        self.assertEqual(resumed["review_obligations"]["blockers"], [])
+        self.assertEqual({row["id"] for row in resumed["review_obligations"]["obligations"]},
+                         {"first-request", "first-finding"})
+
     def test_repair_after_code_approval_refreshes_earlier_proof(self):
         before = self.obligation()
         original = (self.evidence / "review-obligations.json").read_bytes()
