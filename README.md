@@ -62,12 +62,18 @@ Handoffs carry check receipts and original output between stages. Fingerprints t
 
    ```sh
    pip install flightcheck
+   flightcheck --version
    ```
 
    Or Homebrew (macOS Apple silicon):
 
    ```sh
+   brew tap spring-labs-inc/tap
+   brew cat spring-labs-inc/tap/flightcheck
+   brew trust --formula spring-labs-inc/tap/flightcheck
    brew install spring-labs-inc/tap/flightcheck
+   flightcheck_command="$(brew --prefix)/bin/flightcheck"
+   "$flightcheck_command" --version
    ```
 
 2. **Configure your project or worktree.**
