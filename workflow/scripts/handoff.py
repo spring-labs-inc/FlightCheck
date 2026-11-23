@@ -14,7 +14,8 @@ from proof import acceptance_status, contract_status, freeze, obligations_status
 from recovery import plan as recovery_plan
 from behavior import challenge_brief, proposal_packet, record_plan, status as behavior_status
 from disposition import review_packet as disposition_packet
-from proof import ledger
+from proof import (ledger, incremental_status, incremental_configuration, review_protocol,
+                   declared_dependencies, INCREMENTAL_PROTOCOL)
 from handoff_schema import brief_fields, coverage as coverage_shape, schema
 
 COVERAGE_OUTCOMES = ("passed", "skipped", "expected_failures", "failed")
@@ -88,15 +89,17 @@ def gate_status(root, gate, candidate, final):
             return dict(result, status="pending", reason=receipt["status"])
         if receipt["exit_code"] != 0:
             output = receipt["output"]
+            result["effective_inputs"] = fingerprint(request["fingerprint_command"])
             current_failure = (receipt["candidate"] == candidate and receipt.get("request") == request
                                and receipt.get("inputs_before") is not None
-                               and fingerprint(request["fingerprint_command"]) == receipt["inputs_before"]
+                               and result["effective_inputs"] == receipt["inputs_before"]
                                and output["path"] == "output.log" and output["status"] == "complete"
                                and digest(run / "output.log") == output["sha256"])
             if read_json(latest) != run.name:
                 return dict(result, status="pending", reason="latest attempt changed during validation")
             return dict(result, status="failed", reason="latest attempt failed", current_failure=current_failure)
         current = fingerprint(request["fingerprint_command"])
+        result["effective_inputs"] = current
         if current is None:
             return dict(result, status="unverified", reason="current fingerprint unavailable")
         if receipt["inputs_before"] != current or receipt["inputs_after"] != current:
@@ -188,7 +191,7 @@ def check_plan(task, root):
     return {"candidate": candidate, "checks": checks}
 
 
-def implementation_brief(task):
+def implementation_brief(task, root=None):
     brief = {"scope": task["scope"], "acceptance": task["acceptance"], "delivery": task["delivery"]}
     checks = []
     for gate in configured_gates(task["gates"]):
@@ -203,10 +206,13 @@ def implementation_brief(task):
     brief["early_code"] = EARLY_CODE_CRITERIA if task.get("early_code") is None else task["early_code"]
     if task.get("preview") is not None:
         brief["preview"] = task["preview"]
+    brief["review_protocol"] = review_protocol(root)
+    if incremental_configuration(task, root) is not None:
+        brief["dependency_map"] = declared_dependencies(task)
     return brief
 
 
-def code_review_packet(task, root):
+def _code_review_packet(task, root):
     candidate = task["candidate"]
     if not isinstance(candidate, str) or not candidate.strip():
         raise ValueError("The CODE review needs a candidate identity")
@@ -260,6 +266,22 @@ def code_review_packet(task, root):
     return packet
 
 
+def code_review_packet(task, root):
+    packet = _code_review_packet(task, root)
+    packet["review_protocol"] = review_protocol(root)
+    if incremental_configuration(task, root) is not None:
+        checks = [gate_status(root, gate, task["candidate"], final=True)
+                  for gate in configured_gates(task["gates"])]
+        context = dict(packet, checks=checks,
+                       review_obligations=obligations_status(task, root, checks, code=True))
+        incremental = incremental_status(task, root, context, target="code")
+        packet["incremental_evidence"] = incremental
+        if incremental["blockers"]:
+            packet["action"] = "blocked"
+            packet["blockers"] = packet.get("blockers", []) + incremental["blockers"]
+    return packet
+
+
 def build_packet(task, root, final):
     candidate = task["candidate"]
     saved = task.get("saved_candidate")
@@ -275,6 +297,7 @@ def build_packet(task, root, final):
     packet = {
         "candidate": candidate, "saved_candidate": saved, "candidate_changed": saved != candidate,
         "preview": preview, "checks": checks, "blockers": blockers,
+        "review_protocol": review_protocol(root),
     }
     acceptance = acceptance_status(task, root, checks)
     obligations = obligations_status(task, root, checks)
@@ -292,7 +315,13 @@ def build_packet(task, root, final):
                       ready_for_review=not blockers)
         if "scope" in task:
             packet["scope"] = task["scope"]
-    else:
+    if incremental_configuration(task, root) is not None:
+        incremental = incremental_status(task, root, packet)
+        packet["incremental_evidence"] = incremental
+        blockers.extend(incremental["blockers"])
+        if final:
+            packet["ready_for_review"] = not blockers
+    if not final:
         packet["route"] = resume_route(task, packet)
     return packet
 
@@ -319,9 +348,13 @@ def preflight(task, root, amendment=None):
     check = gate_status(probe, {"id": "preflight", "request": request}, task["candidate"], final=True)
     if check["status"] != "passed":
         raise ValueError("Evidence preflight receipt could not be verified")
-    return {"candidate": task["candidate"], "contract": contract, "evidence": str(root),
-            "probe": check, "ready": True,
-            "reviewer_access": "The adapter must separately verify read access and write rejection in the actual reviewer client."}
+    result = {"candidate": task["candidate"], "contract": contract, "evidence": str(root),
+              "probe": check, "ready": True, "review_protocol": review_protocol(root),
+              "reviewer_access": "The adapter must separately verify read access and write rejection in the actual reviewer client."}
+    if incremental_configuration(task, root) is not None:
+        result["dependency_map"] = declared_dependencies(task)
+        result["access_report"] = "reviewer-access.json"
+    return result
 
 
 def main():
@@ -355,7 +388,7 @@ def main():
             return 0
         task = read_json(args.task)
         if args.mode == "brief":
-            packet = implementation_brief(task)
+            packet = implementation_brief(task, args.evidence_dir.resolve() if args.evidence_dir else None)
         elif args.mode == "challenge-brief":
             packet = challenge_brief(task)
         else:
@@ -387,8 +420,12 @@ def main():
             elif args.mode in ("requests", "verdict"):
                 review = record_review(task, root, args.review)
                 final_packet = build_packet(task, root, final=True)
-                packet = (verdict_status(task, root, final_packet, review) if args.mode == "verdict"
+                packet = (verdict_status(task, root, final_packet, review, digest(args.review)) if args.mode == "verdict"
                           else {"candidate": task["candidate"], **final_packet["review_obligations"]})
+                if (args.mode == "verdict" and packet["ready_for_approval"]
+                        and review_protocol(root) == INCREMENTAL_PROTOCOL):
+                    task["review_validation"] = packet
+                    write_json(args.task, task)
             elif args.mode == "checks":
                 packet = check_plan(task, root)
             elif args.mode == "next-action":

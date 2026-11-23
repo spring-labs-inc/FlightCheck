@@ -231,7 +231,10 @@ class AdoptionPreflightTests(unittest.TestCase):
             self.assertEqual(result.returncode,expected,result.stdout+result.stderr)
             folder=evidence/json.loads((evidence/('gate-'+gate+'.json')).read_text())
             return folder,json.loads((folder/'run.json').read_text())
-        ctl('preflight')
+        self.assertNotIn('incremental',task)
+        initialized=ctl('preflight')
+        self.assertEqual(initialized['review_protocol'],'incremental-v1')
+        self.assertEqual(initialized['dependency_map'][0]['id'],'criterion-labels')
         original, before=record('original-control', info['original_candidate'], 1)
         self.assertIn(info['native_test'],json.loads((original/'artifact-0').read_text())['failed'])
         shutil.copyfile(project/'proposed/product.py',project/'product.py')
@@ -243,6 +246,8 @@ class AdoptionPreflightTests(unittest.TestCase):
                 'candidate':info['original_candidate'],'source':'baseline','report':'coverage.json','spec':'spec.json'}}
         self.assertIn(info['native_test'],json.loads((current/'artifact-0').read_text())['passed'])
         packet=ctl('review',1)
+        self.assertEqual(packet['incremental_evidence']['dependencies'][0]['state'],'new')
+        self.assertEqual(packet['incremental_evidence']['access_status'],'pending')
         cases=packet['behavior_evidence']['cases']
         self.assertTrue(cases[0]['verified'],cases)
         self.assertIn('independent challenge plan',packet['blockers'])
@@ -253,5 +258,6 @@ class AdoptionPreflightTests(unittest.TestCase):
         ctl('preflight')
         self.assertEqual(ctl('review',1)['checks'][1]['status'],'missing')
         contract=json.loads((evidence/'acceptance-contract.json').read_text())
+        self.assertEqual(contract['review_protocol'],'incremental-v1')
         self.assertEqual(contract['baseline_candidate'],info['original_candidate'])
         self.assertEqual(len(contract['required_gates']),2)

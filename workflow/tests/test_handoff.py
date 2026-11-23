@@ -46,6 +46,13 @@ class HandoffTests(unittest.TestCase):
                 "proofs": [{"kind": "check", "gate": "policy", "assertion": "The native policy command rejects violations"}]}],
             "delivery": "local only",
         }
+        if getattr(self, "legacy_fixture", True):
+            # A persisted pre-marker contract is the legacy compatibility input.
+            # DefaultFlightTests exercises genuinely absent contracts instead.
+            (self.evidence / "acceptance-contract.json").write_text(json.dumps({
+                "acceptance": self.task["acceptance"], "required_gates": ["policy"],
+                "gates": {"policy": {"request": self.request, "coverage": None, "phase": "authoritative"}},
+                "baseline_candidate": self.task["candidate"]}))
         self.handoff("preflight", 0)
 
     def record(self, *, fail=False, refresh=False, owner=None):
@@ -62,7 +69,7 @@ class HandoffTests(unittest.TestCase):
             check=False, capture_output=True, text=True, timeout=10,
         )
 
-    def handoff(self, mode, expected_exit, review=None, amendment=None):
+    def handoff(self, mode, expected_exit, review=None, amendment=None, error=None):
         self.manifest.write_text(json.dumps(self.task))
         result = subprocess.run(
             [sys.executable, "-B", str(SCRIPTS / "handoff.py"), mode, "--task", str(self.manifest),
@@ -71,6 +78,10 @@ class HandoffTests(unittest.TestCase):
             cwd=self.checkout, check=False, capture_output=True, text=True, timeout=10,
         )
         self.assertEqual(result.returncode, expected_exit, result.stderr)
+        if error is not None:
+            self.assertIn(error, result.stderr)
+            self.assertEqual(result.stdout.strip(), "")
+            return {}
         return json.loads(result.stdout)
 
     def amend_fixture(self):
@@ -387,6 +398,11 @@ class HandoffTests(unittest.TestCase):
         self.assertIn("acceptance:surface", self.handoff("review", 1)["blockers"])
         decision["candidate"] = self.task["candidate"]
         path.write_text(json.dumps(decision))
+        # This test deliberately created a new contract above, so use a real
+        # synthetic adapter report as well as the current owner decision.
+        pending = self.handoff("review", 1)
+        self.task["incremental"] = {}
+        self.incremental_access(pending)
         self.assertTrue(self.handoff("review", 0)["ready_for_review"])
 
     def test_owner_exception_remains_an_observation_requiring_bound_approval(self):
@@ -506,6 +522,349 @@ class HandoffTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
         self.assertTrue(self.handoff('verdict', 0, self.review_file())['ready_for_approval'])
 
+
+    def incremental_access(self, packet=None, *, unreadable=None, omit=None):
+        """Synthetic actual-client probe report for the public protocol fixture."""
+        if packet is None:
+            self.task["incremental"].pop("access_report", None)
+            packet = self.handoff("review", 1)
+        incremental = packet["incremental_evidence"]
+        rows = []
+        for item in incremental["access_manifest"]["files"]:
+            if item["path"] == omit:
+                continue
+            path = Path(item["path"])
+            rows.append({"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None,
+                         "readable": path.is_file() and str(path) != unreadable})
+        path = self.evidence / "actual-client-access.json"
+        path.write_text(json.dumps({"manifest_sha256": incremental["access_manifest_sha256"],
+            "session": "synthetic-readonly-reviewer", "boundary": {"read_only": True, "write_rejected": True},
+            "files": rows}))
+        self.task["incremental"]["access_report"] = path.name
+        return incremental
+
+    def incremental_seed(self):
+        self.assertEqual(self.record().returncode, 0)
+        self.task["incremental"] = {}
+        self.incremental_access()
+        packet = self.handoff("review", 0)
+        native = self.review_file(criteria=[{"id": item["id"], "sufficient": True,
+            "reason": "Fixture proof and current native outcome independently inspected"}
+            for item in self.task["acceptance"]],
+            decision_basis_sha256=packet["incremental_evidence"]["decision_basis_sha256"])
+        result = self.handoff("verdict", 0, native)
+        accepted = self.evidence / "final-verdict.json"
+        accepted.write_text(json.dumps(result))
+        self.task["incremental"]["accepted_validation"] = {
+            "reference": accepted.name, "sha256": hashlib.sha256(accepted.read_bytes()).hexdigest()}
+        self.incremental_access()
+        return self.handoff("review", 0)
+
+    def test_incremental_reuse_without_archive_expansion(self):
+        packet = self.incremental_seed()
+        self.assertEqual(packet["incremental_evidence"]["dependencies"][0]["state"], "accepted")
+        archive = self.evidence / "archive"
+        archive.mkdir()
+        for number in range(20):
+            (archive / str(number)).write_text("Unrelated unqualified historical material")
+        (archive / "broken-link").symlink_to(archive / "absent")
+        self.task["incremental"]["navigation"] = ["archive/broken-link"]
+        current = self.handoff("review", 0)["incremental_evidence"]
+        self.assertEqual(current["delta"], [])
+        self.assertEqual(current["decision_basis_sha256"], packet["incremental_evidence"]["decision_basis_sha256"])
+        self.assertFalse(any("archive" in row["path"] for row in current["access_manifest"]["files"]))
+        self.assertLess(len(current["access_manifest"]["files"]), 10)
+        # Bare legacy approvals have no historical receipt bindings to promote.
+        accepted = self.evidence / "final-verdict.json"
+        legacy = json.loads(accepted.read_text())
+        legacy.pop("incremental_context")
+        accepted.write_text(json.dumps(legacy))
+        self.task["incremental"]["accepted_validation"]["sha256"] = hashlib.sha256(accepted.read_bytes()).hexdigest()
+        self.assertTrue(any("accepted validation" in blocker for blocker in self.handoff("review", 1)["blockers"]))
+
+    def test_incremental_input_and_claim_invalidation(self):
+        self.task["acceptance"].append({"id": "unrelated", "kind": "policy", "description": "Unrelated accepted claim",
+            "proofs": [{"kind": "check", "gate": "policy", "assertion": "Existing broad gate also covers this claim"}]})
+        self.amend_fixture()
+        original = self.incremental_seed()["incremental_evidence"]
+        source = self.evidence / "one-criterion-source.txt"
+        source.write_text("The changed dependency applies only to the first criterion")
+        self.task["incremental"]["required_evidence"] = [{"reference": source.name,
+            "sha256": hashlib.sha256(source.read_bytes()).hexdigest(), "criteria": ["policy"]}]
+        scoped = self.handoff("review", 1)["incremental_evidence"]
+        self.assertEqual([row["state"] for row in scoped["dependencies"]], ["changed", "accepted"])
+        self.task["incremental"].pop("required_evidence")
+        self.inputs.write_text("changed dependency input")
+        changed = self.handoff("review", 1)
+        self.assertEqual(changed["checks"][0]["status"], "stale")
+        self.assertEqual(changed["incremental_evidence"]["dependencies"][0]["state"], "changed")
+        self.assertNotEqual(original["decision_basis_sha256"], changed["incremental_evidence"]["decision_basis_sha256"])
+        self.assertEqual(self.record(refresh=True).returncode, 0)
+        self.incremental_access()
+        self.handoff("review", 0)
+        self.task["acceptance"][0]["description"] = "Owner's strengthened policy meaning"
+        self.amend_fixture()
+        claimed = self.handoff("review", 1)["incremental_evidence"]
+        self.assertEqual(claimed["dependencies"][0]["state"], "changed")
+        self.assertNotEqual(original["dependencies"][0]["claim_sha256"], claimed["dependencies"][0]["claim_sha256"])
+        self.incremental_access()
+        self.handoff("verdict", 2, self.review_file(decision_basis_sha256=original["decision_basis_sha256"]),
+            error="Native incremental review needs the current decision_basis_sha256")
+        # Effective fingerprint failure cannot qualify an accepted dependency.
+        self.inputs.unlink()
+        self.assertEqual(self.handoff("review", 1)["checks"][0]["status"], "unverified")
+
+    def test_incremental_required_access_and_covered_duplicate(self):
+        packet = self.incremental_seed()
+        self.task["incremental"]["navigation"] = [
+            {"path": "archive/inaccessible-duplicate.log", "dependency_ids": ["criterion-policy"]}]
+        self.assertTrue(self.handoff("review", 0)["ready_for_review"])
+        required = str((self.evidence / "candidate.diff").resolve())
+        for options in ({"unreadable": required}, {"omit": required}):
+            with self.subTest(options=options):
+                self.incremental_access(packet, **options)
+                self.assertIn("incremental reviewer access", self.handoff("review", 1)["blockers"])
+        self.incremental_access(packet)
+        self.assertTrue(self.handoff("review", 0)["ready_for_review"])
+        access_path = self.evidence / self.task["incremental"]["access_report"]
+        access = json.loads(access_path.read_text())
+        access["boundary"]["read_only"] = 1
+        access_path.write_text(json.dumps(access))
+        self.assertIn("incremental reviewer access", self.handoff("review", 1)["blockers"])
+        self.incremental_access(packet)
+        # Accepted proof cannot cover damage to the actual governing receipt.
+        Path(packet["checks"][0]["output"]).unlink()
+        damaged = self.handoff("review", 1)
+        self.assertEqual(damaged["checks"][0]["status"], "unverified")
+        self.assertIn("policy", damaged["blockers"])
+        self.incremental_access(damaged)
+        self.assertFalse(self.handoff("verdict", 1, self.review_file(
+            decision_basis_sha256=damaged["incremental_evidence"]["decision_basis_sha256"]))["ready_for_approval"])
+
+    def test_incremental_navigation_and_candidate_bindings(self):
+        original = self.incremental_seed()["incremental_evidence"]
+        moved = self.evidence / "relocated.diff"
+        moved.write_bytes((self.evidence / "candidate.diff").read_bytes())
+        self.task["diff"] = moved.name
+        relocated = self.handoff("review", 1)["incremental_evidence"]
+        self.assertEqual(original["decision_basis_sha256"], relocated["decision_basis_sha256"])
+        self.assertNotEqual(original["access_manifest_sha256"], relocated["access_manifest_sha256"])
+        self.assertEqual(relocated["access_status"], "pending")
+        self.incremental_access()
+        self.assertTrue(self.handoff("verdict", 0, self.review_file(
+            decision_basis_sha256=original["decision_basis_sha256"]))["ready_for_approval"])
+        self.task["candidate"] = "B-with-unrelated-source-edit"
+        self.assertIn("Check reused:", self.record().stdout)
+        reuse, = self.evidence.glob("reuse-*/reuse.json")
+        self.gate["reuse"] = str(reuse.relative_to(self.evidence))
+        changed = self.handoff("review", 1)["incremental_evidence"]
+        self.assertEqual(changed["dependencies"][0]["state"], "accepted")
+        self.assertNotEqual(original["decision_basis_sha256"], changed["decision_basis_sha256"])
+        self.incremental_access()
+        self.handoff("verdict", 2, self.review_file(decision_basis_sha256=original["decision_basis_sha256"]),
+            error="Native incremental review needs the current decision_basis_sha256")
+        current = self.handoff("review", 0)["incremental_evidence"]
+        self.assertTrue(self.handoff("verdict", 0, self.review_file(
+            decision_basis_sha256=current["decision_basis_sha256"]))["ready_for_approval"])
+        # A same-candidate change to the full diff also requires a fresh decision.
+        moved.write_text("materially changed complete diff")
+        changed = self.handoff("review", 1)["incremental_evidence"]
+        self.incremental_access()
+        self.handoff("verdict", 2, self.review_file(decision_basis_sha256=current["decision_basis_sha256"]),
+            error="Native incremental review needs the current decision_basis_sha256")
+        self.assertNotEqual(current["decision_basis_sha256"], changed["decision_basis_sha256"])
+        # A necessary retained dependency excerpt is always governing, including
+        # when carried gate proof was previously accepted.
+        source = self.evidence / "dependency-source.txt"
+        source.write_text("Actual retained decoder assertion excerpt")
+        self.task["incremental"]["required_evidence"] = [{"reference": source.name,
+            "sha256": hashlib.sha256(source.read_bytes()).hexdigest(), "phase": "final"}]
+        required = self.handoff("review", 1)
+        self.incremental_access(required)
+        self.handoff("review", 0)
+        source.unlink()
+        missing = self.handoff("review", 1)
+        self.assertTrue(any("required evidence" in row for row in missing["blockers"]))
+        source.write_text("Actual retained decoder assertion excerpt")
+        self.incremental_access()
+        changed = self.handoff("review", 0)["incremental_evidence"]
+        # Every final criterion still needs its own independent assessment.
+        self.handoff("verdict", 1, self.review_file(criteria=[],
+            decision_basis_sha256=changed["decision_basis_sha256"]))
+        # CODE needs its selected proof, not an absent future authoritative gate
+        # or a final-only dependency excerpt.
+        self.gate["phase"] = "cheap"
+        self.task["gates"].append({"id": "independent-required", "request": self.request})
+        self.amend_fixture()
+        code = self.handoff("code-review", 1)
+        self.incremental_access(code)
+        self.assertEqual(self.handoff("code-review", 0)["action"], "start")
+        self.assertNotIn(str(source), {row["path"] for row in code["incremental_evidence"]["access_manifest"]["files"]})
+        extra = [sys.executable, "-B", str(SCRIPTS / "capture_check.py"), "--gate", "independent-required",
+                 "--scope", self.request["scope"], "--candidate", self.task["candidate"],
+                 "--fingerprint-command", json.dumps(self.request["fingerprint_command"]),
+                 "--evidence-dir", str(self.evidence), "--owner", "controller", "--refresh", "--",
+                 *self.request["command"]]
+        for attempt in range(2):
+            result = subprocess.run(extra, cwd=self.checkout, env=dict(os.environ, FAIL_CHECK="0"),
+                                    capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            packet = self.handoff("review", 1)
+            self.incremental_access(packet)
+            now = self.handoff("review", 0)["incremental_evidence"]
+            if attempt:
+                self.assertNotEqual(previous, now["decision_basis_sha256"])
+            previous = now["decision_basis_sha256"]
+        self.assertEqual({row["id"] for row in now["decision_basis"]["governing_checks"]},
+                         {"policy", "independent-required"})
+
+
+
+class DefaultFlightTests(unittest.TestCase):
+    """Normal new flights and actual retained pre-marker contracts are distinct."""
+
+    handoff = HandoffTests.handoff
+    record = HandoffTests.record
+    review_file = HandoffTests.review_file
+    amend_fixture = HandoffTests.amend_fixture
+
+    def setUp(self):
+        self.legacy_fixture = (self._testMethodName ==
+                               "test_legacy_contract_preserves_archives_without_inventing_acceptance")
+        HandoffTests.setUp(self)
+
+    def probe(self, packet):
+        # Unit fixture for an adapter's actual-client report; the normal runtime
+        # chooses this canonical path without an activation/configuration field.
+        evidence = packet["incremental_evidence"]
+        rows = [{"path": item["path"], "sha256": hashlib.sha256(Path(item["path"]).read_bytes()).hexdigest(),
+                 "readable": True} for item in evidence["access_manifest"]["files"]]
+        (self.evidence / "reviewer-access.json").write_text(json.dumps({
+            "manifest_sha256": evidence["access_manifest_sha256"], "session": "synthetic-default-reviewer",
+            "boundary": {"read_only": True, "write_rejected": True}, "files": rows}))
+
+    def test_new_flight_defaults_and_retains_successful_validation(self):
+        self.assertNotIn("incremental", self.task)
+        self.assertNotIn("review_validation", self.task)
+        initialized = self.handoff("preflight", 0)
+        self.assertEqual(initialized["review_protocol"], "incremental-v1")
+        self.assertEqual([(row["id"], row["state"]) for row in initialized["dependency_map"]],
+                         [("criterion-policy", "new")])
+        contract = json.loads((self.evidence / "acceptance-contract.json").read_text())
+        self.assertEqual(contract["review_protocol"], "incremental-v1")
+        self.assertEqual(self.record(fail=True, refresh=True).returncode, 1)
+        failed = self.handoff("review", 1)
+        self.assertEqual(failed["checks"][0]["status"], "failed")
+        self.assertEqual(failed["incremental_evidence"]["dependencies"][0]["state"], "new")
+        rejected = self.handoff("verdict", 1, self.review_file(
+            decision_basis_sha256=failed["incremental_evidence"]["decision_basis_sha256"]))
+        self.assertFalse(rejected["ready_for_approval"])
+        self.assertNotIn("incremental_context", rejected)
+        self.assertNotIn("review_validation", json.loads(self.manifest.read_text()))
+        self.assertEqual(self.record(refresh=True).returncode, 0)
+        pending = self.handoff("review", 1)
+        self.assertEqual(pending["incremental_evidence"]["access_report"], "reviewer-access.json")
+        self.assertEqual(pending["incremental_evidence"]["access_status"], "pending")
+        self.probe(pending)
+        ready = self.handoff("review", 0)
+        basis = ready["incremental_evidence"]["decision_basis_sha256"]
+        accepted = self.handoff("verdict", 0, self.review_file(decision_basis_sha256=basis))
+        self.assertTrue(accepted["ready_for_approval"])
+        # The normal verdict command, rather than test-supplied accepted config,
+        # stores its own successful result in the existing private task record.
+        self.task = json.loads(self.manifest.read_text())
+        self.assertEqual(self.task["review_validation"], accepted)
+        self.assertNotIn("incremental", self.task)
+        self.probe(self.handoff("review", 1))
+        carried = self.handoff("review", 0)
+        self.assertEqual(carried["incremental_evidence"]["dependencies"][0]["state"], "accepted")
+        # Owner-amended additional work does not invent partial final approval.
+        # Only the earlier genuinely complete one-criterion decision carries.
+        independent = self.checkout / "new-independent-input"
+        independent.write_text("a separately bound future check")
+        request = dict(self.request, scope="New independently bound required check",
+            command=[sys.executable, "-c", "print('new independent native check')"],
+            fingerprint_command=[sys.executable, "-c",
+                "from pathlib import Path;print(Path('new-independent-input').read_text())"])
+        self.task["gates"].append({"id": "future", "request": request})
+        self.task["acceptance"].append({"id": "future", "kind": "policy", "description": "New independent requirement",
+            "proofs": [{"kind": "check", "gate": "future", "assertion": "A separate future native check must pass"}]})
+        self.amend_fixture()
+        amended = self.handoff("review", 1)
+        self.assertEqual([row["state"] for row in amended["incremental_evidence"]["dependencies"]], ["accepted", "new"])
+        self.assertEqual(amended["checks"][1]["status"], "missing")
+        self.assertNotEqual(basis, amended["incremental_evidence"]["decision_basis_sha256"])
+        self.handoff("verdict", 2, self.review_file(decision_basis_sha256=basis),
+            error="Native incremental review needs the current decision_basis_sha256")
+        self.assertEqual(json.loads(self.manifest.read_text())["review_validation"], accepted)
+        # Neither a removed activation field nor removed accepted metadata can
+        # downgrade this persisted new flight or turn native passes into proof.
+        self.task["incremental"] = {}
+        self.task.pop("incremental")
+        self.task.pop("review_validation")
+        resumed = self.handoff("resume", 0)
+        self.assertEqual(resumed["review_protocol"], "incremental-v1")
+        self.assertEqual([row["state"] for row in resumed["incremental_evidence"]["dependencies"]], ["new", "new"])
+        self.assertEqual(resumed["route"], "resume_work")
+        self.assertIn("future", resumed["blockers"])
+        self.assertEqual(resumed["incremental_evidence"]["access_status"], "pending")
+        self.assertNotIn("review_validation", json.loads(self.manifest.read_text()))
+
+    def test_new_flight_cannot_downgrade_incremental_guards(self):
+        contract_path = self.evidence / "acceptance-contract.json"
+        frozen = contract_path.read_bytes()
+        self.assertEqual(self.record().returncode, 0)
+        self.task["incremental"] = {}
+        self.task.pop("incremental")
+        pending = self.handoff("review", 1)
+        self.assertEqual(pending["review_protocol"], "incremental-v1")
+        self.assertIn("incremental reviewer access", pending["blockers"])
+        self.handoff("verdict", 2, self.review_file(),
+            error="Native incremental review needs the current decision_basis_sha256")
+        self.assertNotIn("review_validation", json.loads(self.manifest.read_text()))
+        self.task["incremental"] = None
+        self.handoff("review", 2, error="incremental must be an object")
+        self.handoff("preflight", 2, error="incremental must be an object")
+        self.assertEqual(contract_path.read_bytes(), frozen)
+        self.task.pop("incremental")
+        unknown = json.loads(frozen)
+        unknown["review_protocol"] = "unknown-protocol"
+        raw = json.dumps(unknown).encode()
+        contract_path.write_bytes(raw)
+        self.handoff("review", 2, error="Unknown frozen review_protocol")
+        self.handoff("preflight", 2, error="Unknown frozen review_protocol")
+        self.assertEqual(contract_path.read_bytes(), raw)
+        contract_path.unlink()
+        unprepared = self.handoff("resume", 0)
+        self.assertEqual(unprepared["review_protocol"], "incremental-v1")
+        self.assertIn("acceptance contract", unprepared["blockers"])
+        self.assertEqual(unprepared["incremental_evidence"]["dependencies"][0]["state"], "new")
+        self.handoff("preflight", 0)
+        self.assertEqual(contract_path.read_bytes(), frozen)
+
+    def test_legacy_contract_preserves_archives_without_inventing_acceptance(self):
+        contract = self.evidence / "acceptance-contract.json"
+        frozen = contract.read_bytes()
+        self.assertNotIn("review_protocol", json.loads(frozen))
+        archive = self.evidence / "legacy-archive"
+        archive.mkdir()
+        historical = archive / "historical-approval.json"
+        historical.write_text(json.dumps({"candidate": "A", "verdict": "APPROVE", "status": "passed"}))
+        historical_bytes = historical.read_bytes()
+        self.assertEqual(self.record().returncode, 0)
+        ready = self.handoff("review", 0)
+        self.assertEqual(ready.get("review_protocol", "legacy"), "legacy")
+        self.assertNotIn("incremental_evidence", ready)
+        result = self.handoff("verdict", 0, self.review_file())
+        self.assertTrue(result["ready_for_approval"])
+        self.assertNotIn("incremental_context", result)
+        self.assertNotIn("review_validation", json.loads(self.manifest.read_text()))
+        self.handoff("preflight", 0)
+        self.assertEqual(contract.read_bytes(), frozen)
+        self.assertNotIn("incremental_evidence", self.handoff("resume", 0))
+        self.assertEqual(self.handoff("resume", 0).get("review_protocol", "legacy"), "legacy")
+        self.assertEqual(contract.read_bytes(), frozen)
+        self.assertEqual(historical.read_bytes(), historical_bytes)
 
 
 if __name__ == "__main__":

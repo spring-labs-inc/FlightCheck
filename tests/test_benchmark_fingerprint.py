@@ -80,6 +80,7 @@ class BenchmarkFingerprintTests(unittest.TestCase):
                             path.write_bytes(b"changed input")
                         packet = json.loads(handoff("review").stdout)
                         self.assertFalse(packet["ready_for_review"])
+                        self.assertIn(packet["checks"][0]["status"], ("stale", "unverified"))
                         attempted = subprocess.run(args, cwd=checkout, capture_output=True)
                         self.assertNotIn(b"Check reused:", attempted.stdout)
                         path.write_bytes(original)
@@ -87,10 +88,14 @@ class BenchmarkFingerprintTests(unittest.TestCase):
                         self.assertEqual(subprocess.run(args, cwd=checkout, capture_output=True).returncode, 0)
             # New source files and changed manifest scope also invalidate the receipt.
             (source / "new.py").write_text("new product input")
-            self.assertFalse(json.loads(handoff("review").stdout)["ready_for_review"])
+            packet = json.loads(handoff("review").stdout)
+            self.assertFalse(packet["ready_for_review"])
+            self.assertIn(packet["checks"][0]["status"], ("stale", "unverified"))
             (source / "new.py").unlink()
             manifest.write_text(json.dumps({"files": [str(files[0])], "trees": []}))
-            self.assertFalse(json.loads(handoff("review").stdout)["ready_for_review"])
+            packet = json.loads(handoff("review").stdout)
+            self.assertFalse(packet["ready_for_review"])
+            self.assertIn(packet["checks"][0]["status"], ("stale", "unverified"))
 
 
 if __name__ == "__main__":

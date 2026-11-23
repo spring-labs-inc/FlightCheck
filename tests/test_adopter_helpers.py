@@ -167,7 +167,7 @@ class Cases(unittest.TestCase):
         result=subprocess.run([sys.executable,'-B','-m','unittest','discover','-s',str(tests),'-v'],cwd=self.project,
                               env=env,capture_output=True,text=True,timeout=150)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
-        self.assertIn('Ran 56 tests',result.stderr)
+        self.assertIn('Ran 65 tests',result.stderr)
         self.assertFalse((scripts.parent/'AGENTS.md').exists())
         self.assertFalse((scripts.parent/'CONTRIBUTING.md').exists())
 
@@ -224,7 +224,11 @@ class Cases(unittest.TestCase):
         def handoff(mode,*args,expected=0):
             result=self.run_script('handoff.py',mode,'--task',task_path,'--evidence-dir',evidence,*args,expected=expected,cwd=project)
             return json.loads(result.stdout) if result.stdout.strip() else {}
-        handoff('preflight');frozen=(evidence/'acceptance-contract.json').read_bytes()
+        self.assertNotIn('incremental',task)
+        initialized=handoff('preflight');frozen=(evidence/'acceptance-contract.json').read_bytes()
+        self.assertEqual(initialized['review_protocol'],'incremental-v1')
+        self.assertEqual(initialized['dependency_map'][0]['id'],'criterion-labels')
+        self.assertEqual(json.loads(frozen)['review_protocol'],'incremental-v1')
         gate=task['gates'][0];q=gate['request']
         command=[sys.executable,'-B',str(SCRIPTS/'capture_check.py'),'--evidence-dir',str(evidence),'--candidate',task['candidate'],
                  '--gate',gate['id'],'--scope',q['scope'],'--owner','controller','--fingerprint-command',json.dumps(q['fingerprint_command']),
@@ -236,6 +240,8 @@ class Cases(unittest.TestCase):
         self.assertEqual(before['artifacts']['spec.json'],after['artifacts']['spec.json'])
         self.assertEqual(json.loads((current/'artifact-0').read_text())['passed'],[info['native_witness']])
         packet=handoff('review',expected=1)
+        self.assertEqual(packet['incremental_evidence']['dependencies'][0]['state'],'new')
+        self.assertEqual(packet['incremental_evidence']['access_status'],'pending')
         self.assertTrue(packet['behavior_evidence']['cases'][0]['verified'])
         self.assertIn('independent challenge plan',packet['blockers'])
         # Refresh cannot amend acceptance or erase obligations/expected outcomes.
