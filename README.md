@@ -56,44 +56,42 @@ Handoffs carry check receipts and original output between stages. Fingerprints t
 
 ## Get started
 
-**Supported environments:** Claude Desktop, Claude Code TUI, Codex Desktop, and Codex CLI/TUI. FlightCheck has been verified in all four environments.
+**Supported environments:** Claude Desktop, Claude Code TUI, Codex Desktop, and Codex TUI.
 
-Use an installed supported coding client, Git, and Python 3.9+ on POSIX. Choose one tool installation outside your project.
+1. **Install FlightCheck.** Use pip (recommended):
 
-**PyPI/pip (recommended):**
+   ```sh
+   pip install flightcheck
+   ```
 
-```sh
-flightcheck_tool="$HOME/.local/share/flightcheck/venvs/0.1.0"
-python3 -m venv "$flightcheck_tool"
-(
-  . "$flightcheck_tool/bin/activate"
-  python3 -m pip install flightcheck==0.1.0
-)
+   Or Homebrew (macOS Apple silicon):
+
+   ```sh
+   brew install spring-labs-inc/tap/flightcheck
+   ```
+
+2. **Configure your project or worktree.**
+
+   ```sh
+   cd /path/to/your/project
+   flightcheck init . --agent claude
+   flightcheck doctor .
+   ```
+
+   Setup confirms your project choices, previews changes, and asks before applying them, preserving existing instructions, permissions, dependencies, and delivery policy.
+
+   Use `--agent codex` or `--agent both` for those clients.
+
+3. **Start your first flight.** Open a fresh client session in the configured project. Use your client’s command below and request a small first flight. Open the printed status-card URL in your browser.
+
+**Available skills**
+
+```text
+Claude: /develop-change
+Codex:  $develop-change
 ```
 
-**Homebrew 7 on macOS Apple silicon:** inspect the first-party formula before trusting it. The [Setup guide](https://github.com/spring-labs-inc/FlightCheck/blob/main/setup/README.md#homebrew-macos-apple-silicon) records prerequisites and the tested platform limits.
-
-```sh
-brew tap spring-labs-inc/tap
-brew cat spring-labs-inc/tap/flightcheck
-brew trust --formula spring-labs-inc/tap/flightcheck
-brew install spring-labs-inc/tap/flightcheck
-flightcheck_tool="$(brew --prefix)"
-```
-
-Other supported methods—pipx, uv and source installation—are in the [Setup guide](https://github.com/spring-labs-inc/FlightCheck/blob/main/setup/README.md), along with configuration, PATH and remote/browser details.
-
-After either installation, in the same shell, enter an existing project checkout:
-
-```sh
-cd /path/to/your/project
-"$flightcheck_tool/bin/flightcheck" init . --agent claude
-"$flightcheck_tool/bin/flightcheck" doctor .
-```
-
-Use `--agent codex` or `--agent both` for those clients. Setup confirms the project choices, previews changes, and asks before applying them, preserving existing instructions, permissions, dependencies, and delivery policy.
-
-Open a fresh client session in the configured project. Select `/develop-change` in Claude (including Desktop's Code tab), or `$develop-change`/the `develop-change` skill in Codex, and request a small first flight. Activation is opt-in by default. Open the printed status-card URL in your browser.
+The [Setup guide](https://github.com/spring-labs-inc/FlightCheck/blob/main/setup/README.md) covers installation prerequisites, additional options, and configuration limits.
 
 ## Guides
 

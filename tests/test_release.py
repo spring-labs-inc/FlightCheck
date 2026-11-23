@@ -534,10 +534,10 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn('pypa/gh-action-pypi-publish@', publish['steps'][-1]['uses'])
         readme = (ROOT / 'README.md').read_text()
         quickstart = readme.split('## Get started', 1)[1].split('## Guides', 1)[0]
-        self.assertIn('python3 -m pip install flightcheck==0.1.0', quickstart)
-        self.assertIn('python3 -m venv', quickstart)
-        self.assertIn('\"$flightcheck_tool/bin/flightcheck\" init . --agent claude', quickstart)
-        self.assertIn('\"$flightcheck_tool/bin/flightcheck\" doctor .', quickstart)
+        self.assertIn('pip install flightcheck', quickstart)
+        self.assertIn('python3 -m venv', (ROOT / 'setup/README.md').read_text())
+        self.assertIn('flightcheck init . --agent claude', quickstart)
+        self.assertIn('flightcheck doctor .', quickstart)
         self.assertNotIn('pipx install "git+https://github.com/spring-labs-inc/FlightCheck.git"', quickstart)
         rows = [line.split(']')[0].split('[')[-1] for line in readme.splitlines() if line.startswith('| [')]
         self.assertEqual(rows, ['Status Card', 'Workflow', 'Verdict', 'Setup', 'Benchmarks', 'Contributing'])

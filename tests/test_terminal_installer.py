@@ -445,9 +445,9 @@ with installer() as (_,root,*rest):
     def test_documented_terminal_entrypoint(self):
         readme = (PRODUCT / "README.md").read_text()
         self.assertNotIn("Install FlightCheck from https://github.com", readme)
-        self.assertIn("python3 -m pip install flightcheck==0.1.0", readme)
-        self.assertIn('"$flightcheck_tool/bin/flightcheck" init . --agent claude', readme)
-        self.assertIn('"$flightcheck_tool/bin/flightcheck" doctor .', readme)
+        self.assertIn("pip install flightcheck", readme)
+        self.assertIn('flightcheck init . --agent claude', readme)
+        self.assertIn('flightcheck doctor .', readme)
         self.assertNotIn("[PyPI distribution]", readme)
         self.assertLess(readme.index("## Get started"), readme.index("## Guides"))
         self.assertTrue(readme.rstrip().endswith("[bug reports and feature requests are welcome](https://github.com/spring-labs-inc/FlightCheck/blob/main/CONTRIBUTING.md)."))
