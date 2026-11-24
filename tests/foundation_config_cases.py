@@ -60,7 +60,8 @@ class ConfigurationCases:
                 (root / ".flightcheck").mkdir()
                 (root / ".flightcheck/.gitignore").write_text("/owner-local-only\n/project.json\n!/project.json\n")
             module = self.config_module(source / "setup/install.py", "foundation_source_installer")
-            values = {"python": sys.executable, "evidence_dir": str(area / "private-evidence"),
+            project_python = str(Path(getattr(sys, "_base_executable", sys.executable)).resolve(strict=True))
+            values = {"python": project_python, "evidence_dir": str(area / "private-evidence"),
                       "nit_tracker": "private-notes", "policy_reference": "fixture owner setup",
                       "checks": [{"name": "record only", "command": [sys.executable, "-c", "raise SystemExit(93)"], "phase": "cheap"}],
                       "protected_branches": ["release"]}
