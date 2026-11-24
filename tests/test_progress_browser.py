@@ -18,3 +18,13 @@ class ProgressBrowserTests(unittest.TestCase):
                                 capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('"contract":"freshness-disconnect-resume-identity"', result.stdout)
+
+    def test_metadata_availability_selection_safety(self):
+        node = os.environ.get("FLIGHTCHECK_NODE") or shutil.which("node")
+        if not node:
+            self.skipTest("Node is required for the shipped task.js browser contract")
+        result = subprocess.run([node, str(ROOT / "tests/progress_dom.cjs"),
+                                 str(ROOT / "status-card/task.js"), str(ROOT / "status-card/task.html"), "--metadata"],
+                                capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('"contract":"metadata-availability-selection-safety"', result.stdout)

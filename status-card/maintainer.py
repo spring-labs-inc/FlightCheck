@@ -246,6 +246,11 @@ def show_card(checkout, state, args):
     directory = task_dir(state, args.task)
     snapshot = directory / "status.json"
     endpoint_file = directory / "endpoint.json"
+    from link_metadata import prepare_publication, check_publication_base
+    before = read_task(snapshot) if snapshot.exists() else {}
+    original_details = json.loads(args.details.read_text(encoding="utf-8")) if args.details else {}
+    prepared = prepare_publication(snapshot, {"mode": "flight", "task": args.task, "candidate": candidate(checkout)},
+                                   original_details, checkout)
     with (directory / "card.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         previous = read_task(snapshot) if snapshot.exists() else {}
@@ -259,7 +264,12 @@ def show_card(checkout, state, args):
             "verdict_candidate": args.verdict_candidate if args.verdict else previous.get("verdict_candidate"),
             "verdict_evidence": previous.get("verdict_evidence"),
         }
-        details = json.loads(args.details.read_text(encoding="utf-8")) if args.details else {}
+        details = prepared
+        check_publication_base(before, previous, data, details)
+        # If the source changed during I/O, do not publish its older link set.
+        latest_details = json.loads(args.details.read_text(encoding="utf-8")) if args.details else {}
+        if latest_details.get('links') != original_details.get('links'):
+            raise ValueError('Link source changed during metadata preparation')
         if not isinstance(details, dict):
             raise ValueError("Expected a details object")
         details.pop("branch", None)

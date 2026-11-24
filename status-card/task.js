@@ -115,25 +115,37 @@ function renderWorkLinks(links, stages) {
     const { item } = selected;
     const title = item.title || item.label;
     setText("work-link-title", title);
-    setText("work-link-description", item.description || "No description published.");
+    const metadata = item.metadata;
+    let description = item.description || "Details not loaded.";
+    if (metadata?.state === "empty") description = "No description published.";
+    else if (metadata?.state === "stale") {
+      description = `Last known details · ${metadata.reason || "Refresh is due."}${item.description ? ` ${item.description}` : ""}`;
+    } else if (metadata && metadata.state !== "ready") description = metadata.reason || "Details unavailable.";
+    setText("work-link-description", description);
     const destination = link(">", item.url);
     destination.className = "work-link-open";
     destination.target = "_blank";
+    destination.rel = "noopener noreferrer";
     destination.setAttribute("aria-label", `Open ${title} in a new tab or window`);
     byId("work-link-destination").replaceChildren(destination);
   }
 
-  fill("links", links, (item) => {
-    const row = element("li", "");
-    const entry = element("span", "", "work-link-item");
+  const orderedLinks = [...links.filter(item => item.kind === "epic"), ...links.filter(item => item.kind !== "epic")];
+  fill("links", orderedLinks, (item) => {
+    const row = element("li", "", item.kind === "epic" ? "work-link-epic" : "");
+    const entry = element("span", "", item.kind === "epic" ? "work-link-item work-link-item--epic" : "work-link-item");
     const label = labels[item.kind];
     entry.append(element("span", label, "pill"), " ");
     const reference = item.label.replace(/^(?:epic|issue|pr)\s+(?=#)/i, "");
-    const text = item.kind === "epic" && item.title ? `${reference} ${item.title}` : reference;
+    const epicTitle = item.title && item.title.length > 48
+      ? `${item.title.slice(0, 48).replace(/\s+\S*$/, "").replace(/[,:;]$/, "")} …` : item.title;
+    const text = item.kind === "epic" && epicTitle ? `${reference} ${epicTitle}` : reference;
     const key = `${item.kind}:${item.url}`;
     const button = element("button", text, "work-link-select");
     button.type = "button";
-    button.setAttribute("aria-label", `${label} ${text}`);
+    const fullLabel = item.kind === "epic" && item.title ? `${reference} ${item.title}` : text;
+    button.setAttribute("aria-label", `${label} ${fullLabel}`);
+    if (item.kind === "epic" && item.title) button.title = item.title;
     button.setAttribute("aria-controls", "work-link-detail");
     const choice = { key, item, button };
     button.addEventListener("click", () => {

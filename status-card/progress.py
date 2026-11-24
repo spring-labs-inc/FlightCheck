@@ -15,7 +15,7 @@ from contextlib import contextmanager
 from datetime import datetime
 
 from task_status import read_task, publish_locked, utc_time
-from task_details import task_id
+from task_details import task_id, normalize_details
 
 EVENT_SECONDS = 5
 HEARTBEAT_SECONDS = 10
@@ -358,11 +358,115 @@ class ListenerRecovery:
                                    lifecycle="stale", action="Automatic listener recovery stopped. Run prepare to restore the preserved task route.")
 
 
-def monitor_step(directory, token, *, now=None, probe=True, runtime=None, recovery=None):
+class LinkPreparation:
+    """One bounded lookup at a time, off the progress/heartbeat publication path."""
+
+    def __init__(self):
+        self.thread = None
+        self.key = self.result = None
+        self.started_at = None
+        self.fetch_pending = False
+
+    def poll(self, directory, checkout, task, candidate, links, *, fetch):
+        from link_metadata import canonical, sha, prepare_publication
+        key = sha(canonical([task, candidate, links]))
+        # A newer source event can arrive while the previous batch is busy.
+        # Retain its acquisition requirement until the latest batch starts.
+        self.fetch_pending = self.fetch_pending or fetch
+        if self.thread is not None and self.thread.is_alive():
+            return None
+        if self.key == key and not self.fetch_pending:
+            result, self.result = self.result, None
+            return result
+        self.key, self.result = key, None
+        self.started_at = time.time()
+        acquire = self.fetch_pending
+
+        def run():
+            self.result = prepare_publication(Path(directory) / "status.json",
+                {"mode": "flight", "task": task, "candidate": candidate},
+                {"links": links}, checkout, fetch=acquire)["links"]
+
+        self.thread = threading.Thread(target=run, daemon=True, name="link-metadata-preparation")
+        self.thread.start()
+        self.fetch_pending = False
+        return None
+
+
+def link_key(row):
+    return tuple(row.get(k) for k in ("kind", "label", "url", "flight"))
+
+
+def pending_links(rows, data, now):
+    """Keep unchanged safe projections while new identities await preparation."""
+    from link_metadata import bind, REASONS, iso, PREPARE_SECONDS
+    prior = {link_key(row): row for row in data.get("links", [])}
+    result = []
+    for row in rows:
+        old = prior.get(link_key(row))
+        if old is not None:
+            result.append(old)
+        else:
+            item = bind(row, data["task"], data["candidate"])
+            if item["metadata"].get("identity"):
+                item["metadata"].update(state="loading", ready=False, reason=REASONS["loading"],
+                                        expires_at=iso(now + PREPARE_SECONDS + 0.2))
+            result.append(item)
+    return result
+
+
+def completed_links(rows, data, started_at=None):
+    """A late observation cannot replace a newer publication or erase safe bytes."""
+    from link_metadata import seconds as metadata_seconds
+    prior = {link_key(row): row for row in data.get("links", [])}
+    result = []
+    for item in rows:
+        old = prior.get(link_key(item))
+        old_meta = old.get("metadata", {}) if old else {}
+        meta = item.get("metadata", {})
+        # Candidate/content validation remains in normalize_details. Compare only
+        # verified observation clocks for this exact item/task/candidate binding.
+        incoming_at = metadata_seconds(meta["observed_at"]) if meta.get("observed_at") else started_at
+        newer = (old_meta.get("candidate") == data["candidate"]
+                 and old_meta.get("observed_at") and incoming_at is not None
+                 and metadata_seconds(old_meta["observed_at"]) > incoming_at)
+        if newer:
+            item = old
+        elif old and old.get("title") and not item.get("title"):
+            item = dict(old)
+            item["metadata"] = dict(old_meta, state="stale", ready=False,
+                                    reason=meta.get("reason", "Last known details."), source="cache")
+        result.append(item)
+    return result
+
+
+def monitor_step(directory, token, *, now=None, probe=True, runtime=None, recovery=None, metadata=None):
     """One deterministic observation tick; returns whether monitoring continues."""
     import maintainer
     directory = Path(directory)
     now = time.time() if now is None else now
+    # Provider work never holds card.lock or delays ordinary progress/heartbeat.
+    prepared = source_value = prepared_candidate = None
+    if metadata is not None:
+        observed = maintainer.read_json(directory / "monitor.json")
+        if observed.get("token") == token and observed.get("details_source"):
+            try:
+                source_value = json.loads(Path(observed["details_source"]).read_text(encoding="utf-8"))
+                if not isinstance(source_value, dict):
+                    raise ValueError("Expected a details object")
+                prior = observed.get("source_value", {})
+                current = snapshot(directory, observed["task"])
+                prepared_candidate = maintainer.candidate(Path(observed["checkout"]))
+                links = source_value.get("links")
+                if links is not None:
+                    changed = links != prior.get("links")
+                    pending = any(row.get("metadata", {}).get("candidate") != prepared_candidate
+                                  for row in current.get("links", []))
+                    if changed or pending or metadata.key is not None:
+                        prepared = metadata.poll(directory, observed["checkout"], observed["task"],
+                                                 prepared_candidate, links, fetch=changed)
+            except (OSError, ValueError, TypeError, KeyError):
+                source_value = None
     with locked(directory):
         config = maintainer.read_json(directory / "monitor.json")
         if config.get("token") != token:
@@ -393,6 +497,14 @@ def monitor_step(directory, token, *, now=None, probe=True, runtime=None, recove
                 value = json.loads(Path(source).read_text(encoding="utf-8"))
                 before = config.get("source_value", {})
                 details = {key: item for key, item in value.items() if before.get(key) != item}
+                if "links" in details:
+                    details["links"] = pending_links(details["links"], data, now)
+                if (prepared is not None and current_candidate == prepared_candidate
+                        and value.get("links") == (source_value or {}).get("links")):
+                    normalized_links = normalize_details({"links": completed_links(prepared, data, metadata.started_at), "task": data["task"],
+                                                           "candidate": current_candidate})["links"]
+                    if normalized_links != data.get("links"):
+                        details["links"] = completed_links(prepared, data, metadata.started_at)
                 # Individual native results survive an unrelated source update.
                 if "checks" in details:
                     old = {(row["name"], row["candidate"]): row for row in before.get("checks", [])}
@@ -434,12 +546,13 @@ def main():
     if args.command == "monitor":
         runtime = LeaseClock()
         recovery = ListenerRecovery(args.directory, args.token)
+        metadata = LinkPreparation()
         # Leave one second of the event budget for healthy source/probe work.
         # Anchor ticks to elapsed time rather than adding that work to a 5s
         # sleep. Fault recovery has its separate bounded recovery deadline.
         cadence = max(1, EVENT_SECONDS - 1)
         next_tick = time.monotonic()
-        while monitor_step(args.directory, args.token, runtime=runtime, recovery=recovery):
+        while monitor_step(args.directory, args.token, runtime=runtime, recovery=recovery, metadata=metadata):
             next_tick += cadence
             delay = next_tick - time.monotonic()
             if delay > 0:

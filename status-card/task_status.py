@@ -132,6 +132,8 @@ def normalize(data):
         "verdict_candidate": candidate if current else None,
         "verdict_evidence": data.get("verdict_evidence") if current else None,
         **details,
+        "link_details": {"ready": all(row.get("metadata", {}).get("ready", False) for row in details.get("links", [])),
+                         "unavailable": sum(not row.get("metadata", {}).get("ready", False) for row in details.get("links", []))},
         **progress,
     }
 
@@ -215,9 +217,17 @@ def publish_locked(path, data, details, record_verdict=False, *, now=None, heart
 
 def publish(path, data, details, record_verdict=False, **kwargs):
     """Serialize every snapshot writer, including the standalone publisher."""
+    from link_metadata import prepare_publication, check_publication_base
+    project = kwargs.pop("project", None)
+    before = read_task(path) if path.exists() else {}
+    if before and before['task'] != data['task']:
+        raise ValueError('A snapshot belongs to one task')
+    prepared = prepare_publication(path, data, details, project)
     with (path.parent / "card.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        return publish_locked(path, data, details, record_verdict, **kwargs)
+        current = read_task(path) if path.exists() else {}
+        check_publication_base(before, current, data, prepared)
+        return publish_locked(path, data, prepared, record_verdict, **kwargs)
 
 
 def main():

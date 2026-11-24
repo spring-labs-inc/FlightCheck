@@ -94,7 +94,11 @@ dd { margin: 1px 0 0; font-size: .85rem; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .work-links { list-style: none; padding: 0; margin: 3px 0 0; font-size: .82rem; line-height: 1.7; }
 .work-links li { display: inline; }
+.work-links li.work-link-epic { display: block; }
 .work-link-item { display: inline-block; max-width: 100%; }
+.work-link-item--epic { display: inline-flex; align-items: baseline; gap: 4px; vertical-align: middle; white-space: nowrap; }
+.work-link-item--epic .pill { flex-shrink: 0; }
+.work-link-item--epic .work-link-select { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .work-link-separator { margin: 0 5px 0 2px; color: var(--muted); }
 .work-link-select {
   max-width: 100%; padding: 0; border: 0; background: none; color: var(--cyan); font: inherit; cursor: pointer;
