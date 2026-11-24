@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import signal
 import subprocess
+import time
 import unittest
 
 import test_card_startup as startup
@@ -89,6 +90,22 @@ class CardCliTests(unittest.TestCase):
         subprocess.run([str(removable/'bin/python'),'-B','-m','pip','uninstall','-y','flightcheck'],
                        env=self.environ,check=True,capture_output=True)
         self.assertFalse((removable/'bin/flightcheck').exists())
+        record_path = next((self.root/'connector-state').glob('connections/*/connection.json'))
+        record = json.loads(record_path.read_text())
+        helpers = Path(record['helper_directory'])
+        self.assertTrue((helpers/'connect.py').is_file())
+        # The packaged temporary source and CLI package are gone. The default
+        # supervisor must still execute its bounded probes and own recovery.
+        os.kill(record['pid'], signal.SIGTERM)
+        deadline = time.monotonic() + 18
+        while time.monotonic() < deadline:
+            recovered = json.loads(record_path.read_text())
+            if recovered['pid'] != record['pid']:
+                break
+            time.sleep(.1)
+        self.assertNotEqual(recovered['pid'], record['pid'])
+        self.assertEqual(recovered['user_url'], connected['user_url'])
+        os.kill(recovered['pid'], 0)
         env=dict(self.environ,FLIGHTCHECK_STATE_DIR=str(state))
         run=subprocess.run([terminal.BASE_PYTHON,'-B',str(self.project/'.flightcheck/status-card/reply.py'),
                             'prepare','--task','test-change','--execution','remote'],

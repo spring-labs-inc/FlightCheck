@@ -17,7 +17,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from task_details import task_id
-from task_status import VERDICTS, chat_status, normalize, publish, read_task, task_path, validate_task_url
+from task_status import VERDICTS, chat_status, normalize, publish_locked, read_task, task_path, validate_task_url
 
 FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 
@@ -139,15 +139,17 @@ def fetch_card(task, port, expected_candidate, publication_port=None):
     return None
 
 
-def current_card(task, port, expected_candidate, publication_port=None):
+def current_card(task, port, expected_candidate, publication_port=None, timeout=2):
     # Per-read socket timeouts can be extended by trickled bytes. Bound the
     # whole read-only probe; it cannot start listeners or modify private state.
     try:
+        if timeout <= 0:
+            return None
         result = subprocess.run(
             [sys.executable, "-B", str(Path(__file__).resolve()), "probe", "--task", task,
              "--port", str(port), "--candidate", expected_candidate,
              "--publication-port", str(publication_port or port)],
-            capture_output=True, text=True, timeout=2,
+            capture_output=True, text=True, timeout=min(2, timeout),
         )
         return json.loads(result.stdout) if result.returncode == 0 else None
     except (OSError, ValueError, subprocess.SubprocessError):
@@ -158,7 +160,15 @@ def card_matches(status, data):
     fields = ("branch", "worktree", "stages", "stages_declared", "stage_updated_at", "links", "checks", "ci", "history",
               "mode", "completeness", "check_plan", "checks_unavailable", "links_unavailable",
               "verdict", "verdict_candidate", "verdict_evidence")
+    freshness = data.get("freshness")
+    observed = status.get("freshness", {})
+    protocol = (not freshness or (all(observed.get(key) == value for key, value in freshness.items()
+                                    if key != "state")
+                                 and "served_at" in observed
+                                 and all(key in observed for key in ("activity_age_seconds", "publication_age_seconds",
+                                                                    "heartbeat_age_seconds", "owner_remaining_seconds"))))
     return (all(status.get(key) == data.get(key) for key in fields)
+            and status.get("activities", []) == data.get("activities", []) and protocol
             and list(status.get("stages", {})) == list(data.get("stages", {})))
 
 
@@ -190,8 +200,10 @@ def stop_outdated_listener(snapshot, data, endpoint):
     raise ValueError("The outdated card listener did not stop")
 
 
-def start_listener(snapshot, data, port):
+def start_listener(snapshot, data, port, deadline=None):
     server = Path(__file__).with_name("serve.py")
+    if deadline is not None and time.monotonic() >= deadline:
+        raise ValueError("Listener recovery authorization expired before startup")
     with (snapshot.parent / "listener.log").open("ab") as log:
         process = subprocess.Popen(
             [sys.executable, "-B", str(server), "--port", str(port), "--task-status", str(snapshot)],
@@ -199,7 +211,7 @@ def start_listener(snapshot, data, port):
         )
     try:
         line = b""
-        deadline = time.monotonic() + 5
+        deadline = min(deadline, time.monotonic() + 5) if deadline is not None else time.monotonic() + 5
         while b"\n" not in line and len(line) < 4096:
             remaining = deadline - time.monotonic()
             if remaining <= 0 or not select.select([process.stdout], [], [], remaining)[0]:
@@ -213,7 +225,8 @@ def start_listener(snapshot, data, port):
         if b"\n" not in line or not line.startswith(prefix) or not actual.isdigit():
             raise ValueError("Card listener could not start. Check listener.log in the task directory")
         actual_port = int(actual)
-        status = current_card(data["task"], actual_port, data["candidate"])
+        status = current_card(data["task"], actual_port, data["candidate"],
+                              timeout=min(2, max(0, deadline - time.monotonic())))
         if (port and actual_port != port) or not status or not card_matches(status, data):
             raise ValueError("Card listener did not serve the current task")
         return {"port": actual_port, "pid": process.pid}
@@ -239,7 +252,7 @@ def show_card(checkout, state, args):
         current = candidate(checkout)
         data = {
             "mode": "flight",
-            "task": args.task, "title": args.title,
+            "task": args.task, "title": args.title if args.title is not None else previous.get("title", "FlightCheck " + args.task),
             "summary": args.summary if args.summary is not None else previous.get("summary", ""),
             "candidate": current,
             "verdict": args.verdict or previous.get("verdict"),
@@ -252,17 +265,28 @@ def show_card(checkout, state, args):
         details.pop("branch", None)
         details.pop("worktree", None)
         details.update(checkout_details(checkout))
-        publish(snapshot, data, details, record_verdict=bool(args.verdict))
-        endpoint = read_json(endpoint_file)
-        port = endpoint.get("port", 0)
-        status = current_card(args.task, port, current) if port else None
-        if status and not card_matches(status, data):
-            stop_outdated_listener(snapshot, data, endpoint)
-            status = None
-        if not status:
-            endpoint = start_listener(snapshot, data, port)
-            write_json(endpoint_file, endpoint)
-            port = endpoint["port"]
+        publish_locked(snapshot, data, details, record_verdict=bool(args.verdict))
+    # Listener recovery must not hold up status producers for its 15s budget.
+    # A separate lock serializes service ownership; card.lock only protects
+    # snapshot and metadata reads/commits inside that lifecycle operation.
+    from progress import recover_listener, register, start_monitor
+    endpoint = read_json(endpoint_file)
+    if endpoint:
+        endpoint = recover_listener(directory, args.task, allow_incomplete=True)
+    else:
+        with (directory / "listener.lock").open("a") as listener_lock:
+            fcntl.flock(listener_lock, fcntl.LOCK_EX)
+            endpoint = read_json(endpoint_file)
+            if not endpoint:
+                endpoint = start_listener(snapshot, data, 0)
+                write_json(endpoint_file, endpoint)
+    port = endpoint["port"]
+    with (directory / "card.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        data = read_task(snapshot)
+        if data["completeness"]["ready"]:
+            register(checkout, state, directory, args.task, args.details)
+            start_monitor(directory)
 
     if args.session:
         record_path = turn_file(state, args.session)
@@ -371,7 +395,7 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     card = commands.add_parser("card")
     card.add_argument("--task", type=task_id, required=True)
-    card.add_argument("--title", required=True)
+    card.add_argument("--title")
     card.add_argument("--summary")
     card.add_argument("--details", type=Path)
     card.add_argument("--verdict", choices=VERDICTS)

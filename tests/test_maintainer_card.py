@@ -142,6 +142,43 @@ class MaintainerCardTests(unittest.TestCase):
         self.assertEqual(json.loads(self.request(footer, "status.json"))["summary"],
                          "Keep this summary on resume.")
 
+    def test_omitted_title_preserves_prepared_heading_under_shared_lock(self):
+        footer = self.card()
+        self.addCleanup(self.stop_listener, self.endpoint()["pid"])
+        command = [sys.executable, "-B", "status-card/maintainer.py", "card", "--task", "test-change"]
+        resumed = subprocess.run(command, cwd=self.checkout, env=self.env, capture_output=True, text=True, timeout=10)
+        self.assertEqual(resumed.returncode, 0, resumed.stderr)
+        self.assertEqual(resumed.stdout.strip(), footer)
+        self.assertEqual(json.loads(self.request(footer, "status.json"))["title"], "Synthetic implementation")
+        rejected = subprocess.run([*command, "--title", ""], cwd=self.checkout, env=self.env,
+                                  capture_output=True, text=True, timeout=10)
+        self.assertNotEqual(rejected.returncode, 0)
+
+    def test_resume_upgrades_listener_without_server_freshness_ages(self):
+        server = self.checkout / "status-card/serve.py"
+        original = server.read_text()
+        legacy = server.with_name("legacy_serve.py")
+        legacy.write_text(original)
+        server.write_text(
+            "import legacy_serve\n"
+            "original = legacy_serve.freshness_observation\n"
+            "def old_clock(data):\n"
+            "    return data['freshness'] if data.get('freshness',{}).get('revision',0)>1 else original(data)\n"
+            "legacy_serve.freshness_observation = old_clock\n"
+            "legacy_serve.main()\n"
+        )
+        footer = self.card()
+        old = self.endpoint()
+        self.addCleanup(self.stop_listener, old["pid"])
+        server.write_text(original)
+        legacy.unlink()
+        self.assertEqual(self.card(), footer)
+        new = self.endpoint()
+        self.addCleanup(self.stop_listener, new["pid"])
+        self.assertEqual(new["port"], old["port"])
+        self.assertNotEqual(new["pid"], old["pid"])
+        self.assertIn("heartbeat_age_seconds", json.loads(self.request(footer, "status.json"))["freshness"])
+
     def test_checkout_label_tracks_primary_branch_linked_worktree_and_detached_head(self):
         self.run_git("switch", "-c", "codex/primary-label")
         details = self.state.parent / "legacy-details.json"

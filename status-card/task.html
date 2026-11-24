@@ -16,7 +16,7 @@
       <div>
         <p class="eyebrow">Selected workflow · task status</p>
         <h1 id="title">Current task</h1>
-        <p class="summary" id="summary">Waiting for the published snapshot.</p>
+        <p class="summary" id="summary">Waiting for task status.</p>
         <p class="candidate">Candidate <code id="candidate">Pending</code></p>
         <p class="candidate" id="checkout-line" hidden><span id="checkout-label"></span> <code id="checkout-name"></code></p>
       </div>
@@ -25,7 +25,7 @@
         <p class="verdict" id="verdict">Pending</p>
       </div>
     </section>
-    <p id="notice" class="notice" role="status">Loading task status…</p>
+    <p id="notice" class="notice" role="status">Update freshness unknown</p>
     <div class="task-details" id="task-details" hidden>
       <section class="panel" id="links-panel" aria-labelledby="links-title" hidden>
         <h2 id="links-title">Work links</h2>
@@ -58,12 +58,15 @@
         <ol class="gates" id="history"></ol>
       </details>
     </div>
-    <footer class="route" aria-label="Viewing route diagnostics">
-      <div><span>Publication</span><strong id="publication">Pending</strong></div>
-      <div><span>Browser route</span><strong id="forwarding">Pending</strong></div>
-      <div><span>Rendering</span><strong id="rendering">Shell loaded</strong></div>
+    <footer class="route" aria-label="Task update details">
+      <details id="status-diagnostics">
+        <summary id="progress-summary">Last progress unknown · Details</summary>
+        <div class="route-diagnostics">
+          <p id="connection-status">Connection: Unknown · Updates: Unknown</p>
+          <p id="receipt-status">Last received: unknown</p>
+        </div>
+      </details>
     </footer>
-    <noscript><p class="notice">JavaScript is unavailable. Refer to the current status in chat.</p></noscript>
   </main>
 </body>
 </html>

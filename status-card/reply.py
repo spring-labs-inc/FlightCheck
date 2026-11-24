@@ -113,7 +113,7 @@ def prepare(checkout, state, args):
         record = route_record(previous, args.task, host_url, mode, args.user_url)
         try:
             maintainer.show_card(checkout, state, argparse.Namespace(
-                task=args.task, title=args.title or "FlightCheck " + args.task,
+                task=args.task, title=args.title,
                 summary=args.summary, details=args.details, verdict=args.verdict,
                 verdict_candidate=args.verdict_candidate, session=args.session))
             endpoint = read_object(directory / "endpoint.json")
@@ -158,9 +158,33 @@ def check(checkout, state, args):
     return result
 
 
+class WrongTask(ValueError):
+    pass
+
+
+def observe(checkout, state, args, recover=False):
+    # Observation/recovery never republishes a snapshot or renews its producer.
+    import progress
+    directory = state / "tasks" / args.task
+    if read_object(directory / "status.json").get("task") != args.task:
+        raise WrongTask("The recorded worker snapshot belongs to another task")
+    if recover:
+        progress.recover_listener(directory, args.task)
+    snapshot = progress.observe(directory, args.task)
+    endpoint = read_object(directory / "endpoint.json")
+    number = endpoint.get("port")
+    if type(number) is not int or not 1 <= number <= 65535:
+        raise ValueError("No valid recorded worker publication port")
+    current = maintainer.candidate(checkout)
+    live = published_card(args.task, number, snapshot["candidate"])
+    return {"status": "observed", "task": args.task, "candidate": current,
+            "host_url": maintainer.card_url(args.task, number),
+            "publication": "verified" if live else "unavailable", "snapshot": snapshot}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("prepare", "check"))
+    parser.add_argument("command", choices=("prepare", "check", "observe", "recover"))
     parser.add_argument("--context", choices=("controller", "ordinary", "reviewer"), default="controller")
     parser.add_argument("--task", type=task_id)
     parser.add_argument("--title")
@@ -190,7 +214,10 @@ def main():
             browser_url(args.user_url, args.task)
         checkout = maintainer.git_path(Path.cwd(), "--show-toplevel")
         state = maintainer.state_dir(checkout)
-        result = prepare(checkout, state, args) if args.command == "prepare" else check(checkout, state, args)
+        if args.command in ("observe", "recover"):
+            result = observe(checkout, state, args, args.command == "recover")
+        else:
+            result = prepare(checkout, state, args) if args.command == "prepare" else check(checkout, state, args)
     except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
         known_url = None
         try:
@@ -199,10 +226,12 @@ def main():
             known_url = browser_url(value, args.task) if value else None
         except (OSError, ValueError, TypeError):
             pass
-        result = {"status": "unavailable", "error": str(error), "footer": footer(None), "known_url": known_url,
+        result = {"status": "unavailable", "error": str(error),
+                  "error_code": "wrong_task" if isinstance(error, WrongTask) else "unavailable",
+                  "footer": footer(None), "known_url": known_url,
                   "publication": "unavailable", "browser_reachability": "unobserved", "browser_rendering": "unobserved"}
     print(json.dumps(result, indent=2))
-    return 0 if result["status"] == "published" else 1
+    return 0 if result["status"] in ("published", "observed") else 1
 
 
 if __name__ == "__main__":

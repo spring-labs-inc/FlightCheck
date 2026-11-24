@@ -5,12 +5,50 @@ import hashlib
 import json
 import os
 import tempfile
+import fcntl
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from task_details import STAGE_NAMES, normalize_details, task_id, update_details
+from task_details import STAGE_NAMES, normalize_details, task_id, update_details, timestamp, short_text
 
 VERDICTS = ("APPROVE", "APPROVE_WITH_NITS", "APPROVE_WITH_OBSERVATIONS", "REVISE")
+
+
+def utc_time(value=None):
+    return (datetime.now(timezone.utc) if value is None else datetime.fromtimestamp(value, timezone.utc)).isoformat(timespec="milliseconds")
+
+
+def normalize_progress(data):
+    result = {}
+    if "freshness" in data:
+        value = data["freshness"]
+        if not isinstance(value, dict) or value.get("state") not in ("active", "closed", "expired", "stale"):
+            raise ValueError("Invalid publisher freshness")
+        if type(value.get("revision")) is not int or value["revision"] < 1:
+            raise ValueError("Invalid publication revision")
+        result["freshness"] = {key: timestamp(value.get(key)) for key in
+                               ("activity_at", "published_at", "publisher_heartbeat_at", "owner_expires_at")}
+        result["freshness"].update(state=value["state"], revision=value["revision"])
+        if value.get("action") is not None:
+            result["freshness"]["action"] = short_text(value["action"])
+    if "activities" in data:
+        if not isinstance(data["activities"], list):
+            raise ValueError("Expected registered activities")
+        rows = []
+        for row in data["activities"]:
+            if row.get("kind") not in ("controller", "worker", "reviewer", "check") or row.get("state") not in ("running", "completed", "failed", "interrupted", "unavailable"):
+                raise ValueError("Invalid activity lifecycle")
+            item = {key: short_text(row.get(key)) for key in ("id", "name", "candidate")}
+            item.update({key: timestamp(row.get(key)) for key in ("observed_at", "heartbeat_at", "expires_at")})
+            item.update(kind=row["kind"], state=row["state"])
+            if row.get("summary") is not None:
+                item["summary"] = short_text(row["summary"])
+            rows.append(item)
+        if len({row["id"] for row in rows}) != len(rows):
+            raise ValueError("Activity identifiers must be unique")
+        result["activities"] = rows
+    return result
 
 
 def completeness(data):
@@ -69,6 +107,7 @@ def normalize(data):
     candidate = fields["candidate"].strip()
     verdict = data.get("verdict")
     details = normalize_details(data)
+    progress = normalize_progress(data)
     stage_map = details.get("stages")
     mode = data.get("mode", "minimal")
     if mode not in ("minimal", "flight"):
@@ -79,6 +118,9 @@ def normalize(data):
                and verdict in VERDICTS and data.get("verdict_evidence") == evidence_identity(state))
     if stage_map is not None:
         current = current and stage_map["Final Verdict"] in ("current", "completed")
+    if any(row["candidate"] == candidate and row["state"] == "running" and row["kind"] != "controller"
+           for row in progress.get("activities", [])):
+        current = False
     return {
         "snapshot": "live" if mode == "flight" else "minimal",
         "mode": mode,
@@ -90,6 +132,7 @@ def normalize(data):
         "verdict_candidate": candidate if current else None,
         "verdict_evidence": data.get("verdict_evidence") if current else None,
         **details,
+        **progress,
     }
 
 
@@ -123,7 +166,9 @@ def chat_status(data, url, phase):
     return status
 
 
-def publish(path, data, details, record_verdict=False):
+def publish_locked(path, data, details, record_verdict=False, *, now=None, heartbeat=False,
+                   renew_owner=True, activities=None, lifecycle=None, action=None):
+    """Publish while the caller holds the task's shared card.lock."""
     parent = path.parent
     if parent.stat().st_uid != os.geteuid() or parent.stat().st_mode & 0o077:
         raise ValueError("Snapshot directory must be private to the current user")
@@ -133,6 +178,30 @@ def publish(path, data, details, record_verdict=False):
     data.update(update_details(previous, details, data["candidate"]))
     if record_verdict:
         data["verdict_evidence"] = evidence_identity(data)
+    if activities is None:
+        activities = previous.get("activities", [])
+    data["activities"] = activities
+    clock = utc_time(now)
+    prior = previous.get("freshness", {})
+    ignored = {"freshness", "activities"}
+    meaningful = ({key: value for key, value in normalize(data).items() if key not in ignored}
+                  != {key: value for key, value in previous.items() if key not in ignored})
+    old_activity = [{key: value for key, value in row.items() if key not in ("heartbeat_at", "expires_at")}
+                    for row in previous.get("activities", [])]
+    new_activity = [{key: value for key, value in row.items() if key not in ("heartbeat_at", "expires_at")}
+                    for row in activities]
+    meaningful |= old_activity != new_activity
+    expiry = utc_time((datetime.fromisoformat(clock).timestamp()) + 120)
+    data["freshness"] = {
+        "activity_at": clock if meaningful or not prior else prior["activity_at"],
+        "published_at": clock,
+        "publisher_heartbeat_at": clock if heartbeat or renew_owner or not prior else prior["publisher_heartbeat_at"],
+        "owner_expires_at": expiry if renew_owner or not prior else prior["owner_expires_at"],
+        "revision": prior.get("revision", 0) + 1,
+        "state": lifecycle or ("active" if renew_owner else prior.get("state", "active")),
+    }
+    if action is not None:
+        data["freshness"]["action"] = action
     data.update(normalize(data))
     fd, pending = tempfile.mkstemp(prefix=".status-", dir=parent)
     try:
@@ -142,6 +211,13 @@ def publish(path, data, details, record_verdict=False):
         os.replace(pending, path)
     finally:
         Path(pending).unlink(missing_ok=True)
+
+
+def publish(path, data, details, record_verdict=False, **kwargs):
+    """Serialize every snapshot writer, including the standalone publisher."""
+    with (path.parent / "card.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        return publish_locked(path, data, details, record_verdict, **kwargs)
 
 
 def main():

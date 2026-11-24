@@ -24,6 +24,7 @@
     ["status-card/task.js", ".flightcheck/status-card/task.js", "shared"],
     ["status-card/task_details.py", ".flightcheck/status-card/task_details.py", "shared"],
     ["status-card/task_status.py", ".flightcheck/status-card/task_status.py", "shared"],
+    ["status-card/progress.py", ".flightcheck/status-card/progress.py", "shared"],
     ["status-card/maintainer.py", ".flightcheck/status-card/maintainer.py", "shared"],
     ["status-card/reply.py", ".flightcheck/status-card/reply.py", "shared"],
     ["status-card/connect.py", ".flightcheck/status-card/connect.py", "shared"],

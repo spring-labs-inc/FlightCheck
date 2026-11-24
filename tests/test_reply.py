@@ -1,6 +1,7 @@
 """Exercise portable controller reply checks against real disposable task cards."""
 
 import importlib.util
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -144,6 +145,23 @@ class ReplyTests(unittest.TestCase):
             self.assertEqual(occupied.getsockname(), ("127.0.0.1", endpoint["port"]))
         self.assertEqual(self.api("prepare")["footer"], first["footer"])
 
+    def test_new_task_without_title_uses_shared_default(self):
+        self.api("prepare")
+        self.assertEqual(self.snapshot()["title"], "FlightCheck test-change")
+
+    def test_omitted_title_preserves_previous_title(self):
+        first = self.api("prepare", "--title", "Descriptive owner title")
+        self.assertEqual(self.snapshot()["title"], "Descriptive owner title")
+        resumed = self.api("prepare")
+        self.assertEqual(resumed["footer"], first["footer"])
+        self.assertEqual(self.snapshot()["title"], "Descriptive owner title")
+        self.api("prepare", "--title", "Explicit replacement")
+        self.api("prepare")
+        self.assertEqual(self.snapshot()["title"], "Explicit replacement")
+        invalid = self.api("prepare", "--title", "", expected=1)
+        self.assertEqual(invalid["status"], "unavailable")
+        self.assertEqual(self.snapshot()["title"], "Explicit replacement")
+
     def test_every_controller_phase_requires_exact_final_footer(self):
         prepared = self.api("prepare")
         footer = prepared["footer"]
@@ -160,6 +178,33 @@ class ReplyTests(unittest.TestCase):
         self.assertEqual(self.check("Verdict: APPROVE\n\n" + footer, "end", 1)["status"], "blocked")
         self.api("prepare", "--verdict", "APPROVE", "--verdict-candidate", prepared["candidate"])
         self.check("Verdict: APPROVE\n\n" + footer, "end")
+        # This boundary deliberately needs an unpublished edit. Stop only this
+        # fixture's registered publisher; automatic publication is tested apart.
+        directory = self.directory()
+        with (directory / "card.lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            monitor = json.loads((directory / "monitor.json").read_text())
+            self.assertEqual(monitor["task"], "test-change")
+            self.assertEqual(Path(monitor["checkout"]).resolve(), self.checkout.resolve())
+            self.assertEqual(Path(monitor["directory"]).resolve(), directory.resolve())
+            pid = monitor["pid"]
+            self.assertIs(type(pid), int)
+            self.assertGreater(pid, 1)
+            suffix = f"/status-card/progress.py monitor --directory {directory} --token {monitor['token']}"
+            def registered_publisher():
+                observed = subprocess.run(["ps", "-ww", "-p", str(pid), "-o", "uid=", "-o", "command="],
+                                          capture_output=True, text=True, check=False)
+                fields = observed.stdout.strip().split(maxsplit=1)
+                return len(fields) == 2 and fields[0] == str(os.geteuid()) and fields[1].endswith(suffix)
+            self.assertTrue(registered_publisher(), "Disposable publisher identity was not verified")
+            monitor["token"] = "paused-by-reply-fixture-" + monitor["token"]
+            pending = directory / "monitor-fixture.tmp"
+            pending.write_text(json.dumps(monitor))
+            pending.replace(directory / "monitor.json")
+        deadline = time.monotonic() + 5
+        while registered_publisher() and time.monotonic() < deadline:
+            time.sleep(.02)
+        self.assertFalse(registered_publisher(), "Disposable publisher did not stop after generation invalidation")
         # Editing without republishing makes even the right URL insufficient.
         self.readme.write_text("New candidate\n")
         self.assertEqual(self.check(footer, expected=1)["publication"], "unavailable")
