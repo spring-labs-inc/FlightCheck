@@ -81,6 +81,32 @@ route; the worker cannot verify the user's loopback socket. Host publication,
 browser-machine reachability and actual rendering remain separate observations.
 Record rendering only after desktop inspection or an owner observation.
 
+### Progress, freshness and bounded recovery
+
+A prepared task has separate clocks for meaningful progress, producer heartbeat/publication and the browser's last successful receipt. A successful HTTP poll proves transport at that instant; it does not renew the producer, evidence, review verdict or stage timestamps. A healthy long-running stage can retain the same progress time while its authorized producer remains alive. Missing or invalid freshness data means freshness is unknown, including for older task snapshots.
+
+While the processes are scheduled, meaningful source/activity changes are published within five seconds, producer heartbeats run every ten seconds and the producer becomes stale after thirty seconds without a heartbeat. The browser polls every five seconds with a 4.5-second whole-request deadline: a transport failure becomes visible within 9.5 seconds of its onset, and a published change can take the next poll/deadline to appear. These are active-execution bounds, not promises while the computer is asleep. Visibility, online and resume observations trigger immediate revalidation and disclose the observation gap without inventing missed events.
+
+The private publisher observes only the explicitly registered task, current details source and registered activities. It does not inspect historical evidence archives. Native check start, heartbeat and finish are projected as status; original logs, receipts and exit status remain authoritative. A controller registers worker/reviewer lifecycle observations without giving those sessions write access. An activity heartbeat reports observed liveness, not thinking, new proof or a favorable verdict. Stage advancement still requires its actual governing observation.
+
+Owner leases expire after 120 seconds without a controller or registered live-work renewal. The monitor cannot renew its own ownership merely by polling. Detached monitoring is bounded to eight hours, with five-second sequential health observations and at most three recovery attempts. A listener recovery attempt is bounded to fifteen seconds; an SSH preparation has a twenty-second subprocess deadline. Only directly owned processes may be stopped. An occupied preserved port or ambiguous ownership produces an explicit recovery action rather than killing another listener, switching ports or retrying indefinitely. Expiry stops monitoring, never native work; resume re-establishes authorization on the same recorded route.
+
+Publication staleness, listener failure and an SSH/browser route failure are distinct states. During an outage the card retains the last-known Work Links and stage observations with an age/disconnection warning, and suppresses an unverifiable current verdict. Transport loss alone does not make references invalid. Reconnection reads the newest valid task/candidate-bound snapshot; it cannot claim observation of intervening transitions. Terminal closeout preserves pending and skipped obligations and stops unnecessary active monitoring rather than painting every stage complete.
+
+The controller can report a worker or reviewer lifecycle through the same private task directory, without changing that session's access:
+
+```sh
+python3 -B status-card/progress.py activity --directory /private/task-directory \
+  --task TASK_ID --candidate CURRENT_CANDIDATE --id worker-1 \
+  --kind worker --name "Implement scoped repair" --state running
+```
+
+Repeat the running observation only while liveness is actually observed; report `completed`, `failed`, `interrupted` or `unavailable` from the retained native outcome. The default native-check bridge finds the explicitly prepared task for its checkout automatically; no additional user flag is needed. `FLIGHTCHECK_TASK_ID` can disambiguate an explicitly selected task. Activity status is informational and cannot replace accepted evidence or grant review access.
+
+Reconnecting without `--title` preserves the existing friendly heading. A new task without a title defaults to `FlightCheck TASK_ID`. An explicit nonempty title replaces the heading exactly; an explicitly blank title is rejected before replacing the snapshot. Task, candidate and route identity remain separate from this display label.
+
+These reliability diagnostics preserve the existing Workflow Stages presentation. Issue #83 retains ownership of its undelivered presentation changes and must integrate this freshness contract when it lands. Its later-image maintenance rule does not authorize package publication or changes to immutable installed artifacts.
+
 ### Publish work links and evidence
 
 Pass `--details /private/path/details.json` to the same publisher command. Initialize every required section first; later updates may supply only changed sections. For example, a synthetic update for `--candidate candidate-2` could contain:

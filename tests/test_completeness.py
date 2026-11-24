@@ -1,6 +1,6 @@
 """Exercise active-flight readiness through real CLI/HTTP and the browser script.
 
-All data is synthetic. Node executes task.js's DOM/polling contract; this is not
+All data is synthetic. Node executes task.js's DOM/polling contract, including last-known details on outage; this is not
 an interactive browser render or native Claude qualification.
 """
 

@@ -5,6 +5,7 @@ or desktop browser. The release checklist requires that separate live rehearsal.
 """
 
 import json
+import fcntl
 import os
 from pathlib import Path
 import signal
@@ -188,7 +189,33 @@ with Server(('127.0.0.1',int(local)),Relay) as server:server.serve_forever()
                                 SSH_RECORDS=str(self.records),FLIGHTCHECK_STATE_DIR=str(self.root/'connector-state'))
         self.addCleanup(self.stop_forwarders)
 
+    def stop_monitors(self):
+        for path in (self.root/'connector-state').glob('connections/*/connection.json'):
+            record = json.loads(path.read_text())
+            pid = record.get('supervisor_pid')
+            if not pid:
+                continue
+            probe = subprocess.run(['ps', '-p', str(pid), '-o', 'uid=', '-o', 'args='],
+                                   capture_output=True, text=True)
+            fields = probe.stdout.strip().split(maxsplit=1)
+            if (len(fields) == 2 and fields[0] == str(os.geteuid())
+                    and str(Path(record.get('helper_directory') or self.root)/'connect.py') in fields[1]
+                    and '--supervise ' in fields[1]):
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                deadline = time.monotonic() + 3
+                with (path.parent/'monitor.lock').open('a') as lock:
+                    while time.monotonic() < deadline:
+                        try:
+                            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                            break
+                        except BlockingIOError:
+                            time.sleep(.02)
+
     def stop_forwarders(self):
+        StartupTests.stop_monitors(self)
         if self.records.exists():
             for line in self.records.read_text().splitlines():
                 record=json.loads(line)
@@ -245,6 +272,24 @@ with Server(('127.0.0.1',int(local)),Relay) as server:server.serve_forever()
         forwards=[json.loads(x)['pid'] for x in self.records.read_text().splitlines() if '-N' in json.loads(x)['args']]
         self.assertNotEqual(forwards[-1],forwards[0])
         os.kill(forwards[-1],0)
+
+    def test_reconnect_title_preservation(self):
+        self.api('prepare', '--title', 'Owner descriptive title', '--execution', 'remote', expected=1)
+        self.fake_ssh()
+        first = self.connector()
+        self.assertEqual(self.snapshot()['title'], 'Owner descriptive title')
+        self.assertEqual(first['monitor'], 'active')
+        resumed = self.connector()
+        self.assertEqual(first['footer'], resumed['footer'])
+        self.assertEqual(self.snapshot()['title'], 'Owner descriptive title')
+        self.connector('--title', 'Explicit connector title')
+        self.connector()
+        self.assertEqual(self.snapshot()['title'], 'Explicit connector title')
+        records = [json.loads(line) for line in self.records.read_text().splitlines()]
+        prepares = [row['args'][-1] for row in records if '-N' not in row['args']
+                    and ' prepare ' in row['args'][-1]]
+        self.assertNotIn('--title', prepares[0])
+        self.assertTrue(any("'Explicit connector title'" in command for command in prepares))
 
     def test_connector_failures_never_offer_a_link(self):
         self.api('prepare','--execution','remote',expected=1)

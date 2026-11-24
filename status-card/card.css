@@ -77,7 +77,7 @@ dd { margin: 1px 0 0; font-size: .85rem; }
 .task-card .review { max-width: 22ch; border: 0; border-left: 1px solid var(--frame); padding: 0 0 0 10px; }
 .task-card .notice { margin: 5px 0; padding: 3px 7px; font-size: .75rem; }
 .task-card .panel { padding: 7px 9px; min-width: 0; }
-.task-details { display: grid; gap: 6px; }
+.task-details { display: grid; gap: 6px; margin-top: 6px; }
 .task-evidence { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; }
 .task-evidence > .panel { flex: 1 1 16rem; }
 .task-card [hidden] { display: none; }
@@ -103,7 +103,7 @@ dd { margin: 1px 0 0; font-size: .85rem; }
 .work-link-select:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 .work-link-select[aria-expanded="true"] { color: var(--warn); }
 .work-link-detail {
-  display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
   margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--line); overflow-wrap: anywhere;
 }
 .work-link-detail p { margin: 2px 0 0; color: var(--muted); font-size: .78rem; }
@@ -126,6 +126,10 @@ dd { margin: 1px 0 0; font-size: .85rem; }
 .task-details summary { cursor: pointer; font-weight: 680; }
 .task-details summary .pill { margin-left: 4px; }
 .task-card .route { margin-top: 6px; padding: 5px 8px; gap: 5px; }
+.task-card .route > details { grid-column: 1 / -1; }
+.task-card .route summary { cursor: pointer; color: var(--muted); font-size: inherit; }
+.task-card .route-diagnostics { margin-top: 6px; }
+.task-card .route-diagnostics p { margin: 0; overflow-wrap: anywhere; white-space: normal; }
 
 @media (max-width: 450px) {
   .task-card .hero { grid-template-columns: minmax(0, 1fr); gap: 4px; }

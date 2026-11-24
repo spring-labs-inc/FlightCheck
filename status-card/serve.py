@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 
 from task_details import issue_stages
 from task_status import read_task, task_path
+from progress import freshness_observation
 
 ROOT = Path(__file__).resolve().parent
 ASSETS = {
@@ -86,6 +87,9 @@ class StatusHandler(BaseHTTPRequestHandler):
             self.reply(503, b"Task snapshot unavailable.\n", "text/plain; charset=utf-8")
             return
         snapshot["issue_stages"] = issue_stages(snapshot)
+        freshness = freshness_observation(snapshot)
+        if freshness is not None:
+            snapshot["freshness"] = freshness
         snapshot.pop("tracked_flights", None)
         status = 503 if snapshot["mode"] == "flight" and not snapshot["completeness"]["ready"] else 200
         self.json_status(snapshot, status)

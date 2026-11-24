@@ -179,21 +179,123 @@ function renderDetails(data) {
   byId("task-details").hidden = ![stageEntries, links, checks, ci, history].some((rows) => rows.length);
 }
 
+const pollInterval = 5000;
+const requestDeadline = 4500;
+const staleAfter = 30;
+let lastSnapshot;
+let receivedAt;
+let connectionState = "Unknown";
+let updateState = "Unknown";
+let receiptMessage = "";
+let hadTransportFailure = false;
+let refreshTimer;
+let refreshing = false;
+let wakePending = false;
+let observationGap = false;
+
+function freshness(data) {
+  const value = data.freshness;
+  const ages = [value?.activity_age_seconds, value?.publication_age_seconds, value?.heartbeat_age_seconds];
+  const timestamps = [value?.activity_at, value?.published_at, value?.publisher_heartbeat_at, value?.owner_expires_at];
+  // Ages come from the worker's clock. Never compare its timestamps with the browser clock.
+  if (!value || !Number.isInteger(value.revision) || value.revision < 1
+      || !timestamps.every((time) => typeof time === "string" && Number.isFinite(Date.parse(time)))
+      || !ages.every((age) => typeof age === "number" && Number.isFinite(age) && age >= 0)
+      || typeof value.owner_remaining_seconds !== "number" || !Number.isFinite(value.owner_remaining_seconds)
+      || !["active", "closed", "expired", "stale"].includes(value.state)) {
+    return { current: false, closed: false, unknown: true };
+  }
+  const elapsed = Math.max(0, (performance.now() - receivedAt) / 1000);
+  const heartbeatAge = value.heartbeat_age_seconds + elapsed;
+  const closed = value.state === "closed";
+  const leaseExpired = !closed && (value.state === "expired" || value.owner_remaining_seconds <= elapsed);
+  const stale = !closed && (value.state === "stale" || heartbeatAge > staleAfter);
+  return { current: !leaseExpired && !stale, closed };
+}
+
+function relativeAge(value) {
+  const age = Math.max(0, value);
+  const [unit, scale] = age >= 86400 ? ["d", 86400] : age >= 3600 ? ["h", 3600]
+    : age >= 60 ? ["m", 60] : ["s", 1];
+  return `${Math.floor(age / scale)}${unit}`;
+}
+
+function renderFreshness(data) {
+  const status = freshness(data);
+  const elapsed = Math.max(0, (performance.now() - receivedAt) / 1000);
+  const value = data.freshness;
+  const progressKnown = typeof value?.activity_age_seconds === "number"
+    && Number.isFinite(value.activity_age_seconds) && value.activity_age_seconds >= 0
+    && typeof value.activity_at === "string" && Number.isFinite(Date.parse(value.activity_at));
+  setText("progress-summary", progressKnown
+    ? `Last progress ${relativeAge(value.activity_age_seconds + elapsed)} ago · Details` : "Last progress unknown · Details");
+  return status;
+}
+
+function notice(value) {
+  setText("notice", value);
+  byId("notice").hidden = !value;
+}
+
+function renderUpdateDetails() {
+  setText("connection-status", `Connection: ${connectionState} · Updates: ${updateState}`);
+  const age = receivedAt === undefined ? "unknown" : performance.now() - receivedAt < 1000
+    ? "just now" : `${relativeAge((performance.now() - receivedAt) / 1000)} ago`;
+  setText("receipt-status", `Last received: ${age}${receiptMessage ? ` · ${receiptMessage}` : ""}`);
+}
+
+function unverified(updates = "Unknown", message = observationGap ? "Resuming after gap" : "") {
+  setText("verdict", "Pending");
+  notice(lastSnapshot ? "Updates paused · Showing last known status" : "Update freshness unknown");
+  updateState = updates;
+  receiptMessage = message;
+  if (lastSnapshot) renderFreshness(lastSnapshot);
+  renderUpdateDetails();
+}
+
 async function refresh() {
+  if (refreshing) { wakePending = true; return; }
+  refreshing = true;
+  clearTimeout(refreshTimer);
+  const startedAt = performance.now();
+  if (lastSnapshot && startedAt - receivedAt > pollInterval + requestDeadline) {
+    observationGap = true;
+    unverified();
+  } else if (lastSnapshot && !freshness(lastSnapshot).current) {
+    unverified();
+  }
   let reachedServer = false;
+  let timeout;
+  let closed = false;
   const abort = new AbortController();
-  const timeout = setTimeout(() => abort.abort(), 4500);
   try {
-    const response = await fetch("status.json", { cache: "no-store", signal: abort.signal });
-    reachedServer = true;
-    if (!response.ok) throw new Error("Task snapshot is unavailable");
-    const data = await response.json();
+    const request = (async () => {
+      const response = await fetch("status.json", { cache: "no-store", signal: abort.signal });
+      reachedServer = true;
+      if (!response.ok) throw new Error("Task snapshot is unavailable");
+      return await response.json();
+    })();
+    // Bound both headers and body decoding even when a transport fails to settle on abort.
+    const deadline = new Promise((resolve, reject) => {
+      timeout = setTimeout(() => { abort.abort(); reject(new Error("Snapshot deadline exceeded")); }, requestDeadline);
+    });
+    const data = await Promise.race([request, deadline]);
+    if (document.visibilityState === "hidden") return;
     if (data?.snapshot !== "live" || `/task/${data.task}/` !== taskPath
         || ![data.title, data.summary, data.candidate].every((value) => typeof value === "string")
         || !Number.isInteger(data.publicationPort) || data.publicationPort < 1 || data.publicationPort > 65535) {
       throw new Error("Invalid task snapshot");
     }
-    const current = data.candidate && data.candidate === data.verdict_candidate && verdicts.has(data.verdict);
+    if (Number.isInteger(lastSnapshot?.freshness?.revision)
+        && Number.isInteger(data.freshness?.revision)
+        && data.freshness.revision < lastSnapshot.freshness.revision) {
+      throw new Error("Snapshot revision moved backwards");
+    }
+    receivedAt = performance.now();
+    lastSnapshot = data;
+    const status = renderFreshness(data);
+    closed = status.closed;
+    const current = status.current && data.candidate && data.candidate === data.verdict_candidate && verdicts.has(data.verdict);
     setText("title", data.title);
     setText("summary", data.summary);
     setText("candidate", data.candidate.slice(0, 12) || "Pending");
@@ -204,21 +306,40 @@ async function refresh() {
     byId("checkout-line").hidden = !checkoutName;
     setText("verdict", current ? data.verdict : "Pending");
     renderDetails(data);
-    setText("publication", "Published on loopback");
-    setText("forwarding", String(data.publicationPort) !== location.port ? "Forwarded endpoint reached" : "Endpoint reached");
-    setText("rendering", "Snapshot rendered");
-    setText("notice", current ? "Verdict applies to the displayed candidate." : "Waiting for a verdict on the current candidate.");
+    const reconnected = hadTransportFailure;
+    connectionState = "Connected";
+    updateState = status.closed ? "Closed" : status.unknown ? "Unknown" : status.current ? "Live" : "Paused";
+    receiptMessage = reconnected ? "Reconnected after gap" : observationGap ? "Resumed after gap" : "";
+    hadTransportFailure = false;
+    renderUpdateDetails();
+    notice(status.current ? "" : status.unknown ? "Update freshness unknown" : "Updates paused · Showing last known status");
+    observationGap = false;
   } catch {
-    setText("verdict", "Pending");
-    byId("task-details").hidden = true;
-    setText("publication", reachedServer ? "Snapshot unavailable" : "Publication unconfirmed");
-    setText("forwarding", reachedServer ? "Endpoint reached" : "Disconnected");
-    setText("rendering", "Current snapshot unavailable");
-    setText("notice", "Current status could not be verified. Refer to the task in chat.");
+    connectionState = reachedServer ? "Connected" : "Disconnected";
+    if (!reachedServer && receivedAt !== undefined) hadTransportFailure = true;
+    unverified(reachedServer ? "Unavailable" : "Unknown", "");
   } finally {
     clearTimeout(timeout);
-    setTimeout(refresh, 5000);
+    refreshing = false;
+    if (document.visibilityState === "hidden") {
+      wakePending = false;
+    } else if (wakePending) {
+      wakePending = false;
+      refreshTimer = setTimeout(refresh, 0);
+    } else if (!closed) {
+      refreshTimer = setTimeout(refresh, Math.max(0, pollInterval - (performance.now() - startedAt)));
+    }
   }
 }
 
+function wake() {
+  observationGap = receivedAt !== undefined;
+  unverified();
+  clearTimeout(refreshTimer);
+  if (document.visibilityState !== "hidden") refresh();
+}
+
+document.addEventListener("visibilitychange", wake);
+window.addEventListener("online", wake);
+window.addEventListener("pageshow", wake);
 refresh();

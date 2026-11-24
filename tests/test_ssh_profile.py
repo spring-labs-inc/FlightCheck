@@ -34,6 +34,7 @@ class SSHProfileTests(unittest.TestCase):
     connector = startup.StartupTests.connector
     fake_ssh = startup.StartupTests.fake_ssh
     stop_forwarders = startup.StartupTests.stop_forwarders
+    stop_monitors = startup.StartupTests.stop_monitors
 
     def real_ssh(self):
         if not all(Path(p).is_file() for p in ('/usr/bin/ssh', '/usr/bin/ssh-keygen', '/usr/sbin/sshd')):
@@ -61,7 +62,7 @@ class SSHProfileTests(unittest.TestCase):
                           'project='+repr(str(self.checkout))+'\n'
                           'state='+repr(str(self.state))+'\n'
                           'prefix=["cd",project,"&&","env","FLIGHTCHECK_STATE_DIR="+state,'
-                          +repr(sys.executable)+',"-B","status-card/reply.py","prepare"]\n'
+                          +repr(sys.executable)+',"-B","status-card/reply.py"]\n'
                           'if args[:len(prefix)]!=prefix:sys.exit(126)\n'
                           'env=dict(os.environ,FLIGHTCHECK_STATE_DIR=state)\n'
                           'sys.exit(subprocess.run(args[5:],cwd=project,env=env).returncode)\n')
@@ -114,6 +115,7 @@ class SSHProfileTests(unittest.TestCase):
                                   FLIGHTCHECK_STATE_DIR=str(self.root/'connector-state'))
 
     def stop_real_ssh(self):
+        self.stop_monitors()
         # Only the managed child for our private test configuration is eligible.
         for path in (self.root/'connector-state').glob('connections/*/connection.json'):
             pid = json.loads(path.read_text()).get('pid')
@@ -154,6 +156,27 @@ class SSHProfileTests(unittest.TestCase):
                                capture_output=True, text=True, timeout=5)
         self.assertEqual(check.returncode, 0, check.stderr)
         self.assertEqual(self.client_config.read_bytes(), config_before)
+    def test_monitor_recovers_real_owned_ssh_tunnel(self):
+        self.api('prepare', '--title', 'Real SSH monitor', '--execution', 'remote', expected=1)
+        self.real_ssh()
+        first = self.connector()
+        record_path = next((self.root/'connector-state').glob('connections/*/connection.json'))
+        original = json.loads(record_path.read_text())
+        os.kill(original['pid'], signal.SIGTERM)
+        deadline = time.monotonic() + 18
+        while time.monotonic() < deadline:
+            record = json.loads(record_path.read_text())
+            if record['pid'] != original['pid']:
+                break
+            time.sleep(.1)
+        self.assertNotEqual(record['pid'], original['pid'])
+        os.kill(record['pid'], 0)
+        self.assertEqual(record['user_url'], first['user_url'])
+        self.assertEqual(self.snapshot()['title'], 'Real SSH monitor')
+        monitor = json.loads((record_path.parent/'monitor.json').read_text())
+        self.assertEqual(monitor['transport'], 'verified')
+        self.assertIsNone(self.master.poll())
+
     def test_shared_master_does_not_authorize_an_incorrect_forward(self):
         self.api('prepare', '--execution', 'remote', expected=1)
         self.real_ssh()

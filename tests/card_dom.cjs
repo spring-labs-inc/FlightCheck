@@ -15,7 +15,8 @@ const byId = id => { if (!nodes.has(id)) nodes.set(id, new Node()); return nodes
 const observations = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
 let next = 0, poll;
 const context = vm.createContext({
-  document: { getElementById: byId, createElement: () => new Node() },
+  document: { getElementById: byId, createElement: () => new Node(), addEventListener() {}, visibilityState: 'visible' },
+  window: { addEventListener() {} }, performance: { now: () => 0 },
   location: { pathname: '/task/test-change/', port: '31337' }, URL, Intl, AbortController,
   setTimeout: (fn, delay) => { if (delay === 5000) poll = fn; return delay; },
   clearTimeout: () => {},
@@ -34,15 +35,17 @@ vm.runInContext(fs.readFileSync(process.argv[2], 'utf8'), context);
     assert.equal(typeof poll, 'function');
     assert.equal(byId('verdict').textContent, 'Pending');
     if (i === 0 || i === 5) {
-      assert.equal(byId('rendering').textContent, 'Snapshot rendered');
+      assert.equal(byId('connection-status').textContent, 'Connection: Connected · Updates: Live');
       assert.equal(byId('task-details').hidden, false);
       assert.equal(byId('stages').children.length, 9);
       const state = byId('checks').children[0].children[1].textContent;
       assert.equal(state, i === 5 ? 'Stale' : 'Pending');
     } else {
-      assert.equal(byId('task-details').hidden, true);
-      assert.equal(byId('rendering').textContent, 'Current snapshot unavailable');
-      assert.equal(byId('publication').textContent, i === 4 ? 'Publication unconfirmed' : 'Snapshot unavailable');
+      assert.equal(byId('task-details').hidden, false);
+      assert.equal(byId('stages').children.length, 9);
+      assert.equal(byId('connection-status').textContent, i === 4 ? 'Connection: Disconnected · Updates: Unknown' : 'Connection: Connected · Updates: Unavailable');
+      assert.equal(byId('notice').textContent, 'Updates paused · Showing last known status');
+
     }
     if (i + 1 < observations.length) await poll();
   }

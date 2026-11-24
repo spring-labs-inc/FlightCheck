@@ -15,6 +15,36 @@ import time
 from contextlib import nullcontext
 from pathlib import Path
 
+
+def status_activity(worktree, args, run_id):
+    """Optional projection bridge, never a governing receipt or test outcome."""
+    # The source and installed layouts keep card helpers adjacent to the shared
+    # scripts. No network lookup, arbitrary module search or archive scan occurs.
+    script = Path(__file__).resolve()
+    candidates = (script.parents[2] / "status-card", script.parents[1] / "status-card")
+    card = next((path for path in candidates if (path / "progress.py").is_file()), None)
+    if card is None:
+        return None
+    try:
+        sys.path.insert(0, str(card))
+        from progress import selected_activity
+        return selected_activity(worktree, args.candidate, run_id, args.gate or args.scope)
+    except Exception as error:
+        print(f"Progress projection unavailable: {error}", file=sys.stderr)
+        return None
+    finally:
+        if sys.path and sys.path[0] == str(card):
+            sys.path.pop(0)
+
+
+def project_activity(activity, method, *args, **kwargs):
+    if activity is not None:
+        try:
+            return getattr(activity, method)(*args, **kwargs)
+        except Exception as error:
+            # Projection failure cannot change native output or command status.
+            print(f"Progress projection unavailable: {error}", file=sys.stderr)
+
 ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 PYTEST_FOOTER = re.compile(r"(?P<counts>.+) in \d+(?:\.\d+)?s(?: \([\d:]+\))?")
 PYTEST_COUNT = re.compile(
@@ -127,7 +157,7 @@ def previous_pass(parent, latest, request, current):
         return None
 
 
-def run_command(command, output, env=None):
+def run_command(command, output, env=None, activity=None):
     """Forward terminal interrupts to the check's own process group."""
     with subprocess.Popen(
         command, stdout=output, stderr=subprocess.STDOUT, start_new_session=True,
@@ -141,7 +171,11 @@ def run_command(command, output, env=None):
 
         previous = {sig: signal.signal(sig, forward) for sig in (signal.SIGINT, signal.SIGTERM)}
         try:
-            return child.wait()
+            while True:
+                try:
+                    return child.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    project_activity(activity, "heartbeat")
         finally:
             for sig, handler in previous.items():
                 signal.signal(sig, handler)
@@ -189,6 +223,8 @@ def capture(args, command, worktree, parent, latest, request, before):
     if latest:
         write_json(latest, run.name)
     print(f"Check evidence: {run}", flush=True)
+    activity = status_activity(worktree, args, run.name)
+    project_activity(activity, "begin")
 
     environment = None
     if args.isolated_reports:
@@ -199,12 +235,13 @@ def capture(args, command, worktree, parent, latest, request, before):
 
     with log.open("xb") as output:
         try:
-            code = run_command(command, output, environment)
+            code = run_command(command, output, environment, activity)
         except OSError as error:
             packet.update(status="unavailable", finished_at=time.time(), error=str(error))
             packet["output"]["status"] = "unavailable"
             packet["warnings"]["status"] = "unavailable"
             write_json(run / "run.json", packet)
+            project_activity(activity, "end", "unavailable")
             print(f"Could not start check: {error}", file=sys.stderr)
             return 127
 
@@ -238,6 +275,9 @@ def capture(args, command, worktree, parent, latest, request, before):
                 print(f"Cannot retain {artifact}: {error}", file=sys.stderr)
         packet["inputs_after"] = fingerprint(args.fingerprint_command)
     write_json(run / "run.json", packet)
+    counts = {key: value for key, value in packet["coverage"]["reported"].items()
+              if key in ("passed", "failed", "errors", "skipped", "warnings")}
+    project_activity(activity, "end", "interrupted" if interrupted else "completed" if code == 0 else "failed", counts=counts)
     replay(log)
     return 128 - code if code < 0 else code
 
