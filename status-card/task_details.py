@@ -59,7 +59,7 @@ def timestamp(value):
         raise ValueError("Invalid status observation time") from error
 
 
-def link(row):
+def link(row, task=None, candidate=None):
     result = {
         "kind": choice(row.get("kind"), LINK_KINDS),
         "label": short_text(row.get("label")),
@@ -73,6 +73,12 @@ def link(row):
             result[field] = short_text(row[field])
     if result["kind"] == "issue" and row.get("flight") is not None:
         result["flight"] = task_id(row["flight"])
+    if 'metadata' in row:
+        from link_metadata import normalize
+        result['metadata'] = row['metadata']
+        return normalize(result, task, candidate)
+    # Legacy/minimal records retain their shape. Normal flight publication
+    # prepares explicit metadata before reaching this pure projection.
     return result
 
 
@@ -220,7 +226,7 @@ def normalize_details(data):
             raise ValueError("Expected a map of tracked flight observations")
         result["tracked_flights"] = {task_id(flight): tracked_flight(record) for flight, record in flights.items()}
     if "links" in data:
-        result["links"] = newest_first(rows(data["links"], link))
+        result["links"] = newest_first(rows(data["links"], lambda row: link(row, data.get("task"), data.get("candidate"))))
     for key, convert in (("checks", check), ("ci", ci_run), ("history", event)):
         if key in data:
             result[key] = newest_first(rows(data[key], convert))

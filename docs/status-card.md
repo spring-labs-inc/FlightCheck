@@ -227,3 +227,50 @@ If the forwarded tab reports `ERR_CONNECTION_RESET`, check the listener on the c
 A connection loss retains the last rendered snapshot and labels the route disconnected. A reachable endpoint with unusable data is labeled unavailable. Pending gates have their own section.
 
 The server reads the example data from `status-card/pilot.json` at startup and exposes it through the read-only status endpoint. Use the [current task](#current-task) route to publish evidence for your own workflow.
+
+
+### Prepare Work Link metadata
+
+Normal flight publication resolves the existing Epic, Issue and PR controls before
+committing their initial coherent snapshot. The controller and changed-link monitor
+use the selected project's configured GitHub repository (or its single existing Git
+remote). Only canonical items in that repository are read through the existing `gh`
+subscription/login environment with explicit GET requests. This does not authorize
+provider writes or arbitrary endpoints. Unsupported providers remain visibly
+unavailable; no provider registry or configuration migration is introduced.
+
+The task-private `link-metadata` observation cache binds each safe projection to its
+repository/configuration authority, task and canonical item. Publication also binds
+it to the current candidate and content digest. A changed candidate may rebind
+valid cached bytes; wrong tasks, items or changed content cannot supply ready
+metadata. The cache contains a short title/summary and supported source state and
+times, never raw bodies or errors. Private descriptions and sensitive-looking
+content are withheld; open the tracker for full details. Public summaries are
+conservatively reduced to the first safe paragraph (240 characters), rendered as
+text, and never interpreted as instructions or HTML. This filter is deliberately
+conservative; it is not a general secret-classification service. Avoid putting
+secrets in public tracker titles/descriptions.
+
+Safe item observations are fresh for 15 minutes. A batch that fetches new body
+data first rechecks repository visibility; cached public classification cannot
+authorize sharing a newly private body. Cache hits, polling and selection still
+perform no provider reads. Failed lookups back off for 30 seconds.
+One preparation has at most eight GETs, a two-second deadline per subprocess and
+an eight-second overall lookup deadline, with up to 0.2 seconds for owned-process
+cleanup after a timeout. Added/changed links use the same bounded path on a
+background worker, leaving progress and heartbeat publication independent. Browser
+polling, selection, and ordinary heartbeats never fetch provider metadata. Normal
+explicit preparation reuses fresh cache and refreshes expired observations; no
+new click-to-refresh control is added.
+
+`link_details.ready` reports whether all required link details are currently
+verified. Existing `completeness.ready` still reports the flight frame's structural
+readiness, so unavailable tracker details do not disable monitoring or hide an
+otherwise usable card. A never-loaded, loading, unavailable/denied, stale last-known
+or confirmed-empty description is shown honestly in the existing expansion.
+“No description published” is reserved for a successfully observed empty source.
+Safe cached details and selected links survive outages. A metadata failure cannot
+renew evidence, change Workflow Stages, alter ownership, or imply fresh progress.
+Technical diagnostics remain in private records; the approved concise warning and
+two-line operational footer are unchanged. #83 retains the separate visual/status
+indicator and canonical-image design scope.
