@@ -5,6 +5,19 @@ description: Run the repository's staged development workflow when the owner exp
 
 Use the small first-flight guide when adopting the supplied evidence helpers. Capture the reviewer’s complete native final JSON through controller-owned capture; never replace it with an abridgment or give reviewers capture/write permissions. Start implementation from the prepared stage brief and applicable repository instructions. Confirm the project setup, scope, structured acceptance proof, checkout, and delivery boundary before editing. Declare native coverage baselines and a distinct retained test/fixture spec artifact before freezing; use the guide’s bootstrap/additive recipe for a new behavior. Export `handoff.py schema --kind challenge` or `review` for response types; use `challenge-review` to discuss ungrounded proposals before registration. Registered obligations still require the audited withdrawal process. Complete `handoff.py preflight` and the actual reviewer read-only boundary/access probes; keep the frozen acceptance contract across resumes. Consult the relevant section of the [project workflow](../../../workflow/docs/development-workflow.md) if the brief is missing or leaves an applicable rule or decision open.
 
+Before selected-flight edits, run the delivered related-work detector and verify
+native checkout selection through the shared Registry/configuration and
+[checkout contract](../../../docs/checkout-verification.md). Record one actual main
+checkout, explicit editing children, pinned base, authoritative default/protected
+policy and observed client/session capabilities. Native choice accepts safe
+branch-only or worktree execution; explicit worktree-required never silently
+weakens. Isolated native detached work may remain detached until delivery needs a
+branch. Retain `task.checkout_binding` for controlled checks/review and verify the
+actual execution context on resume and delivery. Reconcile legitimate moves and
+client handoffs explicitly without losing unfinished work or unrelated valid
+proof. Release execution ownership with the #81 handoff inside PR & Merge; no
+separate cleanup manager or universal command-interception claim.
+
 During Plan, give a separate read-only reviewer `handoff.py challenge-brief` before the implementation narrative. Retain its actual proposal with `handoff.py challenges`. Map each behavioral acceptance case and independent challenge to exact native witnesses and qualify its expected outcome using the guide's baseline or mutation controls. Include public observations, representation variants, and lifecycle timing where relevant to the project's contract. A green suite alone is insufficient.
 
 Run the configured cheap checks, including fast checks for affected behavior, and resolve failures before interactive HTML approval or conditional early CODE review. Use the trusted recorder for gates assigned to the worker. At handoff, use `handoff.py checks` to carry verified receipts and identify the checks still due. Follow the guide for final code and evidence review and verdict routing. On resume, reconcile the current candidate, original results, owner decisions, and provider state before repeating work.

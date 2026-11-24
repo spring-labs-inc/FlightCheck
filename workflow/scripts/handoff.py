@@ -1,6 +1,7 @@
 """Route a saved FlightCheck task or build a review packet."""
 
 import argparse
+import copy
 from collections import Counter
 import hashlib
 import json
@@ -9,7 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from capture_check import digest, evidence_directory, fingerprint, latest_run, matches_pass, write_json
+from capture_check import (digest, evidence_directory, fingerprint, latest_run, matches_pass,
+                           write_json, verify_checkout, checkout_identity, same_checkout)
 from proof import acceptance_status, contract_status, freeze, obligations_status, record_review, verdict_status
 from recovery import plan as recovery_plan
 from behavior import challenge_brief, proposal_packet, record_plan, status as behavior_status
@@ -32,6 +34,31 @@ EARLY_CODE_CRITERIA = (
 
 def read_json(path):
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def checkout_task(task, root, phase):
+    """Bind a selected execution context through existing review dependencies."""
+    result = copy.deepcopy(task)
+    guard_phase = "review" if phase in ("review", "code-review", "verdict", "requests", "disposition-review") else "implementation"
+    context = verify_checkout(Path.cwd(), task, task.get("_checkout_context"), guard_phase)
+    result["_checkout_context"] = context
+    if checkout_identity(context) is not None and root is not None:
+        identity = checkout_identity(context)
+        raw = (json.dumps(identity, sort_keys=True, indent=2) + "\n").encode()
+        sha = hashlib.sha256(raw).hexdigest()
+        reference = "checkout-context-" + sha + ".json"
+        path = root / reference
+        if not path.exists():
+            path.write_bytes(raw)
+        elif path.read_bytes() != raw:
+            raise ValueError("Retained checkout context does not match its digest")
+        if incremental_configuration(result, root) is not None:
+            configuration = result.setdefault("incremental", {})
+            required = configuration.setdefault("required_evidence", [])
+            declaration = {"reference": reference, "sha256": sha, "phase": "both"}
+            if declaration not in required:
+                required.append(declaration)
+    return result
 
 
 def evidence_path(root, name):
@@ -69,7 +96,10 @@ def verified_coverage(root, run, receipt, request, contract):
     }
 
 
-def gate_status(root, gate, candidate, final):
+def gate_status(root, gate, candidate, final, checkout_context=None):
+    context_task = ({"checkout_binding": checkout_context["checkout_binding"]}
+                    if checkout_identity(checkout_context) is not None else None)
+    checkout_context = verify_checkout(Path.cwd(), context_task, checkout_context)
     gate_id = gate["id"]
     if not isinstance(gate_id, str) or not re.fullmatch(r"[a-zA-Z0-9_-]+", gate_id):
         raise ValueError("Invalid gate identifier")
@@ -87,9 +117,13 @@ def gate_status(root, gate, candidate, final):
             return dict(result, status="unverified", reason="receipt owner does not match the gate assignment")
         if receipt["status"] != "finished":
             return dict(result, status="pending", reason=receipt["status"])
+        if (not same_checkout(receipt.get("checkout_context"), checkout_context)
+                or not same_checkout(receipt.get("checkout_context_after"), checkout_context)):
+            return dict(result, status="stale", reason="receipt checkout execution identity changed")
         if receipt["exit_code"] != 0:
             output = receipt["output"]
             result["effective_inputs"] = fingerprint(request["fingerprint_command"])
+            verify_checkout(Path.cwd(), context_task, checkout_context)
             current_failure = (receipt["candidate"] == candidate and receipt.get("request") == request
                                and receipt.get("inputs_before") is not None
                                and result["effective_inputs"] == receipt["inputs_before"]
@@ -104,7 +138,8 @@ def gate_status(root, gate, candidate, final):
             return dict(result, status="unverified", reason="current fingerprint unavailable")
         if receipt["inputs_before"] != current or receipt["inputs_after"] != current:
             return dict(result, status="stale", reason="gate inputs or runtime changed")
-        if not matches_pass(run, receipt, request, current):
+        verify_checkout(Path.cwd(), context_task, checkout_context)
+        if not matches_pass(run, receipt, request, current, checkout_context):
             return dict(result, status="unverified", reason="request or retained output does not match")
 
         result.update(output=str(run / "output.log"), coverage=receipt["coverage"],
@@ -124,12 +159,15 @@ def gate_status(root, gate, candidate, final):
                             "source_receipt_sha256": digest(run / "run.json"), "inputs": current}
                 if any(reuse[key] != value for key, value in expected.items()):
                     return dict(result, status="unverified", reason="reuse decision does not match the latest pass")
+                if not same_checkout(reuse.get("checkout_context"), checkout_context):
+                    return dict(result, status="stale", reason="reuse checkout execution identity changed")
                 result["reuse"] = str(reuse_path)
                 status = "reused"
             elif receipt["candidate"] == candidate:
                 status = "passed"
         if read_json(latest) != run.name:
             return dict(result, status="pending", reason="latest attempt changed during validation")
+        verify_checkout(Path.cwd(), context_task, checkout_context)
         return dict(result, status=status)
     except FileNotFoundError:
         if not latest.exists():
@@ -181,7 +219,7 @@ def check_plan(task, root):
         raise ValueError("The check plan needs a candidate identity")
     checks = []
     for gate in configured_gates(task["gates"]):
-        check = gate_status(root, gate, candidate, final=True)
+        check = gate_status(root, gate, candidate, final=True, checkout_context=task.get("_checkout_context"))
         action = {"passed": "carry", "reused": "carry", "reusable": "reuse"}.get(check["status"], "run")
         if check.get("current_failure"):
             action = "repair"
@@ -222,7 +260,7 @@ def _code_review_packet(task, root):
     if contract_error:
         return dict(packet, action="blocked", blockers=["acceptance contract"], reason=contract_error)
     packet.update({key: task[key] for key in ("scope", "acceptance") if key in task})
-    all_checks = [gate_status(root, gate, candidate, final=True)
+    all_checks = [gate_status(root, gate, candidate, final=True, checkout_context=task.get("_checkout_context"))
                   for gate in configured_gates(task.get("gates", []))]
     by_gate = {check["id"]: check for check in all_checks}
     cheap = [by_gate[gate["id"]] for gate in task.get("gates", []) if gate.get("phase") == "cheap"]
@@ -267,10 +305,12 @@ def _code_review_packet(task, root):
 
 
 def code_review_packet(task, root):
+    task = checkout_task(task, root, "code-review")
     packet = _code_review_packet(task, root)
+    packet["checkout_context"] = task["_checkout_context"]
     packet["review_protocol"] = review_protocol(root)
     if incremental_configuration(task, root) is not None:
-        checks = [gate_status(root, gate, task["candidate"], final=True)
+        checks = [gate_status(root, gate, task["candidate"], final=True, checkout_context=task.get("_checkout_context"))
                   for gate in configured_gates(task["gates"])]
         context = dict(packet, checks=checks,
                        review_obligations=obligations_status(task, root, checks, code=True))
@@ -283,13 +323,14 @@ def code_review_packet(task, root):
 
 
 def build_packet(task, root, final):
+    task = checkout_task(task, root, "review" if final else "resume")
     candidate = task["candidate"]
     saved = task.get("saved_candidate")
     preview = preview_status(task["preview"])
     gates = configured_gates(task["gates"])
     if not isinstance(candidate, str) or not candidate.strip():
         raise ValueError("The handoff needs a candidate identity")
-    checks = [gate_status(root, gate, candidate, final) for gate in gates]
+    checks = [gate_status(root, gate, candidate, final, checkout_context=task.get("_checkout_context")) for gate in gates]
     accepted = {"passed", "reused"} if final else {"reusable"}
     blockers = [check["id"] for check in checks if check["status"] not in accepted]
     if preview["status"] in ("stale", "missing") and not preview["waiver"]:
@@ -298,6 +339,7 @@ def build_packet(task, root, final):
         "candidate": candidate, "saved_candidate": saved, "candidate_changed": saved != candidate,
         "preview": preview, "checks": checks, "blockers": blockers,
         "review_protocol": review_protocol(root),
+        "checkout_context": task["_checkout_context"],
     }
     acceptance = acceptance_status(task, root, checks)
     obligations = obligations_status(task, root, checks)
@@ -328,6 +370,7 @@ def build_packet(task, root, final):
 
 def preflight(task, root, amendment=None):
     """Exercise the actual recorder and verifier without running project tests."""
+    task = checkout_task(task, root, "preflight")
     from configuration import validate_config
     validate_config(task, root)
     configured_gates(task["gates"])
@@ -341,14 +384,19 @@ def preflight(task, root, amendment=None):
     invocation = [sys.executable, "-B", str(Path(__file__).with_name("capture_check.py")),
                   "--evidence-dir", str(probe), "--candidate", task["candidate"],
                   "--scope", request["scope"], "--gate", "preflight", "--owner", "controller",
-                  "--fingerprint-command", json.dumps(fingerprint_command), "--refresh", "--", *command]
+                  "--fingerprint-command", json.dumps(fingerprint_command), "--refresh"]
+    if checkout_identity(task["_checkout_context"]) is not None:
+        invocation += ["--checkout-binding", json.dumps(task["_checkout_context"]["checkout_binding"])]
+    invocation += ["--", *command]
     result = subprocess.run(invocation, capture_output=True, text=True)
     if result.returncode:
         raise ValueError("Evidence preflight failed: " + result.stdout + result.stderr)
-    check = gate_status(probe, {"id": "preflight", "request": request}, task["candidate"], final=True)
+    check = gate_status(probe, {"id": "preflight", "request": request}, task["candidate"], final=True,
+                        checkout_context=task.get("_checkout_context"))
     if check["status"] != "passed":
         raise ValueError("Evidence preflight receipt could not be verified")
     result = {"candidate": task["candidate"], "contract": contract, "evidence": str(root),
+              "checkout_context": task["_checkout_context"],
               "probe": check, "ready": True, "review_protocol": review_protocol(root),
               "reviewer_access": "The adapter must separately verify read access and write rejection in the actual reviewer client."}
     if incremental_configuration(task, root) is not None:
@@ -387,12 +435,18 @@ def main():
             print(json.dumps(schema(args.kind), indent=2))
             return 0
         task = read_json(args.task)
+        # Guard before probes, contract writes, reviewer recording or approval.
+        # Schema export above remains independent of a checkout/selected flight.
+        guard_phase = "review" if args.mode in ("review", "code-review", "verdict", "requests", "disposition-review") else "implementation"
+        context = verify_checkout(Path.cwd(), task, phase=guard_phase)
+        task["_checkout_context"] = context
         if args.mode == "brief":
             packet = implementation_brief(task, args.evidence_dir.resolve() if args.evidence_dir else None)
         elif args.mode == "challenge-brief":
             packet = challenge_brief(task)
         else:
             root = evidence_directory(args.evidence_dir, Path.cwd(), create=args.mode == "preflight")
+            task = checkout_task(task, root, args.mode)
             if args.mode == "preflight":
                 packet = preflight(task, root, args.amend_contract)
             elif args.mode == "refresh":
@@ -407,7 +461,9 @@ def main():
                 task["candidate"] = args.candidate
                 # Keep saved_candidate, baselines, acceptance, gates, witnesses,
                 # expected outcomes and every retained obligation untouched.
-                write_json(args.task, task)
+                saved_task = read_json(args.task)
+                saved_task["candidate"] = args.candidate
+                write_json(args.task, saved_task)
                 packet = {"candidate": args.candidate, "previous_candidate": before,
                           "status": "refreshed", "next": "Run resume and next-action; old proofs/verdicts are not refreshed by this command"}
             elif args.mode == "challenges":
@@ -422,27 +478,34 @@ def main():
                 final_packet = build_packet(task, root, final=True)
                 packet = (verdict_status(task, root, final_packet, review, digest(args.review)) if args.mode == "verdict"
                           else {"candidate": task["candidate"], **final_packet["review_obligations"]})
+                packet["checkout_context"] = context
                 if (args.mode == "verdict" and packet["ready_for_approval"]
                         and review_protocol(root) == INCREMENTAL_PROTOCOL):
+                    verify_checkout(Path.cwd(), task, context, guard_phase)
                     task["review_validation"] = packet
-                    write_json(args.task, task)
+                    saved_task = read_json(args.task)
+                    saved_task["review_validation"] = packet
+                    write_json(args.task, saved_task)
             elif args.mode == "checks":
                 packet = check_plan(task, root)
             elif args.mode == "next-action":
-                checks = [gate_status(root, gate, task["candidate"], final=True)
+                checks = [gate_status(root, gate, task["candidate"], final=True, checkout_context=task.get("_checkout_context"))
                           for gate in configured_gates(task["gates"])]
                 packet = recovery_plan(task, root, checks, args.target)
             elif args.mode == "disposition-review":
                 _, error = contract_status(task, root)
                 if error:
                     raise ValueError(error)
-                checks = [gate_status(root, gate, task["candidate"], final=True)
+                checks = [gate_status(root, gate, task["candidate"], final=True, checkout_context=task.get("_checkout_context"))
                           for gate in configured_gates(task["gates"])]
                 packet = disposition_packet(task, root, checks, ledger(root))
             elif args.mode == "code-review":
                 packet = code_review_packet(task, root)
             else:
                 packet = build_packet(task, root, final)
+        verify_checkout(Path.cwd(), task, context, guard_phase)
+        if args.mode != "challenge-brief":
+            packet.setdefault("checkout_context", context)
     except (OSError, KeyError, TypeError, ValueError) as error:
         parser.exit(2, f"Cannot build handoff packet: {error}\n")
     print(json.dumps(packet, indent=2))
