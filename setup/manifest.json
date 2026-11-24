@@ -2,6 +2,7 @@
   "schema": 1,
   "files": [
     ["workflow/scripts/capture_check.py", ".flightcheck/scripts/capture_check.py", "shared"],
+    ["workflow/scripts/checkout_guard.py", ".flightcheck/scripts/checkout_guard.py", "shared"],
     ["workflow/scripts/handoff.py", ".flightcheck/scripts/handoff.py", "shared"],
     ["workflow/scripts/proof.py", ".flightcheck/scripts/proof.py", "shared"],
     ["workflow/scripts/recovery.py", ".flightcheck/scripts/recovery.py", "shared"],
@@ -57,6 +58,7 @@
     ["workflow/scripts/project_config.py", ".flightcheck/scripts/project_config.py", "shared"],
     ["workflow/scripts/flight_associations.py", ".flightcheck/scripts/flight_associations.py", "shared"],
     ["workflow/scripts/launch_detection.py", ".flightcheck/scripts/launch_detection.py", "shared"],
-    ["docs/shared-foundations.md", ".flightcheck/docs/shared-foundations.md", "shared"]
+    ["docs/shared-foundations.md", ".flightcheck/docs/shared-foundations.md", "shared"],
+    ["docs/checkout-verification.md", ".flightcheck/docs/checkout-verification.md", "shared"]
   ]
 }

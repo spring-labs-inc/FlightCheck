@@ -393,12 +393,19 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "config":
         return configuration_main(argv[1:])
+    if argv and argv[0] == "checkout":
+        try:
+            with installer() as (module, source, manifest, identity):
+                return module.checkout_main(argv[1:])
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+            output({"status": "incomplete", "error": str(error)}, True)
+            return 1
     if argv and argv[0] == "card":
         from .card import main as card_main
         return card_main(argv[1:])
     parser = argparse.ArgumentParser(description="Run from your normal terminal to configure FlightCheck. No project changes occur when installing the application.")
     parser.add_argument("--version", action="version", version="flightcheck " + metadata.version("flightcheck"))
-    parser.add_argument("command", choices=("inspect", "init", "doctor", "recover", "card"))
+    parser.add_argument("command", choices=("inspect", "init", "doctor", "recover", "card", "checkout"))
     parser.add_argument("target", nargs="?", default=".")
     parser.add_argument("--agent", choices=("codex", "claude", "both"))
     parser.add_argument("--config", help="Reviewed project configuration JSON")

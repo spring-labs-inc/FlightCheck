@@ -3,17 +3,123 @@
 import argparse
 import fcntl
 import hashlib
+import importlib.util
 import json
 import os
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
 import time
 from contextlib import nullcontext
 from pathlib import Path
+
+def standalone_context(worktree, task=None, phase="check"):
+    """Locate selection without verifying it when only this script was copied.
+
+    This reads the canonical Registry solely to refuse selected execution. It
+    never creates state, adopts ownership, or substitutes for the real verifier.
+    """
+    unavailable = "Checkout verifier unavailable; restore the complete FlightCheck helpers before selected execution"
+    if ((isinstance(task, dict) and "checkout_binding" in task)
+            or "FLIGHTCHECK_REGISTRY" in os.environ or "FLIGHTCHECK_FLIGHT" in os.environ):
+        raise ValueError(unavailable)
+    context = {"schema": 1, "status": "unbound", "checkout": {"path": str(Path(worktree).resolve())},
+               "limits": ["Standalone copied recorder; checkout verifier unavailable and no selected flight discovered"]}
+    try:
+        def git(*args):
+            return subprocess.run(
+                ["git", "--no-optional-locks", "-c", "core.fsmonitor=false", "-C", str(worktree), *args],
+                stdin=subprocess.DEVNULL, capture_output=True,
+                env=dict(os.environ, GIT_TERMINAL_PROMPT="0", GIT_OPTIONAL_LOCKS="0"), timeout=10)
+
+        observed = git("rev-parse", "--show-toplevel")
+        if observed.returncode:
+            if b"not a git repository" in observed.stderr:
+                return context
+            raise ValueError(unavailable)
+        root = Path(os.fsdecode(observed.stdout).rstrip("\n")).resolve(strict=True)
+        observed = git("rev-parse", "--path-format=absolute", "--git-common-dir")
+        if observed.returncode:
+            raise ValueError(unavailable)
+        common = Path(os.fsdecode(observed.stdout).rstrip("\n")).resolve(strict=True)
+        base = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "flightcheck"
+        base = Path(os.environ.get("FLIGHTCHECK_STATE_DIR") or base).expanduser()
+        if not base.is_absolute() or root in (base.resolve(), *base.resolve().parents):
+            raise ValueError(unavailable)
+        base = base.resolve()
+        namespace = hashlib.sha256(os.fsencode(common)).hexdigest()[:24]
+        directory = base / namespace / "flight-associations"
+        path = directory / "associations.json"
+        if any(part.is_symlink() for part in (path, *path.parents)):
+            raise ValueError(unavailable)
+        if directory.exists():
+            info = directory.stat()
+            if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077:
+                raise ValueError(unavailable)
+        if not path.exists():
+            return context
+        info = path.stat()
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o077:
+            raise ValueError(unavailable)
+        value = json.loads(path.read_bytes())
+        if not isinstance(value, dict) or value.get("schema") != 1 or not isinstance(value.get("records"), list):
+            raise ValueError(unavailable)
+        for record in value["records"]:
+            state = record["lifecycle"]["state"]
+            if state not in ("active", "paused", "review", "merged", "closed"):
+                raise ValueError(unavailable)
+            if not isinstance(record["children"], list):
+                raise ValueError(unavailable)
+            for item in [record["checkout"], *record["children"]]:
+                owned = item["path"]
+                if not isinstance(owned, str) or not Path(owned).is_absolute():
+                    raise ValueError(unavailable)
+                if state != "closed" and Path(owned).resolve() == root:
+                    raise ValueError(unavailable)
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+        # Do not disclose raw Registry contents or private paths in diagnostics.
+        raise ValueError(unavailable) from None
+    return context
+
+
+if importlib.util.find_spec("checkout_guard") is None:
+    guard_context = standalone_context
+else:
+    # A present helper with broken dependencies is an error, never legacy use.
+    from checkout_guard import guard_context
+
+
+def checkout_identity(context):
+    """Stable execution identity; unrelated Registry edits do not stale proof."""
+    if not context or context.get("status") != "verified":
+        return None
+    return {key: context[key] for key in ("checkout_binding", "binding_digest", "head_binding")}
+
+
+def same_checkout(before, after):
+    return checkout_identity(before) == checkout_identity(after)
+
+
+def verify_checkout(worktree, task=None, before=None, phase="check"):
+    context = guard_context(worktree, task=task, phase=phase)
+    if before is not None and not same_checkout(before, context):
+        raise ValueError("Checkout execution identity changed; reconcile before continuing")
+    return context
+
+
+def checkout_binding(raw):
+    try:
+        value = json.loads(raw)
+        if (isinstance(value, dict) and all(isinstance(value.get(key), str) and value[key].strip()
+                                           for key in ("registry", "flight"))):
+            return value
+    except ValueError:
+        pass
+    raise argparse.ArgumentTypeError("expected a checkout binding object with registry and flight")
 
 
 def status_activity(worktree, args, run_id):
@@ -117,7 +223,10 @@ def latest_run(parent, latest):
     return run, packet
 
 
-def matches_pass(run, packet, request, current):
+def matches_pass(run, packet, request, current, checkout_context=None):
+    if (not same_checkout(packet.get("checkout_context"), checkout_context)
+            or not same_checkout(packet.get("checkout_context_after"), checkout_context)):
+        return False
     if (current is None or packet["request"] != request or packet["status"] != "finished"
             or packet["exit_code"] != 0 or packet["inputs_before"] != current
             or packet["inputs_after"] != current):
@@ -149,10 +258,10 @@ def evidence_directory(path, worktree, create=False):
     return parent
 
 
-def previous_pass(parent, latest, request, current):
+def previous_pass(parent, latest, request, current, checkout_context=None):
     try:
         run, packet = latest_run(parent, latest)
-        return run if matches_pass(run, packet, request, current) else None
+        return run if matches_pass(run, packet, request, current, checkout_context) else None
     except (OSError, ValueError, TypeError, KeyError):
         return None
 
@@ -200,7 +309,10 @@ def replay(log):
             os.dup2(sink.fileno(), sys.stdout.fileno())
 
 
-def capture(args, command, worktree, parent, latest, request, before):
+def capture(args, command, worktree, parent, latest, request, before, checkout_context=None, checkout_task=None):
+    # Input probes are executable too. Verify again after the probe and before
+    # creating an attempt that could launch a native command.
+    checkout_context = verify_checkout(worktree, checkout_task, checkout_context)
     run = Path(tempfile.mkdtemp(prefix="check-", dir=parent))
     log = run / "output.log"
     packet = {
@@ -214,6 +326,7 @@ def capture(args, command, worktree, parent, latest, request, before):
         "status": "incomplete",
         "output": {"path": log.name, "status": "incomplete", "sha256": None},
         "warnings": {"status": "incomplete", "count": None},
+        "checkout_context": checkout_context,
     }
     if latest:
         packet.update(request=request, inputs_before=before, inputs_after=None, artifacts={})
@@ -261,6 +374,12 @@ def capture(args, command, worktree, parent, latest, request, before):
         packet["warnings"] = warnings
     elif not interrupted:
         packet["warnings"]["status"] = "unclassified"
+    checkout_error = None
+    try:
+        packet["checkout_context_after"] = verify_checkout(worktree, checkout_task, checkout_context)
+    except (OSError, ValueError) as error:
+        checkout_error = str(error)
+        packet.update(status="checkout-drift", checkout_error=checkout_error)
     # Retain failing reproductions as well as passes. They never qualify for reuse.
     if latest and not interrupted:
         for index, artifact in enumerate(args.artifact):
@@ -273,12 +392,21 @@ def capture(args, command, worktree, parent, latest, request, before):
                 packet["artifacts"][artifact] = digest(retained)
             except OSError as error:
                 print(f"Cannot retain {artifact}: {error}", file=sys.stderr)
-        packet["inputs_after"] = fingerprint(args.fingerprint_command)
+        if checkout_error is None:
+            packet["inputs_after"] = fingerprint(args.fingerprint_command)
+            try:
+                packet["checkout_context_after"] = verify_checkout(worktree, checkout_task, checkout_context)
+            except (OSError, ValueError) as error:
+                checkout_error = str(error)
+                packet.update(status="checkout-drift", checkout_error=checkout_error)
     write_json(run / "run.json", packet)
     counts = {key: value for key, value in packet["coverage"]["reported"].items()
               if key in ("passed", "failed", "errors", "skipped", "warnings")}
     project_activity(activity, "end", "interrupted" if interrupted else "completed" if code == 0 else "failed", counts=counts)
     replay(log)
+    if checkout_error:
+        print("Checkout verification failed: " + checkout_error, file=sys.stderr)
+        return 2
     return 128 - code if code < 0 else code
 
 
@@ -296,6 +424,8 @@ def main():
     parser.add_argument("--isolated-reports", action="store_true",
                         help="Set FLIGHTCHECK_REPORT_DIR to a fresh run directory; artifacts are relative to it")
     parser.add_argument("--refresh", action="store_true", help="Run the gate even if a reusable pass exists")
+    parser.add_argument("--checkout-binding", type=checkout_binding,
+                        help="Explicit selected flight binding JSON (registry and flight)")
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     if len(args.command) < 2 or args.command[0] != "--":
@@ -306,6 +436,9 @@ def main():
 
     worktree = Path.cwd()
     try:
+        checkout_task = ({"checkout_binding": args.checkout_binding}
+                         if args.checkout_binding is not None else None)
+        checkout_context = verify_checkout(worktree, checkout_task)
         parent = evidence_directory(args.evidence_dir, worktree, args.create_evidence_dir)
     except (OSError, ValueError) as error:
         parser.error(str(error))
@@ -336,19 +469,33 @@ def main():
     with lock as lock_file:
         if lock_file:
             fcntl.flock(lock_file, fcntl.LOCK_EX)
-        before = fingerprint(args.fingerprint_command)
+        try:
+            checkout_context = verify_checkout(worktree, checkout_task, checkout_context)
+            before = fingerprint(args.fingerprint_command)
+            verify_checkout(worktree, checkout_task, checkout_context)
+        except (OSError, ValueError) as error:
+            parser.error(str(error))
         if latest and not args.refresh:
-            run = previous_pass(parent, latest, request, before)
+            run = previous_pass(parent, latest, request, before, checkout_context)
             if run and fingerprint(args.fingerprint_command) == before:
+                try:
+                    verify_checkout(worktree, checkout_task, checkout_context)
+                except (OSError, ValueError) as error:
+                    parser.error(str(error))
                 reuse = Path(tempfile.mkdtemp(prefix="reuse-", dir=parent))
                 write_json(reuse / "reuse.json", {
                     "gate": args.gate, "candidate": args.candidate, "cwd": str(worktree),
                     "source_run_id": run.name, "source_receipt_sha256": digest(run / "run.json"),
                     "inputs": before, "reused_at": time.time(),
+                    "checkout_context": checkout_context,
                 })
                 print(f"Check reused: {run} (decision: {reuse / 'reuse.json'})", flush=True)
                 return 0
-        return capture(args, command, worktree, parent, latest, request, before)
+        try:
+            return capture(args, command, worktree, parent, latest, request, before,
+                           checkout_context, checkout_task)
+        except (OSError, ValueError) as error:
+            parser.error(str(error))
 
 
 if __name__ == "__main__":

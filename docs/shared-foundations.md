@@ -39,14 +39,16 @@ A minimal changes file is:
 {"checkout_policy": {"mode": "worktree-required", "git_fallback": false}}
 ```
 
-`native-choice` is the default: a later checkout verifier may accept either a
+`native-choice` is the default: the checkout verifier accepts either a
 safe dedicated branch in an existing checkout or a suitable worktree. An explicit
 `worktree-required` policy requires a separate flight worktree; it must not
 silently fall back. Both policies retain the actual confirmed default branch and
 additional protected branches in the protected set. Branch prefix and confirmed
 Git fallback are optional policy data, not a checkout manager or authority to
-create anything. This delivery records and validates the policy; #82 owns actual
-checkout selection, verification, protection and enforcement.
+create anything. The foundation records and validates the policy; #82 supplies actual checkout
+verification, protection and enforcement through the [native checkout
+contract](checkout-verification.md). Native clients still select and manage their
+own checkouts. #81 retains cleanup/audit and #83 retains presentation.
 
 The bounded update path supports checkout policy, default/additional protected
 branches, recorded checks and resource pointers. It refuses runtime, evidence-root,
@@ -143,3 +145,11 @@ The concurrent #117 benchmark flight owns its six benchmark/documentation files.
 Foundations do not change its tooling, recorder/handoff/status-card contracts,
 production review policy or accepted #106 archives. Merge #117 first, then reconcile
 and land foundations sequentially with genuinely affected integration checks.
+
+## Checkout integration
+
+The [checkout verifier](checkout-verification.md) consumes these APIs without
+creating another ownership store or changing project defaults. Configuration
+updates preserve active snapshots and grants; explicit reconciliation revalidates
+affected assumptions. This integration does not complete #81 cleanup/audit, #80
+Settings or #83 presentation, or close their parent epic on partial delivery.

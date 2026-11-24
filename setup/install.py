@@ -27,7 +27,7 @@ BEGIN = "<!-- FlightCheck:begin -->"
 END = "<!-- FlightCheck:end -->"
 STATE = ".flightcheck/installation.json"
 CONFIG = ".flightcheck/project.json"
-SCRIPTS = ("capture_check", "handoff", "proof", "recovery", "behavior", "disposition")
+SCRIPTS = ("capture_check", "handoff", "proof", "recovery", "behavior", "disposition", "checkout_guard")
 
 
 class SetupError(ValueError):
@@ -160,6 +160,7 @@ def render(data, source_name, destination, config):
                       ".flightcheck/scripts/" + name + ".py", text)
     text = text.replace("workflow/docs/development-workflow.md", ".flightcheck/docs/development-workflow.md")
     if destination.endswith("docs/development-workflow.md"):
+        text = text.replace("](../../docs/checkout-verification.md)", "](checkout-verification.md)")
         text = text.replace("](../../examples/existing-project/docs/first-flight.md)", "](first-flight.md)")
         text = text.replace("](../../examples/existing-project/examples/evidence-bootstrap/README.md)", "](../examples/evidence-bootstrap/README.md)")
         text = text.replace("](../.flightcheck/scripts/", "](../scripts/")
@@ -170,6 +171,7 @@ def render(data, source_name, destination, config):
     if destination.endswith("docs/first-flight.md"):
         text = text.replace("](../../../.flightcheck/docs/development-workflow.md", "](development-workflow.md")
     if destination.endswith("SKILL.md"):
+        text = text.replace("](../../../docs/checkout-verification.md)", "](../../../.flightcheck/docs/checkout-verification.md)")
         if "/.claude/" in "/" + destination and config["activation"] == "opt-in":
             text = text.replace("description: Run", "disable-model-invocation: true\ndescription: Run", 1)
         text += "\n## Installed status card\n\nThe standard card is installed. Read `.flightcheck/docs/status.md`; start or restore it for each selected flight. A terminal session can use the live browser card through its task URL. Record unavailable capabilities instead of silently omitting the card.\n"
@@ -478,7 +480,30 @@ def verify(root, manifest):
             "client_qualification": "pending fresh-session instruction, skill, reviewer-boundary and browser probes"}
 
 
+def checkout_main(argv):
+    """Run the shared checkout operations without installing into the target."""
+    try:
+        base = Path(__file__).resolve().parent
+        installed = base / "scripts/checkout_guard.py"
+        helper = installed if installed.is_file() else base.parent / "workflow/scripts/checkout_guard.py"
+        if installed.is_file():
+            state = json.loads((base / "installation.json").read_text())
+            for name, record in state["files"].items():
+                if name.startswith(".flightcheck/scripts/") and name.endswith(".py"):
+                    path = safe_path(base.parent, name)
+                    if sha(path.read_bytes()) != record["sha256"]:
+                        raise SetupError("Modified installed checkout dependency: " + name)
+            if ".flightcheck/scripts/checkout_guard.py" not in state["files"]:
+                raise SetupError("Checkout helper is not part of the pinned installation")
+        return subprocess.run([sys.executable, "-B", str(helper), *argv], check=False).returncode
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        print(json.dumps({"status": "incomplete", "error": str(error)}))
+        return 1
+
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "checkout":
+        return checkout_main(sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == "config":
         source = Path(__file__).resolve().parents[1] / "src"
         if not (source / "flightcheck_cli/cli.py").is_file():

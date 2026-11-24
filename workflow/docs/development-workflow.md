@@ -20,6 +20,32 @@ Use the optional [project resource index](project-resources.md) only when the ta
 | Interactive task status | Optional path to the task publisher and loopback server, private snapshot location, and port allocation. Record the task's stable route on activation and reuse it on resume. |
 | Delivery | Target repository and branch, permitted provider writes, the tracker for nits, required checks, and the owner's grant and holds. Recheck current provider policy before delivery. |
 
+## Verified execution checkout
+
+Before editing a selected flight, run the existing related-work detector and use
+the underlying client's native checkout choice/adoption. Bind one actual main
+checkout and explicit editing children through the shared Registry and confirmed
+configuration. Native choice accepts safe branch-only or worktree execution;
+explicit worktree-required policy does not silently fall back. Discover actual
+default/protected branches and pin the intended base. Isolated native detached
+work remains permitted until delivery needs a branch.
+
+Use the [checkout contract](../../docs/checkout-verification.md) and source
+`setup/install.py checkout` entry point. Retain the registry/flight locator as
+`task.checkout_binding`; selected recorder operations also resolve the recorded
+owner automatically or receive explicit controller context. Verify the actual
+execution directory before checks, review and delivery, preserving identity and
+required access in the normal evidence packet. Missing/broken selected ownership
+is a blocker; legacy unbound helpers remain compatible. Record native enforcement
+limits rather than claiming interception of arbitrary commands.
+
+Resume the recorded checkout; reconcile legitimate moves, branch changes,
+restores and client handoffs explicitly, retaining unfinished work and valid
+unaffected proof. Pass verified ownership/disposition to #81 in PR & Merge and
+release execution ownership safely. Do not delete existing checkouts or implement
+another cleanup/retention system. #83 consumes the identity contract and owns its
+presentation; #111 consumes the same associations.
+
 ## Run and resume
 
 1. Record task scope, acceptance, checkout, base, current diff, and intended delivery. Give each deterministic criterion a reproducible assertion and structured proof mapping. Complete the preflight below before implementation or review. Present a bounded implementation plan before editing.
