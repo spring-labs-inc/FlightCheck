@@ -93,3 +93,7 @@ For qualification reuse, the fingerprint must read the external inputs, not just
 ```sh
 python -B benchmarks/fingerprint.py /private/controller/qualification-inputs.json
 ```
+
+## Evidence-inspection track
+
+The separate [version 1 evidence-inspection track](evidence-inspection.md) supplies deterministic synthetic calibration, sealed private-view import, actual pinned pre-106 versus merged #106 helper preparation, bounded reads and quality/accounting reports. Its provider-free smoke verifies machinery, not reviewer behavior. A finite measured-cohort proposal keeps unavailable private bindings unresolved and requires an actual private freeze plus later owner approval; no model cohort or retrospective archive requalification is implied. Existing source-repair results and qualification records remain unchanged.

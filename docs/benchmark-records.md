@@ -44,3 +44,25 @@ Allocate a unique directory for each handoff in a controller namespace separate 
 | Endpoint | Completed, blocked, interrupted or incomplete, with endpoint candidate and timestamp or reason |
 | Time and usage | Setup and arm windows, wait intervals, elapsed and observable active time, native counter deltas and gaps |
 | Deviations | Differences from the manifest, controller assistance, environment changes and attribution limits |
+
+## Evidence-inspection supplement
+
+For the separate [evidence-inspection protocol](evidence-inspection.md), freeze these additional planned fields and retain actual values/deviations privately. Publish only the sanitized reusable schema; exclude private paths, native logs, reviewer prose and oracle contents.
+
+| Field | Required record |
+| --- | --- |
+| Track/provenance | Schema revision, harness/suite digests, opaque case/view IDs, original seal/source-manifest/oracle/dependency digests; separately bound derived adjudication crosswalk and status, synthetic versus preserved-private origin |
+| Workflow identity | Actual baseline/incremental Git pins, native helper/policy digests, retained original commands/output/exit codes, explicit fixture adaptations |
+| Subject identity | Separate product source pin, candidate/diff digest, unchanged source/evidence/claim identities within each matched pair |
+| Decision schedule | Trajectory/step/stage/session IDs; CODE then separate independent final; all planned steps/repetitions and session totals |
+| Matched settings | Provider, requested/effective model/effort, client, tools/access, cache, prompts, assistance, order and exposure limitations |
+| Isolation/access | Actual session boundary/write-denial and required-evidence probes before decision, accessible originals, necessary missing evidence versus covered duplicate, bypass/telemetry gaps |
+| Quality | Frozen specific-discrepancy/repair rubric, genuine detections, actionable repairs, generic blocks, misses, false alarms, critical false approvals, uncertain findings, semantic-audit status, provisional quality precheck and actual adjudication status |
+| Per-decision cost | Active model/session time and summed totals; elapsed/critical-path intervals; tools/reads/repeated bytes; native tokens/cache/quota with sources and unknowns |
+| Full experiment cost | Setup, supervision, waits, native checks, prescribed repairs/reruns, totals, overlaps and accounting completeness |
+| Limits/outcome | Frozen time/session/tool/token/quota caps and enforcement, consumed budgets, stopped/interrupted/diagnostic/incomplete attempts and reasons; no hidden replacement attempts |
+| Interpretation | Machinery-only smoke versus actual model observation; single-case/cohort limits; no efficiency acceptance after a critical false approval or incomplete required measurement |
+
+Keep public calibration separate from the frozen private measured cohort. Preserve every governing attempt and the original verdict before feedback. Ordinary regression results do not establish model detection performance, and review-time savings alone do not establish whole-flight savings.
+
+Unresolved public proposal bindings remain `null`; do not insert invented hashes. Freeze actual private identities and exact owner approval separately before launch. Historical scoring consumes a derived private crosswalk while the original independent key stays unchanged. Extraction/semantic audit uses the bounded supervision allowance, with no extra model or full review per trial.

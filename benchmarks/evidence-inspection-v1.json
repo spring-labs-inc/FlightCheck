@@ -1,0 +1,821 @@
+{
+  "schema": "evidence-inspection-v1",
+  "kind": "synthetic-calibration",
+  "conditions": [
+    {
+      "id": "baseline",
+      "pin": "ee869f9a3c03c8c048ad778d7465d9c31e70f970"
+    },
+    {
+      "id": "incremental",
+      "pin": "c69bbfe364ac01c9a13b46cb983f0c4ffd2c5e33"
+    }
+  ],
+  "schedule": [
+    {
+      "stage": "CODE",
+      "role": "CODE",
+      "independent": false
+    },
+    {
+      "stage": "FINAL",
+      "role": "EVIDENCE",
+      "independent": true
+    }
+  ],
+  "cases": [
+    {
+      "id": "c01",
+      "variant": "clean",
+      "artifacts": [
+        {
+          "id": "a01",
+          "path": "evidence.txt",
+          "content": "EXPLICIT SYNTHETIC CALIBRATION ONLY\nvariant=clean\nclaim=k1\nexpected=x\nobserved=x\ncontrol=same assertion must fail with the synthetic defect present\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        },
+        {
+          "id": "a02",
+          "path": "source.txt",
+          "content": "# EXPLICIT SYNTHETIC CALIBRATION: clean\n# Contract: transform('\\ufeffx') must return 'x' for an explicitly BOM-marked input.\ndef transform(value):\n    return value.removeprefix('\\ufeff')\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "k1",
+          "artifact_ids": [
+            "a01",
+            "a02"
+          ]
+        }
+      ],
+      "oracle": {
+        "clean": true,
+        "defects": []
+      }
+    },
+    {
+      "id": "c02",
+      "variant": "navigation",
+      "artifacts": [
+        {
+          "id": "a01",
+          "path": "evidence.txt",
+          "content": "EXPLICIT SYNTHETIC CALIBRATION ONLY\nvariant=navigation\nclaim=k1\nexpected=x\nobserved=x\ncontrol=same assertion must fail with the synthetic defect present\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        },
+        {
+          "id": "a02",
+          "path": "source.txt",
+          "content": "# EXPLICIT SYNTHETIC CALIBRATION: navigation\n# Contract: transform('\\ufeffx') must return 'x' for an explicitly BOM-marked input.\ndef transform(value):\n    return value.removeprefix('\\ufeff')\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "k1",
+          "artifact_ids": [
+            "a01",
+            "a02"
+          ]
+        }
+      ],
+      "oracle": {
+        "clean": true,
+        "defects": []
+      }
+    },
+    {
+      "id": "c03",
+      "variant": "shortline-bom-synthetic",
+      "artifacts": [
+        {
+          "id": "a01",
+          "path": "evidence.txt",
+          "content": "EXPLICIT SYNTHETIC CALIBRATION ONLY\nvariant=shortline-bom-synthetic\nclaim=k1\nexpected=x\nobserved=\\ufeffx\ncontrol=same assertion must fail with the synthetic defect present\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        },
+        {
+          "id": "a02",
+          "path": "source.txt",
+          "content": "# EXPLICIT SYNTHETIC CALIBRATION: shortline-bom-synthetic\n# Contract: transform('\\ufeffx') must return 'x' for an explicitly BOM-marked input.\ndef transform(value):\n    return value if len(value) < 4 else value.removeprefix('\\ufeff')\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "k1",
+          "artifact_ids": [
+            "a01",
+            "a02"
+          ]
+        }
+      ],
+      "oracle": {
+        "clean": false,
+        "defects": [
+          {
+            "id": "d1",
+            "claim": "k1",
+            "category": "shortline_bom_synthetic",
+            "references": [
+              "a01",
+              "a02"
+            ],
+            "discrepancy": "Synthetic shortline-bom-synthetic: expected x; observed \\ufeffx.",
+            "repair": "Repair the synthetic shortline-bom-synthetic discrepancy and retain a same-assertion failing control plus passing repair.",
+            "critical": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "c04",
+      "variant": "redirected-filter-synthetic",
+      "artifacts": [
+        {
+          "id": "a01",
+          "path": "evidence.txt",
+          "content": "EXPLICIT SYNTHETIC CALIBRATION ONLY\nvariant=redirected-filter-synthetic\nclaim=k1\nexpected=False\nobserved=True\ncontrol=same assertion must fail with the synthetic defect present\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        },
+        {
+          "id": "a02",
+          "path": "source.txt",
+          "content": "# EXPLICIT SYNTHETIC CALIBRATION. Contract: redirected stdin containing NUL must be filtered.\ndef allowed(data, redirected):\n    return True if redirected else b'\\x00' not in data\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "k1",
+          "artifact_ids": [
+            "a01",
+            "a02"
+          ]
+        }
+      ],
+      "oracle": {
+        "clean": false,
+        "defects": [
+          {
+            "id": "d1",
+            "claim": "k1",
+            "category": "redirected_filter_synthetic",
+            "references": [
+              "a01",
+              "a02"
+            ],
+            "discrepancy": "Synthetic redirected-filter-synthetic: expected False; observed True.",
+            "repair": "Repair the synthetic redirected-filter-synthetic discrepancy and retain a same-assertion failing control plus passing repair.",
+            "critical": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "c05",
+      "variant": "parallel-buffer-synthetic",
+      "artifacts": [
+        {
+          "id": "a01",
+          "path": "evidence.txt",
+          "content": "EXPLICIT SYNTHETIC CALIBRATION ONLY\nvariant=parallel-buffer-synthetic\nclaim=k1\nexpected=True\nobserved=False\ncontrol=same assertion must fail with the synthetic defect present\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        },
+        {
+          "id": "a02",
+          "path": "source.txt",
+          "content": "# EXPLICIT SYNTHETIC CALIBRATION. Contract: stdin output must remain buffered when parallel=True.\ndef buffered(stdin, parallel):\n    return stdin and not parallel\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "k1",
+          "artifact_ids": [
+            "a01",
+            "a02"
+          ]
+        }
+      ],
+      "oracle": {
+        "clean": false,
+        "defects": [
+          {
+            "id": "d1",
+            "claim": "k1",
+            "category": "parallel_buffer_synthetic",
+            "references": [
+              "a01",
+              "a02"
+            ],
+            "discrepancy": "Synthetic parallel-buffer-synthetic: expected True; observed False.",
+            "repair": "Repair the synthetic parallel-buffer-synthetic discrepancy and retain a same-assertion failing control plus passing repair.",
+            "critical": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "c06",
+      "variant": "effective-input-change",
+      "artifacts": [
+        {
+          "id": "a01",
+          "path": "evidence.txt",
+          "content": "EXPLICIT SYNTHETIC CALIBRATION ONLY\nvariant=effective-input-change\nclaim=k1\nexpected=qualified current witness\nobserved=effective-input-change: current witness insufficient\ncontrol=same assertion must fail with the synthetic defect present\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        },
+        {
+          "id": "a02",
+          "path": "source.txt",
+          "content": "# EXPLICIT SYNTHETIC CALIBRATION: effective-input-change.\n# Required claim k1: current bound original witness and unresolved obligations establish behavior.\n# This variant deliberately lacks that qualification.\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "k1",
+          "artifact_ids": [
+            "a01",
+            "a02"
+          ]
+        }
+      ],
+      "oracle": {
+        "clean": false,
+        "defects": [
+          {
+            "id": "d1",
+            "claim": "k1",
+            "category": "effective_input_change",
+            "references": [
+              "a01",
+              "a02"
+            ],
+            "discrepancy": "Synthetic effective-input-change: expected qualified current witness; observed effective-input-change: current witness insufficient.",
+            "repair": "Repair the synthetic effective-input-change discrepancy and retain a same-assertion failing control plus passing repair.",
+            "critical": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "c07",
+      "variant": "contradiction",
+      "artifacts": [
+        {
+          "id": "a01",
+          "path": "evidence.txt",
+          "content": "EXPLICIT SYNTHETIC CALIBRATION ONLY\nvariant=contradiction\nclaim=k1\nexpected=qualified current witness\nobserved=contradiction: current witness insufficient\ncontrol=same assertion must fail with the synthetic defect present\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        },
+        {
+          "id": "a02",
+          "path": "source.txt",
+          "content": "# EXPLICIT SYNTHETIC CALIBRATION: contradiction.\n# Required claim k1: current bound original witness and unresolved obligations establish behavior.\n# This variant deliberately lacks that qualification.\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "k1",
+          "artifact_ids": [
+            "a01",
+            "a02"
+          ]
+        }
+      ],
+      "oracle": {
+        "clean": false,
+        "defects": [
+          {
+            "id": "d1",
+            "claim": "k1",
+            "category": "contradiction",
+            "references": [
+              "a01",
+              "a02"
+            ],
+            "discrepancy": "Synthetic contradiction: expected qualified current witness; observed contradiction: current witness insufficient.",
+            "repair": "Repair the synthetic contradiction discrepancy and retain a same-assertion failing control plus passing repair.",
+            "critical": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "c08",
+      "variant": "unresolved-obligation",
+      "artifacts": [
+        {
+          "id": "a01",
+          "path": "evidence.txt",
+          "content": "EXPLICIT SYNTHETIC CALIBRATION ONLY\nvariant=unresolved-obligation\nclaim=k1\nexpected=qualified current witness\nobserved=unresolved-obligation: current witness insufficient\ncontrol=same assertion must fail with the synthetic defect present\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        },
+        {
+          "id": "a02",
+          "path": "source.txt",
+          "content": "# EXPLICIT SYNTHETIC CALIBRATION: unresolved-obligation.\n# Required claim k1: current bound original witness and unresolved obligations establish behavior.\n# This variant deliberately lacks that qualification.\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "k1",
+          "artifact_ids": [
+            "a01",
+            "a02"
+          ]
+        }
+      ],
+      "oracle": {
+        "clean": false,
+        "defects": [
+          {
+            "id": "d1",
+            "claim": "k1",
+            "category": "unresolved_obligation",
+            "references": [
+              "a01",
+              "a02"
+            ],
+            "discrepancy": "Synthetic unresolved-obligation: expected qualified current witness; observed unresolved-obligation: current witness insufficient.",
+            "repair": "Repair the synthetic unresolved-obligation discrepancy and retain a same-assertion failing control plus passing repair.",
+            "critical": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "c09",
+      "variant": "necessary-missing",
+      "artifacts": [
+        {
+          "id": "a01",
+          "path": "evidence.txt",
+          "content": "EXPLICIT SYNTHETIC CALIBRATION ONLY\nvariant=necessary-missing\nclaim=k1\nexpected=qualified current witness\nobserved=necessary-missing: current witness insufficient\ncontrol=same assertion must fail with the synthetic defect present\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        },
+        {
+          "id": "a02",
+          "path": "source.txt",
+          "content": "# EXPLICIT SYNTHETIC CALIBRATION: necessary-missing.\n# Required claim k1: current bound original witness and unresolved obligations establish behavior.\n# This variant deliberately lacks that qualification.\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "k1",
+          "artifact_ids": [
+            "a01",
+            "a02"
+          ]
+        }
+      ],
+      "oracle": {
+        "clean": false,
+        "defects": [
+          {
+            "id": "d1",
+            "claim": "k1",
+            "category": "necessary_missing",
+            "references": [
+              "a01",
+              "a02"
+            ],
+            "discrepancy": "Synthetic necessary-missing: expected qualified current witness; observed necessary-missing: current witness insufficient.",
+            "repair": "Repair the synthetic necessary-missing discrepancy and retain a same-assertion failing control plus passing repair.",
+            "critical": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "c10",
+      "variant": "covered-duplicate",
+      "artifacts": [
+        {
+          "id": "a01",
+          "path": "evidence.txt",
+          "content": "EXPLICIT SYNTHETIC CALIBRATION ONLY\nvariant=covered-duplicate\nclaim=k1\nexpected=x\nobserved=x\ncontrol=same assertion must fail with the synthetic defect present\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        },
+        {
+          "id": "a02",
+          "path": "source.txt",
+          "content": "# EXPLICIT SYNTHETIC CALIBRATION: covered-duplicate\n# Contract: transform('\\ufeffx') must return 'x' for an explicitly BOM-marked input.\ndef transform(value):\n    return value.removeprefix('\\ufeff')\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "k1",
+          "artifact_ids": [
+            "a01",
+            "a02"
+          ]
+        }
+      ],
+      "oracle": {
+        "clean": true,
+        "defects": []
+      }
+    },
+    {
+      "id": "c11",
+      "variant": "tampered-binding",
+      "artifacts": [
+        {
+          "id": "a01",
+          "path": "evidence.txt",
+          "content": "EXPLICIT SYNTHETIC CALIBRATION ONLY\nvariant=tampered-binding\nclaim=k1\nexpected=qualified current witness\nobserved=tampered-binding: current witness insufficient\ncontrol=same assertion must fail with the synthetic defect present\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        },
+        {
+          "id": "a02",
+          "path": "source.txt",
+          "content": "# EXPLICIT SYNTHETIC CALIBRATION: tampered-binding.\n# Required claim k1: current bound original witness and unresolved obligations establish behavior.\n# This variant deliberately lacks that qualification.\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "k1",
+          "artifact_ids": [
+            "a01",
+            "a02"
+          ]
+        }
+      ],
+      "oracle": {
+        "clean": false,
+        "defects": [
+          {
+            "id": "d1",
+            "claim": "k1",
+            "category": "tampered_binding",
+            "references": [
+              "a01",
+              "a02"
+            ],
+            "discrepancy": "Synthetic tampered-binding: expected qualified current witness; observed tampered-binding: current witness insufficient.",
+            "repair": "Repair the synthetic tampered-binding discrepancy and retain a same-assertion failing control plus passing repair.",
+            "critical": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "c12",
+      "variant": "current-diff-defect",
+      "artifacts": [
+        {
+          "id": "a01",
+          "path": "evidence.txt",
+          "content": "EXPLICIT SYNTHETIC CALIBRATION ONLY\nvariant=current-diff-defect\nclaim=k1\nexpected=qualified current witness\nobserved=current-diff-defect: current witness insufficient\ncontrol=same assertion must fail with the synthetic defect present\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        },
+        {
+          "id": "a02",
+          "path": "source.txt",
+          "content": "# EXPLICIT SYNTHETIC CALIBRATION: current-diff-defect.\n# Required claim k1: current bound original witness and unresolved obligations establish behavior.\n# This variant deliberately lacks that qualification.\n",
+          "necessary": true,
+          "coverage": [
+            "k1"
+          ]
+        }
+      ],
+      "claims": [
+        {
+          "id": "k1",
+          "artifact_ids": [
+            "a01",
+            "a02"
+          ]
+        }
+      ],
+      "oracle": {
+        "clean": false,
+        "defects": [
+          {
+            "id": "d1",
+            "claim": "k1",
+            "category": "current_diff_defect",
+            "references": [
+              "a01",
+              "a02"
+            ],
+            "discrepancy": "Synthetic current-diff-defect: expected qualified current witness; observed current-diff-defect: current witness insufficient.",
+            "repair": "Repair the synthetic current-diff-defect discrepancy and retain a same-assertion failing control plus passing repair.",
+            "critical": true
+          }
+        ]
+      }
+    }
+  ],
+  "cohort_proposal": {
+    "schema": "evidence-inspection-v1",
+    "kind": "measured-cohort-proposal",
+    "conditions": [
+      {
+        "id": "baseline",
+        "pin": "ee869f9a3c03c8c048ad778d7465d9c31e70f970"
+      },
+      {
+        "id": "incremental",
+        "pin": "c69bbfe364ac01c9a13b46cb983f0c4ffd2c5e33"
+      }
+    ],
+    "cases": [
+      {
+        "id": "h1",
+        "clean": false,
+        "private_variant_sha256": null
+      },
+      {
+        "id": "h2",
+        "clean": false,
+        "private_variant_sha256": null
+      },
+      {
+        "id": "h3",
+        "clean": false,
+        "private_variant_sha256": null
+      },
+      {
+        "id": "s0",
+        "clean": true,
+        "private_variant_sha256": null
+      },
+      {
+        "id": "s1",
+        "clean": false,
+        "private_variant_sha256": null
+      },
+      {
+        "id": "s2",
+        "clean": true,
+        "private_variant_sha256": null
+      },
+      {
+        "id": "s3",
+        "clean": false,
+        "private_variant_sha256": null
+      },
+      {
+        "id": "s4",
+        "clean": true,
+        "private_variant_sha256": null
+      },
+      {
+        "id": "s5",
+        "clean": false,
+        "private_variant_sha256": null
+      },
+      {
+        "id": "s6",
+        "clean": true,
+        "private_variant_sha256": null
+      },
+      {
+        "id": "s7",
+        "clean": true,
+        "private_variant_sha256": null
+      },
+      {
+        "id": "s8",
+        "clean": true,
+        "private_variant_sha256": null
+      }
+    ],
+    "repetitions": 1,
+    "order": [
+      {
+        "case": "h1",
+        "repetition": 0,
+        "condition": "baseline"
+      },
+      {
+        "case": "h1",
+        "repetition": 0,
+        "condition": "incremental"
+      },
+      {
+        "case": "h2",
+        "repetition": 0,
+        "condition": "incremental"
+      },
+      {
+        "case": "h2",
+        "repetition": 0,
+        "condition": "baseline"
+      },
+      {
+        "case": "h3",
+        "repetition": 0,
+        "condition": "baseline"
+      },
+      {
+        "case": "h3",
+        "repetition": 0,
+        "condition": "incremental"
+      },
+      {
+        "case": "s0",
+        "repetition": 0,
+        "condition": "incremental"
+      },
+      {
+        "case": "s0",
+        "repetition": 0,
+        "condition": "baseline"
+      },
+      {
+        "case": "s1",
+        "repetition": 0,
+        "condition": "baseline"
+      },
+      {
+        "case": "s1",
+        "repetition": 0,
+        "condition": "incremental"
+      },
+      {
+        "case": "s2",
+        "repetition": 0,
+        "condition": "incremental"
+      },
+      {
+        "case": "s2",
+        "repetition": 0,
+        "condition": "baseline"
+      },
+      {
+        "case": "s3",
+        "repetition": 0,
+        "condition": "baseline"
+      },
+      {
+        "case": "s3",
+        "repetition": 0,
+        "condition": "incremental"
+      },
+      {
+        "case": "s4",
+        "repetition": 0,
+        "condition": "incremental"
+      },
+      {
+        "case": "s4",
+        "repetition": 0,
+        "condition": "baseline"
+      },
+      {
+        "case": "s5",
+        "repetition": 0,
+        "condition": "baseline"
+      },
+      {
+        "case": "s5",
+        "repetition": 0,
+        "condition": "incremental"
+      },
+      {
+        "case": "s6",
+        "repetition": 0,
+        "condition": "incremental"
+      },
+      {
+        "case": "s6",
+        "repetition": 0,
+        "condition": "baseline"
+      },
+      {
+        "case": "s7",
+        "repetition": 0,
+        "condition": "baseline"
+      },
+      {
+        "case": "s7",
+        "repetition": 0,
+        "condition": "incremental"
+      },
+      {
+        "case": "s8",
+        "repetition": 0,
+        "condition": "incremental"
+      },
+      {
+        "case": "s8",
+        "repetition": 0,
+        "condition": "baseline"
+      }
+    ],
+    "schedule": [
+      {
+        "stage": "CODE",
+        "role": "CODE",
+        "independent": false
+      },
+      {
+        "stage": "FINAL",
+        "role": "EVIDENCE",
+        "independent": true
+      }
+    ],
+    "limits": {
+      "seconds_per_attempt": 240,
+      "sessions_per_decision": 2,
+      "tool_calls_per_attempt": 24,
+      "attempts_per_cell": 2
+    },
+    "model": "gpt-6.1-sol",
+    "effort": "high",
+    "tools": [
+      "allowlisted instrumented reader within independently probed external read-only boundary"
+    ],
+    "assistance": "none unless frozen in separate grant",
+    "cache": "fresh isolated independent sessions; declare provider cache observations",
+    "endpoint": "first frozen final verdict before feedback; retain interrupted/incomplete attempts",
+    "exclusions": "none silently removed; diagnostic attempts retained; no retry until green",
+    "oracle_sha256": null,
+    "prompt_sha256": null,
+    "environment_sha256": null,
+    "source_sha256": null,
+    "workflow_sha256": null,
+    "evidence_sha256": null
+  }
+}
