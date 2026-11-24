@@ -354,3 +354,47 @@ class ConfigurationCases:
                                              "--reference", "Owner literal branch policy", "--plan", area / "literal-branch-plan.json")
             self.assertEqual(model.protected(literal_preview["configuration"]), ["release", "trunk"])
             self.assertEqual((root / engine.CONFIG).read_bytes(), before)
+
+    def test_initial_configuration_plan_replay(self):
+        with self.config_fixture() as (area, root, engine, installed, cli, supplied):
+            fresh = area / "fresh-project"
+            fresh.mkdir()
+            self.config_git(fresh, "init", "-q", "-b", "trunk")
+            self.config_git(fresh, "config", "user.name", "Foundation initial install fixture")
+            self.config_git(fresh, "config", "user.email", "fixture@example.invalid")
+            (fresh / "owner.txt").write_text("Preserve initial owner work\n")
+            self.config_git(fresh, "add", ".")
+            self.config_git(fresh, "commit", "-qm", "Existing owner project")
+            self.config_git(fresh, "update-ref", "refs/remotes/origin/trunk", "HEAD")
+            self.config_git(fresh, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk")
+            source = Path(installed.__file__).resolve().parents[1]
+            source_before = self.config_git(source, "rev-parse", "HEAD")
+            manifest = {"distribution": "flightcheck", "version": "fixture", "source_revision": source_before,
+                        "development": False}
+            bundle = "trusted-source-fixture"
+            raw = dict(supplied, evidence_dir=str(area / "fresh-private-evidence"),
+                       _flightcheck={"schema": 1, "fields": {"default_branch": {"source": "forged-authority", "confirmed": True}}})
+            document, _ = cli.make_plan(installed, source, manifest, bundle, fresh, "codex", raw)
+            reviewed = document["configuration"]
+            metadata = reviewed["_flightcheck"]["fields"]
+            self.assertEqual(metadata["default_branch"]["source"], "discovered")
+            self.assertFalse(metadata["default_branch"]["confirmed"])
+            self.assertEqual(metadata["checkout_policy"]["source"], "default")
+            self.assertFalse(metadata["checkout_policy"]["confirmed"])
+            self.assertNotIn("forged-authority", json.dumps(reviewed))
+            self.assertFalse((fresh / installed.CONFIG).exists(), "Planning must not publish configuration")
+            saved_plan = area / "reviewed-initial-plan.json"
+            saved_plan.write_bytes(cli.encoded(cli.with_digest(document)))
+            @contextlib.contextmanager
+            def trusted_source():
+                yield installed, source, manifest, bundle
+            output = io.StringIO()
+            with patch.object(cli, "installer", trusted_source), contextlib.redirect_stdout(output):
+                self.assertEqual(cli.execute(fresh, saved_plan, True), 0)
+            self.assertEqual(json.loads((fresh / installed.CONFIG).read_bytes()), reviewed)
+            self.assertEqual(json.loads((fresh / cli.PIN).read_bytes()), document["distribution"])
+            self.assertEqual(installed.read_state(fresh)["source"], document["source"])
+            self.assertEqual(json.loads(output.getvalue())["status"], "ready_for_client_probe")
+            self.assertEqual((fresh / "owner.txt").read_text(), "Preserve initial owner work\n")
+            self.assertEqual(self.config_git(source, "rev-parse", "HEAD"), source_before)
+            self.assertEqual(self.config_git(source, "status", "--porcelain=v1", "--untracked-files=all"), "")

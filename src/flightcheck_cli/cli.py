@@ -41,10 +41,16 @@ def runtime_identity(config):
 
 
 def make_plan(module, source, manifest, bundle_id, root, agent, supplied):
+    if not isinstance(supplied, dict):
+        raise ValueError("Project configuration input must be a JSON object")
+    try:
+        configuration_input = json.loads(json.dumps(supplied, allow_nan=False))
+    except (TypeError, ValueError) as error:
+        raise ValueError("Project configuration input must contain only finite JSON values") from error
     if tx.pending(root):
         raise ValueError("An interrupted installation needs flightcheck recover before planning")
     canonical = module.load_manifest()
-    result, config, operations = module.plan_installation(source, root, canonical, agent, supplied)
+    result, config, operations = module.plan_installation(source, root, canonical, agent, configuration_input)
     runtime = runtime_identity(config)
     pin = {"schema": 1, "distribution": manifest["distribution"], "version": manifest["version"],
            "bundle": bundle_id, "source_revision": manifest["source_revision"],
@@ -59,6 +65,7 @@ def make_plan(module, source, manifest, bundle_id, root, agent, supplied):
     repo_path = (root / repository).resolve() if not Path(repository).is_absolute() else Path(repository).resolve()
     document = {"schema": 1, "target": str(root), "repository": str(repo_path), "agent": agent,
                 "bundle": bundle_id, "distribution": pin, "source": result["source"], "configuration": config,
+                "configuration_input": configuration_input,
                 "operations": tx.operation_state(module, root, operations)}
     return document, operations
 
@@ -155,14 +162,17 @@ def doctor(module, root):
 
 def execute(root, plan_path, json_output):
     reviewed = read_plan(plan_path)
+    if not isinstance(reviewed.get("configuration_input"), dict):
+        raise ValueError("Reviewed plan lacks the original configuration input; preview again with this CLI")
     with installer() as (module, source, manifest, identity):
         root = target(module, root)
         if reviewed["target"] != str(root):
             raise ValueError("Reviewed plan targets another project")
         # Recompute under the same lock as the write transaction. No config path
-        # is reread: the exact reviewed normalized values belong to the plan.
+        # is reread: replay the original input so discovered/default provenance
+        # is regenerated without trusting caller-supplied normalized metadata.
         with tx.locked(root) as state:
-            actual, operations = make_plan(module, source, manifest, identity, root, reviewed["agent"], reviewed["configuration"])
+            actual, operations = make_plan(module, source, manifest, identity, root, reviewed["agent"], reviewed["configuration_input"])
             if actual != reviewed:
                 raise ValueError("Reviewed plan is stale (source/package, project, configuration, mode or runtime changed); preview again")
             # Keep the same cooperating lock from plan comparison through verify.
