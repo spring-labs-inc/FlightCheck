@@ -108,7 +108,8 @@ def operation_state(module, root, operations):
         if before != op["before"]:
             raise ValueError("Project changed during planning: " + op["path"])
         rows.append({"path": op["path"], "action": op["action"], "before": sha(before) if before is not None else None,
-                     "after": sha(op["after"]), "mode": mode})
+                     "after": sha(op["after"]), "mode": mode,
+                     "after_mode": op.get("after_mode", mode if mode is not None else 0o644)})
     return rows
 
 
@@ -136,7 +137,9 @@ def snapshot(module, root, state, operations):
             raise ValueError("Temporary write path already exists")
         records.append({"path": op["path"], "temporary": temporary, "before": sha(before) if before is not None else None,
                         "before_mode": mode, "after": sha(op["after"]),
-                        "after_mode": mode if mode is not None else 0o644, "backup": backup})
+                        "after_mode": op.get("after_mode", mode if mode is not None else 0o644),
+                        "mode_transition": "after_mode" in op and op["after_mode"] != (mode if mode is not None else 0o644),
+                        "backup": backup})
     value = {"schema": 1, "target": str(root), "status": "prepared", "files": records,
              "created_directories": sorted(dirs, key=lambda n: len(Path(n).parts), reverse=True)}
     atomic(state / "transaction.json", encoded(value))
@@ -166,7 +169,10 @@ def restore(module, root, state, value):
                 temporaries.append(path)
         current, mode = file_state(module, root, row["path"])
         identity = sha(current) if current is not None else None
-        if (identity, mode) not in ((row["before"], row["before_mode"]), (row["after"], row["after_mode"])):
+        allowed = {(row["before"], row["before_mode"]), (row["after"], row["after_mode"])}
+        if row.get("mode_transition"):
+            allowed.add((row["after"], row["before_mode"] if row["before_mode"] is not None else 0o644))
+        if (identity, mode) not in allowed:
             raise ValueError("Recovery conflict; preserve owner changes at " + row["path"] + ". Original backup retained in " + str(state))
         if row["before"] is not None:
             if not isinstance(row["backup"], str) or not re.fullmatch(r"backup-[a-f0-9]{32}/[0-9]+\.bin", row["backup"]):
@@ -185,8 +191,10 @@ def restore(module, root, state, value):
         if row["before"] is None:
             path.unlink()
         else:
-            module.write_file(root, row["path"], current, originals[row["path"]], temporary=row.get("temporary"))
-            path.chmod(row["before_mode"])
+            # Publish original bytes and permissions together. A crash after
+            # replacement is already a complete, recognizable restored state.
+            module.write_file(root, row["path"], current, originals[row["path"]],
+                              temporary=row.get("temporary"), mode=row["before_mode"])
     for name in value["created_directories"]:
         # Reuse file-safe validation on a nonexistent child before rmdir.
         path = module.safe_path(root, name + "/.recovery-path-check").parent
@@ -213,6 +221,11 @@ def apply(module, root, operations, verify, state=None):
             # legacy fallback, but must not restore files before our conflict check.
             module.apply_plan(root, operations, rollback_on_error=False,
                               temporary_paths={row["path"]: row["temporary"] for row in record["files"]})
+            # Older pinned installers preserve old modes; the journal also records
+            # this intermediate state so interruption remains recoverable.
+            for row in record["files"]:
+                if row.get("mode_transition"):
+                    module.safe_path(root, row["path"]).chmod(row["after_mode"])
             result = verify()
             record["status"] = "committed"
             atomic(state / "transaction.json", encoded(record))

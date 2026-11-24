@@ -125,50 +125,29 @@ def inspect_project(root):
             "note": "Read existing project policy; detected files are hints, not permission to replace policy or run checks."}
 
 
+def project_model():
+    """Load the same model from source or a verified project-local install."""
+    base = Path(__file__).resolve().parent
+    installed = base / "scripts/project_config.py"
+    path = installed if installed.is_file() else base.parent / "workflow/scripts/project_config.py"
+    if installed.is_file():
+        state = json.loads((base / "installation.json").read_text())
+        expected = state["files"][".flightcheck/scripts/project_config.py"]["sha256"]
+        if sha(path.read_bytes()) != expected:
+            raise SetupError("Modified installed configuration model; refusing execution")
+    namespace = {"__file__": str(path), "__name__": "flightcheck_project_config"}
+    exec(compile(path.read_bytes(), str(path), "exec"), namespace)
+    from types import SimpleNamespace
+    return SimpleNamespace(**namespace)
+
+
 def configuration(root, supplied):
-    detected = inspect_project(root)
-    value = dict(supplied)
-    value.setdefault("activation", "opt-in")
-    value.setdefault("delivery", detected["defaults"]["delivery"])
-    value.setdefault("python", detected["python"])
-    value.setdefault("default_branch", detected["default_branch"])
-    pending = [name for name in ("evidence_dir", "nit_tracker", "checks", "policy_reference", "default_branch") if not value.get(name)]
-    if pending:
-        raise SetupError("Resolve configuration together before applying: " + ", ".join(pending))
-    if value["activation"] not in ("opt-in", "default-for-coding"):
-        raise SetupError("activation must be opt-in or default-for-coding")
-    if value["activation"] == "default-for-coding" and not value.get("activation_reference"):
-        raise SetupError("default-for-coding needs an explicit owner activation_reference")
-    for key in ("nit_tracker", "policy_reference", "default_branch", "delivery", "python", "evidence_dir"):
-        if not isinstance(value[key], str) or not value[key].strip() or "\x00" in value[key]:
-            raise SetupError("Invalid configuration field: " + key)
-    git(root, "check-ref-format", "--branch", value["default_branch"])
-    evidence = Path(value["evidence_dir"]).expanduser()
-    if not evidence.is_absolute() or evidence.is_symlink():
-        raise SetupError("evidence_dir must be an absolute, nonsymlink path outside the checkout")
-    evidence = evidence.resolve()
-    if evidence == root or root in evidence.parents:
-        raise SetupError("Keep evidence outside the checkout")
-    if evidence.exists() and (not evidence.is_dir() or evidence.stat().st_uid != os.geteuid() or stat.S_IMODE(evidence.stat().st_mode) & 0o077):
-        raise SetupError("Existing evidence directory must be owner-only (0700)")
-    value["evidence_dir"] = str(evidence)
-    python = Path(value["python"]).expanduser()
-    if not python.is_absolute():
-        python = root / python
-    value["python"] = str(python)
-    observed = json.loads(run([str(python), "-B", "-c", "import json,os,sys,fcntl;print(json.dumps({'platform':os.name,'version_info':list(sys.version_info[:2]),'version':sys.version}))"], root))
-    if observed["platform"] != "posix" or observed["version_info"] < [3, 9]:
-        raise SetupError("Receipt/card tools require Python 3.9+ on POSIX")
-    value["observed_python"] = observed
-    if not isinstance(value["checks"], list) or not value["checks"]:
-        raise SetupError("Configure the project's actual non-mutating check commands")
-    for check in value["checks"]:
-        if (not isinstance(check, dict) or not isinstance(check.get("name"), str) or not check["name"].strip()
-                or not isinstance(check.get("command"), list) or not check["command"]
-                or any(not isinstance(arg, str) or not arg or "\x00" in arg for arg in check["command"])
-                or check.get("phase") not in ("cheap", "authoritative")):
-            raise SetupError("Each check needs name, command argument array and cheap/authoritative phase")
-    return value
+    try:
+        saved = safe_path(root, CONFIG)
+        trusted = saved.exists() and json.loads(saved.read_bytes()) == supplied
+        return project_model().normalize(root, supplied, inspect_project(root), origin="setup", trusted_metadata=trusted)
+    except ValueError as error:
+        raise SetupError(str(error)) from error
 
 
 def render(data, source_name, destination, config):
@@ -234,7 +213,7 @@ def block_from(data):
     return text[start:end].encode()
 
 
-def desired_files(source, manifest, agent, config):
+def desired_files(source, manifest, agent, config, root=None):
     result = {}
     sources = {}
     for name, destination, _ in selected(manifest, agent):
@@ -249,6 +228,12 @@ def desired_files(source, manifest, agent, config):
               + "Run Python scripts by path with -B, not -I. Verify new client definitions in a fresh session; inspect effective tools, required evidence access and active hooks. File installation does not prove a reviewer boundary.\n")
     result[".flightcheck/docs/status.md"] = ("file", status.encode())
     result[CONFIG] = ("file", encoded(config))
+    existing_ignore = safe_path(root, ".flightcheck/.gitignore").read_bytes() if root is not None and safe_path(root, ".flightcheck/.gitignore").exists() else b""
+    ignore = existing_ignore + (b"\n" if existing_ignore and not existing_ignore.endswith(b"\n") else b"")
+    privacy_rules = b"/project.json\n/docs/status.md\n"
+    if not ignore.endswith(privacy_rules):
+        ignore += privacy_rules
+    result[".flightcheck/.gitignore"] = ("file", ignore)
     if agent in ("codex", "both"):
         result["AGENTS.md"] = ("block", instruction_block("codex", config))
     if agent in ("claude", "both"):
@@ -284,23 +269,31 @@ def prepare(root, desired, previous):
                     conflicts.append(name)
                 separator = b"" if not before or before.endswith(b"\n\n") else b"\n" if before.endswith(b"\n") else b"\n\n"
                 after = before + separator + wanted
-        elif before is not None and before != wanted and (not old or sha(before) != old["sha256"]):
+        elif before is not None and before != wanted and not (name == ".flightcheck/.gitignore" and wanted.startswith(before)) and (not old or sha(before) != old["sha256"]):
             conflicts.append(name)
         operations.append({"path": name, "before": before, "after": after,
+                           **({"after_mode": 0o600} if name in (CONFIG, ".flightcheck/docs/status.md") else {}),
                            "action": "unchanged" if before == after else "create" if before is None else "update"})
     if conflicts:
         raise SetupError("Preserve and reconcile modified/unmanaged files before applying: " + ", ".join(conflicts))
     return operations
 
 
-def write_file(root, name, before, after, temporary=None):
+def write_file(root, name, before, after, temporary=None, mode=None):
     path = safe_path(root, name)
     path.parent.mkdir(parents=True, exist_ok=True)
     safe_path(root, name)
     actual = path.read_bytes() if path.exists() else None
     if actual != before:
         raise SetupError("Concurrent edit detected; preserved file: " + name)
+    requested_mode = mode
     mode = stat.S_IMODE(path.stat().st_mode) if before is not None else 0o644
+    if requested_mode is not None:
+        if type(requested_mode) is not int or requested_mode < 0 or requested_mode & ~0o777:
+            raise SetupError("Invalid file publication mode")
+        mode = requested_mode
+    elif name in (CONFIG, ".flightcheck/docs/status.md"):
+        mode = 0o600
     if temporary is None:
         fd, pending = tempfile.mkstemp(prefix=".flightcheck-", dir=path.parent)
     else:
@@ -349,7 +342,7 @@ def plan_installation(source, root, manifest, agent, supplied):
     """Shared nonwriting plan API for the source and packaged terminal channels."""
     identity = source_identity(source, manifest)
     config = configuration(root, supplied)
-    desired, sources = desired_files(source, manifest, agent, config)
+    desired, sources = desired_files(source, manifest, agent, config, root)
     state = {"schema": 1, "agent": agent, "source": identity,
              "files": {name: {"kind": kind, "sha256": sha(data), **sources.get(name, {})}
                        for name, (kind, data) in desired.items()}}
@@ -468,7 +461,7 @@ def verify(root, manifest):
         raise SetupError("No installation manifest; run plan and apply first")
     config = configuration(root, json.loads(safe_path(root, CONFIG).read_text()))
     agent = state["agent"]
-    required = {row[1] for row in selected(manifest, agent)} | {CONFIG, ".flightcheck/docs/status.md"}
+    required = {row[1] for row in selected(manifest, agent)} | {CONFIG, ".flightcheck/docs/status.md", ".flightcheck/.gitignore"}
     required |= ({"AGENTS.md"} if agent in ("codex", "both") else set())
     required |= ({"CLAUDE.md"} if agent in ("claude", "both") else set())
     if set(state["files"]) != required:
@@ -486,6 +479,14 @@ def verify(root, manifest):
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "config":
+        source = Path(__file__).resolve().parents[1] / "src"
+        if not (source / "flightcheck_cli/cli.py").is_file():
+            print(json.dumps({"status": "incomplete", "error": "Use the source checkout setup/install.py config command or an updated CLI; installed workflow remains pinned"}))
+            return 1
+        sys.path.insert(0, str(source))
+        from flightcheck_cli.cli import configuration_main
+        return configuration_main(sys.argv[2:], engine=sys.modules[__name__])
     if sys.argv[1:] == ["--runtime-worker"]:
         signal.signal(signal.SIGTERM, interrupt_probe)
         try:
