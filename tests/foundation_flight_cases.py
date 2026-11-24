@@ -310,3 +310,90 @@ class FlightCases:
             paused_report = launch.detect(repo, registry, "owner/repo", issues=[84])
             self.assertEqual(paused_report["related"][0]["decision"]["action"], "wait",
                              "A paused flight must not reuse an unreconciled detached child")
+
+    def flight_observation_state(self, common, checkouts):
+        def identity(path):
+            metadata = path.stat()
+            return (hashlib.sha256(path.read_bytes()).hexdigest(), metadata.st_mode,
+                    metadata.st_size, metadata.st_mtime_ns)
+        git_files = {str(path.relative_to(common)): identity(path)
+                     for path in common.rglob("*") if path.is_file() and not path.is_symlink()}
+        working_files = {str(path): identity(path) for checkout in checkouts
+                         for path in checkout.rglob("*") if path.is_file() and not path.is_symlink()
+                         and ".git" not in path.relative_to(checkout).parts}
+        return git_files, working_files
+
+    def test_launch_one_shot_selectors(self):
+        associations, launch = self.flight_modules()
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory).resolve()
+            repo = self.flight_repo(home / "repo")
+            related = self.flight_checkout(repo, home / "related", "topic")
+            (related / "unfinished.txt").write_text("preserve related work\n")
+            registry = associations.Registry(home / "private")
+            record = self.flight_record(associations, repo, related)
+            registry.save(record)
+            common = Path(record["repository"]["git_common_dir"])
+            before = self.flight_observation_state(common, (repo, related))
+            for selector, matched, unmatched in (("issues", 84, 999),
+                                                  ("pull_requests", 200, 999),
+                                                  ("flights", "foundation", "unmatched-flight")):
+                with self.subTest(selector=selector, matching=True):
+                    control = launch.detect(repo, registry, "owner/repo", current_flight="foundation",
+                                            **{selector: [matched]})
+                    self.assertTrue(control["decision_required"])
+                    self.assertEqual([row["flight"] for row in control["related"]], ["foundation"])
+                    self.assertEqual(control["related"][0]["decision"]["action"], "resume")
+                    observed = launch.detect(repo, registry, "owner/repo", current_flight="foundation",
+                                             **{selector: iter([matched])})
+                    self.assertEqual(observed, control,
+                                     "A one-shot selector must retain the list control's related decision")
+                with self.subTest(selector=selector, matching=False):
+                    control = launch.detect(repo, registry, "owner/repo", **{selector: [unmatched]})
+                    observed = launch.detect(repo, registry, "owner/repo", **{selector: iter([unmatched])})
+                    self.assertFalse(control["decision_required"])
+                    self.assertEqual(control["related"], [])
+                    self.assertEqual(observed, control, "Unmatched selectors remain nonblocking")
+            self.assertEqual(self.flight_observation_state(common, (repo, related)), before,
+                             "Selector observations must preserve Git and checkout bytes/modes/mtime")
+
+    def test_launch_default_branch_tag_collision(self):
+        associations, launch = self.flight_modules()
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory).resolve()
+            repo = self.flight_repo(home / "repo")
+            related = self.flight_checkout(repo, home / "related", "topic")
+            (related / "new.txt").write_text("unmerged flight work\n")
+            self.flight_git(related, "add", "new.txt")
+            self.flight_git(related, "commit", "-qm", "Topic ahead of default branch")
+            self.assertEqual(self.flight_git(repo, "rev-list", "--count", "refs/heads/trunk..refs/heads/topic"), "1")
+            registry = associations.Registry(home / "private")
+            record = self.flight_record(associations, repo, related)
+            record["delivery"] = {}  # Exercise the configured default, not an explicit delivery target.
+            registry.save(record)
+            common = Path(record["repository"]["git_common_dir"])
+
+            def observe():
+                before = self.flight_observation_state(common, (repo, related))
+                result = launch.detect(repo, registry, "owner/repo", issues=[84], current_flight="foundation")
+                self.assertEqual(self.flight_observation_state(common, (repo, related)), before,
+                                 "Ref comparison must preserve Git and checkout bytes/modes/mtime")
+                self.assertTrue(result["decision_required"])
+                self.assertEqual(result["related"][0]["decision"]["action"], "resume")
+                return result["related"][0]["checkouts"][0]["branch_state"]["unmerged"]
+
+            with self.subTest(target="configured-default", colliding_tag=False):
+                self.assertEqual(observe(), {"available": True, "count": 1})
+            self.flight_git(repo, "tag", "trunk", "refs/heads/topic")
+            self.assertEqual(self.flight_git(repo, "rev-parse", "refs/tags/trunk"),
+                             self.flight_git(repo, "rev-parse", "refs/heads/topic"))
+            self.assertNotEqual(self.flight_git(repo, "rev-parse", "refs/tags/trunk"),
+                                self.flight_git(repo, "rev-parse", "refs/heads/trunk"))
+            with self.subTest(target="configured-default", colliding_tag=True):
+                self.assertEqual(observe(), {"available": True, "count": 1},
+                                 "A same-named tag must not replace the configured default branch")
+            qualified = copy.deepcopy(record)
+            qualified["delivery"] = {"target": "refs/heads/trunk"}
+            registry.save(qualified, expected_revision=registry.read()["revision"])
+            with self.subTest(target="qualified-delivery", colliding_tag=True):
+                self.assertEqual(observe(), {"available": True, "count": 1})

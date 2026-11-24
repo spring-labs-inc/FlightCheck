@@ -115,6 +115,8 @@ def _branch(checkout, branch, commit, target):
 
 def detect(checkout, registry, repository_id, issues=(), pull_requests=(), flights=(), current_flight=None):
     """Observe explicit related work without acquiring authority to resolve it."""
+    # Retain one-shot selectors for both validation and repository lookup.
+    issues, pull_requests, flights = tuple(issues), tuple(pull_requests), tuple(flights)
     if any(type(number) is not int or number <= 0 for number in [*issues, *pull_requests]):
         raise AssociationError("Issue and PR selectors must be positive repository-qualified numbers")
     if any(not isinstance(flight, str) or not flight.strip() for flight in flights):
@@ -143,7 +145,11 @@ def detect(checkout, registry, repository_id, issues=(), pull_requests=(), fligh
             actual = by_path.get(item["path"], {})
             observation["locked"] = actual.get("locked", False)
             if state["available"]:
-                target = record["delivery"].get("target") or record["configuration"]["values"].get("default_branch")
+                target = record["delivery"].get("target")
+                if not target:
+                    default_branch = record["configuration"]["values"].get("default_branch")
+                    # Configuration stores a literal branch, not an ambiguous revision.
+                    target = "refs/heads/" + default_branch if default_branch else None
                 observation["identity_changed"] = (state["commit"] != item["commit"] or state["branch"] != item["branch"])
                 observation["branch_drift"] = state["branch"] != item["branch"]
                 observation["detached_drift"] = (item["branch"] is None and state["branch"] is None
