@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import subprocess
 
-from flight_associations import AssociationError, Registry, repository_identity
+from flight_associations import AssociationError, Registry, repository_identity, retained_artifacts, reservation_conflicts
 
 
 def git(checkout, *args):
@@ -126,11 +126,37 @@ def detect(checkout, registry, repository_id, issues=(), pull_requests=(), fligh
     if not isinstance(registry, Registry):
         registry = Registry(registry)
     records = registry.related(repository_id, issues, pull_requests, flights)
+    branch_result = git(root, "branch", "--show-current")
+    branch = os.fsdecode(branch_result.stdout).strip() if branch_result.returncode == 0 else None
+    for owner in registry.read()["records"]:
+        if owner["repository"]["id"] != repository_id or any(row["flight"] == owner["flight"] for row in records):
+            continue
+        same_clone = owner["repository"]["git_common_dir"] == repository["git_common_dir"]
+        ref = "refs/heads/" + branch if branch and same_clone else None
+        if any(row["kind"] != "remote_branch" for row in reservation_conflicts(owner, path=str(root), ref=ref)):
+            records.append(owner)
     worktrees = _worktrees(root)
     by_path = {row["path"]: row for row in worktrees}
     related, owned_paths = [], set()
     for record in records:
         if record["lifecycle"]["state"] == "closed":
+            retained = retained_artifacts(record)
+            if retained:
+                paths = [row["identity"] for row in retained if row["kind"] == "worktree"]
+                checkouts = []
+                for path in paths:
+                    owned_paths.add(path)
+                    state = (_state(path, repository["git_common_dir"])
+                             if record["repository"]["git_common_dir"] == repository["git_common_dir"] else
+                             {"available": False, "reason": "Retained checkout belongs to another clone"})
+                    checkouts.append({"path": path, "state": state, "retained": True,
+                                      "locked": by_path.get(path, {}).get("locked", False)})
+                related.append({"flight": record["flight"], "state": "closed",
+                                "issues": record["issues"], "pull_requests": record["pull_requests"],
+                                "checkouts": checkouts, "retained_artifacts": retained,
+                                "decision": {"action": "wait",
+                                    "reason": "Closed flight retains relevant ownership or unresolved operations; reconcile conflicts before mutation",
+                                    "alternatives": ["deliberate-dependent-flight"]}})
             continue
         checkouts = []
         for item in [record["checkout"], *record["children"]]:
@@ -179,6 +205,9 @@ def detect(checkout, registry, repository_id, issues=(), pull_requests=(), fligh
                         "issues": record["issues"], "pull_requests": record["pull_requests"],
                         "checkouts": checkouts, "decision": {"action": action, "reason": reason,
                         "alternatives": ["deliberate-dependent-flight"]}})
+        obligations = retained_artifacts(record)
+        if obligations:
+            related[-1]["retained_artifacts"] = obligations
     # A cheap worktree status observation is not a full branch audit. Unknown or
     # unrelated work remains informational and never establishes ownership.
     other = [{**row, "state": _state(row["path"], repository["git_common_dir"])}

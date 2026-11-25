@@ -95,12 +95,22 @@ disposable-temporary classification, commits, delivery targets and disposition.
 Release execution ownership only after the recorded closeout/handoff decision
 and the required [lifecycle disposition gate](flight-lifecycle.md) pass inside
 PR & Merge. Retain records, outstanding obligations and all preservation proof.
-New cleanup-required records cannot close while eligible artifacts remain.
-Existing markerless records remain compatible without acquiring deletion grants.
+Eligible authorized cleanup must be attempted. An explicit setup-approved
+retention policy may permit **closed with retained artifacts**, with actual
+outcomes, reasons and next actions recorded. This does not waive required tests,
+review, implementation or merge. Retained ownership reservations and unknown
+operations survive closure and block conflicting adoption/reconciliation while
+unrelated work remains permitted. Missing/uncovered disposition stays pending.
+Existing markerless and no-policy records remain compatible without invented
+retention acceptance or deletion grants.
 #81 owns cleanup authorization, integration/preservation proof and native
 cleanup/reconciliation; #82 supplies no deletion, retention or snapshot system.
-Preserve an existing repository checkout used for branch-only work. Temporary
-worktrees are merely eligible for later authorized disposition. A merged PR alone
+Preserve an existing repository checkout used for branch-only work. Keep the PM
+in stable same-clone control and bind a delegated implementation worker as the
+actual main source checkout. Separately authorized ordinary Git-managed workers
+outside client-managed directories retain explicit manual provenance and cleanup
+authority; never use that authority to remove client-managed artifacts. Temporary
+worktrees are merely eligible for later verified disposition. A merged PR alone
 does not prove required disposition complete. Closed cards can retain historical
 identity without claiming the checkout still exists.
 

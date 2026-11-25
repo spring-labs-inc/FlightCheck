@@ -175,9 +175,15 @@ all relevant source changes at the pinned integration commit and its reachabilit
 from the actual target, including squash/rebase delivery. Recheck exact identities,
 source heads, ownership, protection, locks and checkout/private-data state before
 each authorized action. Prefer native cleanup, capture its real result, and verify
-actual path/admin/ref outcomes. Preserve blocked artifacts and keep the stage
-pending; a merged PR alone does not close a flight. Resume an interrupted operation
-with the same inventory and leases. Release ownership only after the current gate
+actual path/admin/ref outcomes. Attempt independently eligible actions even when
+another artifact is blocked. Setup-approved retention may close the flight with
+retained artifacts, recording actual failed/unknown outcomes, policy, reasons,
+next actions and relevant ownership reservations. Uncovered/missing disposition
+remains pending; no unresolved operation is a cleanup success. Unknown operations
+block conflicting mutations after closure and remain visible to launch/audit.
+Retention never waives implementation, checks, reviews or verified delivery.
+A merged PR alone is insufficient. Resume with the same inventory and leases.
+Release execution ownership only after the current verified-disposition gate
 passes; use a same-clone retained control root and verified external helpers when
 the main temporary checkout has been removed.
 

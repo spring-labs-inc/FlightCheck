@@ -48,6 +48,30 @@ client's actual recovery coverage rather than assuming archive preserves every
 kind of file. Keep private evidence, task-card history and necessary helper/card
 runtime assets outside every disposable worktree.
 
+## Setup-approved retention policy
+
+Cleanup authority and retention approval are separate. A flight may declare an
+explicit owner `grants.retention` policy during setup, using the existing Registry:
+
+```json
+{"schema": 1, "authority": "owner", "reference": "private-owner-decision.json",
+ "allowed_reasons": {"native_unavailable": {
+   "next_action": "Reconcile supported native cleanup when available",
+   "responsible": "Flight owner"}}}
+```
+
+Registration binds the policy and its digest alongside the exact cleanup scope.
+An absent policy keeps existing closeout behavior; it does not invent acceptance
+for legacy records. Retain original decisions and operation history. Silent policy
+widening or changing frozen authority/leases is prohibited.
+
+The policy is not permission to skip eligible cleanup. Record each artifact's
+identity, observed existence, actual operation outcome, reason, next action,
+responsibility and policy reference. Unknown identity or existence stays unknown.
+A failed or unknown operation may qualify only for expressly approved retention;
+it never becomes successful removal. Merely emitting a native-action request is
+not an attempted cleanup or evidence of an unknown native outcome.
+
 ## Verified disposition inside PR & Merge
 
 Cleanup follows the confirmed actual merge. The observer checks repository,
@@ -69,12 +93,16 @@ unknown ignored data, unintegrated commits and ambiguous artifacts. An owned mai
 temporary worktree is eligible only when those conditions pass; it is distinct
 from the repository's main checkout.
 
-Safely leave the execution worktree before native removal. Use the supported
-client operation for a client-managed worktree. Without that operation, the helper
+Keep the PM in stable control and safely leave/release the execution worktree
+before removal. Use the supported client operation for a client-managed worktree. Without that operation, the helper
 returns a bound native-action request rather than deleting its directory. Retain
 the actual native result and acknowledge it through `ack-native`; client identity
 and observed absence of both the path and Git administrative entry are necessary.
-A success flag alone cannot complete disposition. A retained control checkout in
+A success flag alone cannot establish successful cleanup. Separately authorized
+Git-managed workers can use ordinary `git worktree remove` without force only
+when their recorded manual provenance, explicit `git_managed` grant and all
+current checks permit it. This is not a fallback for a client-managed worktree;
+never manually remove a Codex-managed artifact. A retained control checkout in
 the same clone and an externally preserved, verified helper runtime allow
 reconciliation after the execution path is removed, without adopting another main
 checkout or changing its files.
@@ -88,15 +116,36 @@ the same authorized inventory and distinguish removed, already absent, retained,
 failed and native-action-pending artifacts. A failed remote query cannot establish
 absence; a recreated artifact cannot inherit an old removal result.
 
-The required close gate belongs to **PR & Merge**, not a tenth stage. A merged PR
-can coexist with a flight still blocked on cleanup. Eligible disposable artifacts
-must actually be removed or proven absent; runtime blockers cannot be relabeled as
-successful retention. Predesignated preserved-existing artifacts receive explicit
-retained disposition. Release execution ownership and close only after the fresh
-gate passes. Preserve the evidence and accurate historical identity on the closed
-card. After authorized removal of the execution checkout, use the existing
-portable publisher and retained assets rather than substituting the publisher's
-checkout for the historical flight location.
+Attempt every independently eligible authorized action. A blocked worktree must
+not prevent safe remote-ref cleanup. A branch still checked out in a preserved
+worktree remains retained. Global authority, actual merge and integration failures
+still prevent unsafe mutation; all other current preservation checks remain in
+force.
+
+The required close gate belongs to **PR & Merge**, not a tenth stage. Its outcomes
+are **closed—cleanup complete** or **closed with retained artifacts**. Every scoped
+artifact needs verified cleanup or policy-accepted retention; missing accounting,
+an uncovered reason or absent next action keeps disposition pending. A merged PR
+alone is insufficient, and retention does not waive implementation acceptance,
+required tests/reviews or delivery. Cleanup completeness and disposition
+completeness are separate; retained, failed and unknown outcomes are not cleanup
+success.
+
+Closeout releases execution sessions from stable control while preserving relevant
+artifact ownership reservations and unresolved obligations. Closed retained flights
+remain visible to related-work detection and audit. Unknown operations prohibit
+conflicting or duplicate mutations until reconciled, including when no physical
+path or native administrative identity was observed. Record the known request and
+exact target reservations without inventing an artifact. Unrelated safe work is
+not blocked. A next action confers no new deletion grant; deferred cleanup must
+revalidate authority, identity, current state and exact original OID conditions.
+
+Preserve evidence and accurate historical identity on the closed card. After
+actual removal of the execution checkout, use the existing portable publisher and
+retained assets without substituting the control checkout for the historical
+execution location. Native capability/archival coverage must be reported
+separately: deterministic outcome tests or accepted retention do not establish
+successful live native archival.
 
 ## Optional on-demand audit
 
@@ -119,6 +168,10 @@ explicit owner/client/flight/PR, checkout dirty/untracked/ignored state where
 applicable, checked-out/locked/protected or active state, target/integration
 indicators and an actionable recommendation with reasons and prerequisites.
 Worktree existence and a closed Registry record do not prove native inactivity.
+Include closed retained obligations and known unresolved operations, even when
+physical identity is unavailable. Report their policy, actual outcome, retention
+reason, next action, responsibility and exact reservations. Keep missing identity
+and native coverage limits explicit; recommendations remain read-only.
 
 Audit is strictly read-only: no fetch, even without prune; no prune, delete,
 archive, checkout switch, commit, stash, configured-check execution or client-state
