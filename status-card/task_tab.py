@@ -48,6 +48,8 @@ def discover(task, candidate, browser, publication_port):
         reason = "Ambiguous browser routes" if urls else "No browser endpoint verified for this task and candidate"
         return dict(missing, reason=reason + "; use the existing connector or refresh the native observation.")
     tab_matches = [tab for tab in browser["tabs"] if tab in matches]
+    if not tab_matches and any(isinstance(tab, dict) and tab.get("url") in urls for tab in browser["tabs"]):
+        return dict(missing, reason="The existing tab needs a fresh candidate observation; do not open a duplicate.")
     decision = decide(task, dict(browser, tabs=tab_matches))
     selected = next((tab for tab in tab_matches if tab.get("visible") is True), matches[0])
     activation = browser.get("activation", {})

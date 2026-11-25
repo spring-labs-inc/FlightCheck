@@ -68,7 +68,7 @@ def ssh_failure(phase, code, diagnostic="", log=None):
     return ValueError(message)
 
 
-def prepare_remote(args, user_url=None):
+def prepare_remote(args, user_url=None, confirmation=None):
     command = [args.remote_python, "-B", str(PurePosixPath(args.card_dir) / "reply.py"),
                "prepare", "--task", args.task, "--execution", "remote", "--connection-adapter"]
     if args.title is not None:
@@ -77,6 +77,7 @@ def prepare_remote(args, user_url=None):
         command += ["--details", args.details]
     if user_url:
         command += ["--user-url", user_url]
+        command += ["--connection-confirmation", json.dumps(confirmation)]
         if getattr(args, "reconcile_route", False):
             command += ["--reconcile-route"]
     if args.remote_state_dir:
@@ -253,11 +254,16 @@ def establish(args, directory, allow_start=True):
                         log.seek(max(log_start, log_path.stat().st_size - 4096))
                         diagnostic = log.read(4096).decode("utf-8", errors="replace")
                     raise ssh_failure("SSH forward", process.poll(), diagnostic, log_path)
-            confirmed = prepare_remote(args, url)
+            # Complete browser-side verification before making the worker route
+            # usable. The worker atomically checks this exact identity at commit;
+            # a changed candidate cannot acquire a fresh verification stamp.
+            if not maintainer.current_card(args.task, local_port, remote["candidate"], remote_port):
+                raise ValueError("Forwarded route changed before confirmation; retry on the same route")
+            confirmation = {key: remote.get(key) for key in ("candidate", "host_url", "context")}
+            confirmed = prepare_remote(args, url, confirmation=confirmation)
             if (confirmed.get("user_url") != url or confirmed["candidate"] != remote["candidate"]
                     or confirmed["host_url"] != remote["host_url"]
-                    or confirmed.get("context") != remote.get("context")
-                    or not maintainer.current_card(args.task, local_port, remote["candidate"], remote_port)):
+                    or confirmed.get("context") != remote.get("context")):
                 raise ValueError("Remote card or forwarded route changed during verification; retry on the same route")
             maintainer.write_json(directory / "connection.json", {
                 "task": args.task, "local_port": local_port, "remote_port": remote_port,

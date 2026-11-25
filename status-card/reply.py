@@ -213,6 +213,15 @@ def prepare(checkout, state, args):
             if not isinstance(saved, dict) or any(saved.get(key) != context.get(key) for key in ("host", "repository")):
                 raise ValueError("Connection adapter belongs to another host or repository")
             context = saved
+        confirmation = None
+        if getattr(args, "connection_adapter", False) and args.user_url:
+            try:
+                confirmation = json.loads(getattr(args, "connection_confirmation", None) or "null")
+            except ValueError:
+                raise ValueError("Invalid connector confirmation") from None
+            expected = {"candidate": maintainer.candidate(checkout), "host_url": host_url, "context": context}
+            if confirmation != expected:
+                raise ValueError("Connector candidate or route changed before confirmation; no route was adopted")
         cfg = manual_configuration(previous, context, checkout, directory)
         if cfg and getattr(args, "reconcile_route", False) and not args.user_url:
             if context.get("session") not in cfg["sessions"]:
@@ -236,6 +245,8 @@ def prepare(checkout, state, args):
                                   context, getattr(args, "reconcile_route", False), confirmed_reuse)
             current = maintainer.candidate(checkout)
             live = published_card(args.task, endpoint["port"], current)
+            if confirmation is not None and confirmation != {"candidate": current, "host_url": record["host_url"], "context": context}:
+                raise ValueError("Connector candidate or route changed during confirmation; no route was adopted")
             if args.user_url:
                 record["route_verification"] = {"candidate": current, "observed_at": time.time(),
                                                 "source": "connector" if getattr(args, "connection_adapter", False) else "declared"}
@@ -361,6 +372,7 @@ def main():
     parser.add_argument("--browser-observation", type=Path, help="Private fresh browser API inventory and endpoint observations")
     parser.add_argument("--reconcile-route", action="store_true", help="Reconcile a browser route or authorized same-flight route caller")
     parser.add_argument("--connection-adapter", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--connection-confirmation", help=argparse.SUPPRESS)
     parser.add_argument("--reply-file", type=Path)
     args = parser.parse_args()
     # Do not even read a draft, resolve the checkout, or create private state for
