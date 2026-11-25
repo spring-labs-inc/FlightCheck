@@ -104,6 +104,14 @@ def verified_route(record, candidate, configured=False):
             and -5 <= time.time() - stamp <= 30 and not record.get("route_unverified"))
 
 
+def usable_route(record, candidate, configured=False):
+    # Local execution proves only the producer's own endpoint. A different
+    # native/browser endpoint needs the same current proof as a remote route.
+    return bool(record.get("user_url") and not record.get("route_unverified") and (
+        record.get("execution") == "local" and record["user_url"] == record.get("host_url")
+        or verified_route(record, candidate, configured)))
+
+
 def route_context(checkout, session):
     return {"host": socket.gethostname(),
             "repository": str(maintainer.git_path(checkout, "--path-format=absolute", "--git-common-dir")),
@@ -173,17 +181,17 @@ def browser_observation(path, context):
 
 def observation(record, candidate, publication, verdict="Pending", configured=False):
     url = record.get("user_url")
-    remote_pending = record["execution"] == "remote" and (not record.get("user_url") or not verified_route(record, candidate, configured))
+    route_pending = not usable_route(record, candidate, configured)
     ready = bool(publication and publication.get("completeness", {}).get("ready"))
     result = {"task": record["task"], "candidate": candidate,
-              "status": "published" if ready and not remote_pending else "incomplete" if publication and not ready else "unavailable",
+              "status": "published" if ready and not route_pending else "incomplete" if publication and not ready else "unavailable",
               "publication": "verified" if publication else "unavailable",
               "verdict": verdict if ready else "Pending",
               "completeness": publication.get("completeness") if publication else None,
               "execution": record["execution"], "host_url": record.get("host_url"),
-              "user_url": record.get("user_url"), "footer": footer(url if ready and not remote_pending else None),
+              "user_url": record.get("user_url"), "footer": footer(url if ready and not route_pending else None),
               "browser_reachability": "unobserved", "browser_rendering": "unobserved"}
-    if remote_pending:
+    if route_pending:
         port = urlsplit(record["host_url"]).port if record.get("host_url") else "HOST_PORT"
         result["guidance"] = ("Browser route unavailable. First refresh supported native browser controls and pass their private "
                               "observation with --browser-observation. If unavailable, run the existing status-card/connect.py "
