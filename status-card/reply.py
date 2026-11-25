@@ -71,6 +71,10 @@ def route_record(previous, task, host_url, execution, supplied, context=None, re
         # A failed handoff must not erase the only known browser route or move
         # its ownership. The caller gets unavailable until reconciliation.
         user_url, context = previous["user_url"], previous.get("context")
+    if confirmed_reuse and not supplied and isinstance(previous.get("context"), dict):
+        # Shared configuration does not transfer the latest browser observation
+        # to the caller that is merely reusing its confirmed destination.
+        context = previous["context"]
     owner = previous.get("connection_owner")
     keep_owner = (isinstance(owner, dict) and previous.get("execution") == execution
                   and owner.get("user_url") == user_url and owner.get("host_url") == host_url
@@ -85,18 +89,18 @@ def route_record(previous, task, host_url, execution, supplied, context=None, re
             **({"route_unverified": True} if retained or compatible and previous.get("route_unverified") and not supplied else {})}
 
 
-def verified_route(record, candidate):
+def verified_route(record, candidate, configured=False):
     proof = record.get("route_verification", {})
     if not isinstance(proof, dict):
         return False
     if record.get("route_unverified"):
         return False
-    # An explicitly confirmed manual destination is connection configuration,
-    # never a fresh browser observation. Scope/session checks remain mandatory.
-    if proof.get("source") == "declared" and isinstance(record.get("manual_route"), dict):
+    # The caller separately validates configuration scope and authorization.
+    # Using it makes no claim about another caller's expiring observation.
+    if configured:
         return True
     stamp = proof.get("observed_at")
-    return (proof.get("candidate") == candidate and type(stamp) in (int, float)
+    return (proof.get("source") in ("native", "connector") and proof.get("candidate") == candidate and type(stamp) in (int, float)
             and -5 <= time.time() - stamp <= 30 and not record.get("route_unverified"))
 
 
@@ -113,13 +117,14 @@ def manual_configuration(record, context, checkout, directory):
     and connector observations never become reusable manual configuration.
     """
     proof, prior = record.get("route_verification", {}), record.get("context", {})
-    if (not isinstance(proof, dict) or proof.get("source") != "declared"
-            or not isinstance(prior, dict) or not record.get("user_url")
+    if (not isinstance(prior, dict) or not record.get("user_url")
             or any(prior.get(key) != context.get(key) for key in ("host", "repository"))
             or read_object(directory / "monitor.json").get("checkout") != str(checkout.resolve())):
         return None
     cfg = record.get("manual_route")
     if cfg is None:
+        if not isinstance(proof, dict) or proof.get("source") != "declared":
+            return None
         # Explicit compatibility reconciliation retains a legacy declaration's
         # original source context/time; publication does not refresh that fact.
         cfg = {"schema": 1, "task": record["task"], "url": record["user_url"],
@@ -135,14 +140,15 @@ def manual_configuration(record, context, checkout, directory):
     return copy.deepcopy(cfg)
 
 
+def configured_route(record, context, checkout, directory):
+    cfg = manual_configuration(record, context, checkout, directory)
+    return bool(cfg and context.get("session") in cfg["sessions"])
+
+
 def route_caller_matches(record, context, checkout, directory):
     if read_object(directory / "monitor.json").get("checkout") != str(checkout.resolve()):
         return False
-    proof = record.get("route_verification", {})
-    if isinstance(proof, dict) and proof.get("source") == "declared" and record.get("manual_route"):
-        cfg = manual_configuration(record, context, checkout, directory)
-        return bool(cfg and context.get("session") in cfg["sessions"])
-    return record.get("context") == context
+    return configured_route(record, context, checkout, directory) or record.get("context") == context
 
 
 def browser_observation(path, context):
@@ -160,9 +166,9 @@ def browser_observation(path, context):
     return value
 
 
-def observation(record, candidate, publication, verdict="Pending"):
+def observation(record, candidate, publication, verdict="Pending", configured=False):
     url = record.get("user_url")
-    remote_pending = record["execution"] == "remote" and (not record.get("user_url") or not verified_route(record, candidate))
+    remote_pending = record["execution"] == "remote" and (not record.get("user_url") or not verified_route(record, candidate, configured))
     ready = bool(publication and publication.get("completeness", {}).get("ready"))
     result = {"task": record["task"], "candidate": candidate,
               "status": "published" if ready and not remote_pending else "incomplete" if publication and not ready else "unavailable",
@@ -297,7 +303,8 @@ def prepare(checkout, state, args):
                     record["route_unverified"] = True
                     native = {"action": "fallback", "reason": str(error)}
             maintainer.write_json(directory / "reply-route.json", record)
-            result = observation(record, current, live, live["verdict"] if live else "Pending")
+            result = observation(record, current, live, live["verdict"] if live else "Pending",
+                                 configured_route(record, context, checkout, directory))
             result["context"] = context
             if native:
                 result["browser_action"] = native["action"]
@@ -354,13 +361,35 @@ def connection_observation(checkout, state, args, renew=False):
         backup = read_object(directory / ("connection-" + confirmation["attempt"] + ".json"))
         previous = backup.get("previous")
         original = backup.get("confirmation", {})
-        if (isinstance(proof, dict) and proof.get("source") == "connector" and proof.get("attempt") == confirmation["attempt"]
+        restore = (isinstance(proof, dict) and proof.get("source") == "connector" and proof.get("attempt") == confirmation["attempt"]
                 and isinstance(original, dict) and all(original.get(key) == confirmation.get(key)
                 for key in ("attempt", "host_url", "user_url", "context"))
-                and isinstance(previous, dict) and previous.get("task") == args.task):
-            record = previous
+                and isinstance(previous, dict) and previous.get("task") == args.task)
+        stopping = confirmation.get("stopping_forward") is True
+        if restore:
+            cfg = record.get("manual_route")
+            newer_cfg = (isinstance(cfg, dict) and cfg.get("url") == record.get("user_url")
+                         and cfg != previous.get("manual_route"))
+            if newer_cfg:
+                # A later explicit configuration must survive rollback of this
+                # attempt's observation, including after monitor renewal.
+                if previous.get("user_url") == record.get("user_url"):
+                    for key in ("route_verification", "connection_owner", "context"):
+                        if key in previous:
+                            record[key] = previous[key]
+                        else:
+                            record.pop(key, None)
+                else:
+                    record.pop("route_verification", None)
+                    record.pop("connection_owner", None)
+            else:
+                record = previous
+            if stopping and record.get("user_url") == confirmation.get("user_url"):
+                record["route_unverified"] = True
+                record.pop("connection_owner", None)
         else:
-            record["route_unverified"] = True
+            if stopping:
+                record["route_unverified"] = True
             record.pop("connection_owner", None)
         maintainer.write_json(directory / "reply-route.json", record)
         return {"status": "connection-rejected", "task": args.task}
@@ -380,13 +409,15 @@ def check(checkout, state, args):
     mode = execution_mode(args.execution)
     if mode != record["execution"]:
         raise ValueError("Execution context changed; prepare the route again before replying")
-    if not route_caller_matches(record, route_context(checkout, args.session), checkout, directory):
+    context = route_context(checkout, args.session)
+    if not route_caller_matches(record, context, checkout, directory):
         raise ValueError("Host, repository or session changed; prepare and verify this connection before replying")
     if args.user_url and args.user_url != record.get("user_url"):
         raise ValueError("Use the prepared task's exact browser URL")
     current = maintainer.candidate(checkout)
     published = published_card(args.task, endpoint.get("port"), current)
-    result = observation(record, current, published, published["verdict"] if published else "Pending")
+    result = observation(record, current, published, published["verdict"] if published else "Pending",
+                         configured_route(record, context, checkout, directory))
     if not args.reply_file:
         raise ValueError("check requires --reply-file with the exact controller reply")
     text = args.reply_file.read_text(encoding="utf-8")

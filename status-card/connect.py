@@ -125,8 +125,8 @@ def connection_observation_remote(args, confirmation, renew=False, timeout=20):
     return value
 
 
-def reject_remote(args, confirmation):
-    connection_observation_remote(args, confirmation, timeout=3)
+def reject_remote(args, confirmation, stopping_forward=False):
+    connection_observation_remote(args, dict(confirmation, stopping_forward=stopping_forward), timeout=3)
 
 
 class RetainedForward(ValueError):
@@ -337,7 +337,7 @@ def establish(args, directory, allow_start=True):
         except BaseException:
             if confirmation is not None:
                 try:
-                    reject_remote(args, confirmation)
+                    reject_remote(args, confirmation, stopping_forward=process is not None)
                 except (OSError, ValueError, subprocess.SubprocessError):
                     if process and process.poll() is None:
                         raise RetainedForward(process)
@@ -379,7 +379,7 @@ def release_forward(args, process):
     confirmation = getattr(args, "connection_confirmation", None)
     if confirmation is not None:
         try:
-            reject_remote(args, confirmation)
+            reject_remote(args, confirmation, stopping_forward=True)
         except (OSError, ValueError, subprocess.SubprocessError):
             if process.poll() is None:
                 print(str(RetainedForward(process)), file=sys.stderr, flush=True)

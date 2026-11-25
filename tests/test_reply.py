@@ -352,7 +352,7 @@ class ReplyTests(unittest.TestCase):
 
         self.assertEqual(hook("UserPromptSubmit", "initial"), {})
         forwarded = "http://127.0.0.1:31337/task/test-change/"
-        prepared = self.api("prepare", "--execution", "remote", "--user-url", forwarded, env=env)
+        prepared = self.api("prepare", "--execution", "remote", env=env, expected=1)
         # Exercise native observation freshness, separately from the owner's
         # durable manual destination configuration used by fallback callers.
         native = self.root / "native-route.json"
@@ -362,7 +362,7 @@ class ReplyTests(unittest.TestCase):
                                       "tabs": [{"id": "native", "url": forwarded, "visible": True,
                                                 "endpoint_reached": True, "snapshot": snapshot}]}))
         native.chmod(0o600)
-        self.api("prepare", "--execution", "remote", "--browser-observation", str(native), env=env)
+        prepared = self.api("prepare", "--execution", "remote", "--browser-observation", str(native), env=env)
         exact = subprocess.check_output(
             [sys.executable, "-B", str(self.checkout / "status-card/maintainer.py"), "card",
              "--task", "test-change", "--title", "Synthetic native Stop fixture"],

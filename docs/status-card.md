@@ -112,6 +112,11 @@ cannot be confirmed, retain that forward and report its exact recovery action.
 Repeated invocations retain the active monitor's transport identity. A native
 observation at the same URL can change proof provenance without dropping that
 transport dependency; stopping the owned forward invalidates its dependent proof.
+Confirmed manual configuration remains available to its authorized callers when
+observation provenance changes. Reusing it never transfers another session's
+fresh proof or renews that proof's time. A known owned-forward outage survives
+ordinary publication; retained URL/configuration metadata supports fresh native
+or connector revalidation without another URL interview.
 Worker publication and ordinary checks do not renew browser evidence.
 
 An owner-confirmed manual destination is separate private connection
