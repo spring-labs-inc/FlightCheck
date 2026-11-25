@@ -121,6 +121,7 @@ def connection_observation_remote(args, confirmation, renew=False, timeout=20):
             or value.get("status") not in (("connection-confirmed", "connection-superseded") if renew else
                                           ("connection-rejected", "connection-superseded")) or value.get("task") != args.task):
         raise ValueError("Connector observation update was not confirmed")
+    return value
 
 
 def reject_remote(args, confirmation):
@@ -291,14 +292,31 @@ def establish(args, directory, allow_start=True):
             # a changed candidate cannot acquire a fresh verification stamp.
             if not maintainer.current_card(args.task, local_port, remote["candidate"], remote_port):
                 raise ValueError("Forwarded route changed before confirmation; retry on the same route")
-            confirmation = {key: remote.get(key) for key in ("candidate", "host_url", "context")}
-            confirmation["attempt"] = uuid.uuid4().hex
-            confirmation["user_url"] = url
-            args.connection_confirmation = confirmation
-            confirmed = prepare_remote(args, url, confirmation=confirmation)
+            if not allow_start:
+                # The live monitor retains transport ownership. A caller that
+                # borrows its forward may refresh that proof, never replace it.
+                owner = saved.get("confirmation")
+                if (not isinstance(owner, dict) or not re.fullmatch(r"[a-f0-9]{32}", str(owner.get("attempt", "")))
+                        or any(owner.get(key) != value for key, value in
+                               (("user_url", url), ("host_url", remote["host_url"])))
+                        or not isinstance(owner.get("context"), dict) or any(owner["context"].get(key) !=
+                            remote.get("context", {}).get(key) for key in ("host", "repository"))):
+                    raise ValueError("The live route monitor has no compatible attempt identity; wait for its ownership to end before reconnecting")
+                route_confirmation = dict(owner, candidate=remote["candidate"])
+                refreshed = connection_observation_remote(args, route_confirmation, renew=True)
+                if refreshed["status"] != "connection-confirmed":
+                    raise ValueError("The owning monitor's route changed; no new attempt was adopted")
+                confirmed = dict(remote, user_url=url, context=owner["context"])
+            else:
+                confirmation = {key: remote.get(key) for key in ("candidate", "host_url", "context")}
+                confirmation["attempt"] = uuid.uuid4().hex
+                confirmation["user_url"] = url
+                route_confirmation = confirmation
+                confirmed = prepare_remote(args, url, confirmation=confirmation)
+            args.connection_confirmation = route_confirmation
             if (confirmed.get("user_url") != url or confirmed["candidate"] != remote["candidate"]
                     or confirmed["host_url"] != remote["host_url"]
-                    or confirmed.get("context") != remote.get("context")):
+                    or confirmed.get("context") != route_confirmation.get("context")):
                 raise ValueError("Remote card or forwarded route changed during verification; retry on the same route")
             maintainer.write_json(directory / "connection.json", {
                 "task": args.task, "local_port": local_port, "remote_port": remote_port,
@@ -306,6 +324,7 @@ def establish(args, directory, allow_start=True):
                 "pid": process.pid if process else saved.get("pid"),
                 "supervisor_pid": saved.get("supervisor_pid"),
                 "helper_directory": saved.get("helper_directory"),
+                "confirmation": route_confirmation,
             })
             confirmed.update(status="published", user_url=url, footer="FlightCheck: [&lt; status /&gt;](" + url + ")",
                              browser_reachability="verified", browser_rendering="unobserved",

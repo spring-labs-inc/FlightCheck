@@ -71,7 +71,13 @@ def route_record(previous, task, host_url, execution, supplied, context=None, re
         # A failed handoff must not erase the only known browser route or move
         # its ownership. The caller gets unavailable until reconciliation.
         user_url, context = previous["user_url"], previous.get("context")
+    owner = previous.get("connection_owner")
+    keep_owner = (isinstance(owner, dict) and previous.get("execution") == execution
+                  and owner.get("user_url") == user_url and owner.get("host_url") == host_url
+                  and isinstance(owner.get("context"), dict) and isinstance(context, dict)
+                  and all(owner["context"].get(key) == context.get(key) for key in ("host", "repository")))
     return {"task": task, "host_url": host_url, "user_url": user_url, "execution": execution,
+            **({"connection_owner": owner} if keep_owner else {}),
             **({"context": context} if context is not None else {}),
             **({"manual_route": previous["manual_route"]} if previous.get("manual_route") else {}),
             **({"route_verification": previous["route_verification"]}
@@ -257,6 +263,10 @@ def prepare(checkout, state, args):
                                                 "source": "connector" if getattr(args, "connection_adapter", False) else "declared"}
                 if confirmation is not None:
                     record["route_verification"]["attempt"] = confirmation["attempt"]
+                    # Candidate belongs to the observation, not to transport
+                    # ownership, which survives later candidate/provenance changes.
+                    record["connection_owner"] = {key: confirmation[key]
+                                                   for key in ("attempt", "host_url", "user_url", "context")}
                     maintainer.write_json(directory / ("connection-" + confirmation["attempt"] + ".json"),
                                           {"confirmation": confirmation, "previous": previous})
                 if not getattr(args, "connection_adapter", False):
@@ -322,8 +332,10 @@ def connection_observation(checkout, state, args, renew=False):
                 or any(confirmation.get("context", {}).get(key) != context.get(key) for key in ("host", "repository"))):
             raise ValueError("Connector rejection belongs to another recorded checkout, host or repository")
         proof = record.get("route_verification", {})
-        if (not isinstance(proof, dict) or proof.get("source") != "connector" or proof.get("attempt") != confirmation["attempt"]
-                or record.get("context") != confirmation.get("context") or record.get("user_url") != confirmation.get("user_url")):
+        owner = record.get("connection_owner", {})
+        if (not isinstance(owner, dict) or any(owner.get(key) != confirmation.get(key)
+                for key in ("attempt", "host_url", "user_url", "context"))
+                or record.get("user_url") != confirmation.get("user_url")):
             return {"status": "connection-superseded", "task": args.task}
         if renew:
             endpoint = read_object(directory / "endpoint.json")
@@ -333,19 +345,23 @@ def connection_observation(checkout, state, args, renew=False):
                     or record.get("host_url") != maintainer.card_url(args.task, endpoint.get("port"))
                     or not published_card(args.task, endpoint.get("port"), current)):
                 raise ValueError("Connector observation no longer matches the published candidate")
-            record["route_verification"] = dict(proof, candidate=current, observed_at=time.time())
+            record["route_verification"] = {"candidate": current, "observed_at": time.time(),
+                                             "source": "connector", "attempt": confirmation["attempt"]}
+            record["context"] = confirmation["context"]
             record.pop("route_unverified", None)
             maintainer.write_json(directory / "reply-route.json", record)
             return {"status": "connection-confirmed", "task": args.task}
         backup = read_object(directory / ("connection-" + confirmation["attempt"] + ".json"))
         previous = backup.get("previous")
         original = backup.get("confirmation", {})
-        if (isinstance(original, dict) and all(original.get(key) == confirmation.get(key)
+        if (isinstance(proof, dict) and proof.get("source") == "connector" and proof.get("attempt") == confirmation["attempt"]
+                and isinstance(original, dict) and all(original.get(key) == confirmation.get(key)
                 for key in ("attempt", "host_url", "user_url", "context"))
                 and isinstance(previous, dict) and previous.get("task") == args.task):
             record = previous
         else:
             record["route_unverified"] = True
+            record.pop("connection_owner", None)
         maintainer.write_json(directory / "reply-route.json", record)
         return {"status": "connection-rejected", "task": args.task}
 

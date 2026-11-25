@@ -109,6 +109,9 @@ The existing browser-side SSH monitor renews only its attempt's connector eviden
 after a current endpoint probe; this never extends producer ownership. A failed
 adoption or owned-forward teardown restores the prior verification. If rejection
 cannot be confirmed, retain that forward and report its exact recovery action.
+Repeated invocations retain the active monitor's transport identity. A native
+observation at the same URL can change proof provenance without dropping that
+transport dependency; stopping the owned forward invalidates its dependent proof.
 Worker publication and ordinary checks do not renew browser evidence.
 
 An owner-confirmed manual destination is separate private connection
