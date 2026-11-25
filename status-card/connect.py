@@ -97,6 +97,7 @@ def prepare_remote(args, user_url=None, confirmation=None):
         raise ssh_failure("Remote preparation", result.returncode, "Startup response must be a JSON object")
     if (result.returncode not in (0, 1) or data.get("task") != args.task
             or data.get("publication") != "verified"
+            or not isinstance(data.get("context"), dict)
             or not data.get("completeness", {}).get("ready")
             or not re.fullmatch(r"[a-f0-9]{64}", data.get("candidate", ""))):
         raise ValueError("Remote card is not ready: " + str(data.get("error") or data.get("guidance") or "SSH preparation failed"))
