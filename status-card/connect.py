@@ -21,6 +21,7 @@ import socket
 import subprocess
 import sys
 import time
+import uuid
 from urllib.parse import urlsplit
 
 import maintainer
@@ -101,6 +102,36 @@ def prepare_remote(args, user_url=None, confirmation=None):
         raise ValueError("Remote card is not ready: " + str(data.get("error") or data.get("guidance") or "SSH preparation failed"))
     validate_task_url(data.get("host_url", ""), args.task)
     return data
+
+
+def connection_observation_remote(args, confirmation, renew=False, timeout=20):
+    command = [args.remote_python, "-B", str(PurePosixPath(args.card_dir) / "reply.py"),
+               "confirm-connection" if renew else "reject-connection", "--task", args.task, "--connection-adapter",
+               "--connection-confirmation", json.dumps(confirmation)]
+    if args.remote_state_dir:
+        command = ["env", "FLIGHTCHECK_STATE_DIR=" + args.remote_state_dir, *command]
+    script = "cd " + shlex.quote(args.checkout) + " && " + shlex.join(command)
+    result = subprocess.run(["ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", "--", args.ssh, script],
+                            stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout)
+    try:
+        value = json.loads(result.stdout)
+    except ValueError:
+        raise ValueError("Connector observation update was not confirmed") from None
+    if (result.returncode or not isinstance(value, dict)
+            or value.get("status") not in (("connection-confirmed", "connection-superseded") if renew else
+                                          ("connection-rejected", "connection-superseded")) or value.get("task") != args.task):
+        raise ValueError("Connector observation update was not confirmed")
+
+
+def reject_remote(args, confirmation):
+    connection_observation_remote(args, confirmation, timeout=3)
+
+
+class RetainedForward(ValueError):
+    def __init__(self, process):
+        super().__init__(f"Route rejection unavailable; retained this attempt's SSH forward PID {process.pid}. "
+                         "Restore worker access before retrying cleanup; do not start a competing forward.")
+        self.process = process
 
 
 def available(number):
@@ -232,6 +263,7 @@ def establish(args, directory, allow_start=True):
                 local_port = free.getsockname()[1]
         url = maintainer.card_url(args.task, local_port)
         process = None
+        confirmation = None
         try:
             live = (maintainer.current_card(args.task, local_port, remote["candidate"], remote_port)
                     if saved else None)
@@ -260,6 +292,9 @@ def establish(args, directory, allow_start=True):
             if not maintainer.current_card(args.task, local_port, remote["candidate"], remote_port):
                 raise ValueError("Forwarded route changed before confirmation; retry on the same route")
             confirmation = {key: remote.get(key) for key in ("candidate", "host_url", "context")}
+            confirmation["attempt"] = uuid.uuid4().hex
+            confirmation["user_url"] = url
+            args.connection_confirmation = confirmation
             confirmed = prepare_remote(args, url, confirmation=confirmation)
             if (confirmed.get("user_url") != url or confirmed["candidate"] != remote["candidate"]
                     or confirmed["host_url"] != remote["host_url"]
@@ -280,6 +315,12 @@ def establish(args, directory, allow_start=True):
                 args.profile_context = {key: confirmed["context"].get(key) for key in ("host", "repository")}
             return confirmed, process
         except BaseException:
+            if confirmation is not None:
+                try:
+                    reject_remote(args, confirmation)
+                except (OSError, ValueError, subprocess.SubprocessError):
+                    if process and process.poll() is None:
+                        raise RetainedForward(process)
             # Only a process created by this attempt belongs to us. A reused
             # route or unrelated port owner must never be signalled by PID.
             if process:
@@ -310,6 +351,21 @@ def stop_child(process):
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait(timeout=3)
+
+
+def release_forward(args, process):
+    if process is None:
+        return True
+    confirmation = getattr(args, "connection_confirmation", None)
+    if confirmation is not None:
+        try:
+            reject_remote(args, confirmation)
+        except (OSError, ValueError, subprocess.SubprocessError):
+            if process.poll() is None:
+                print(str(RetainedForward(process)), file=sys.stderr, flush=True)
+                return False
+    stop_child(process)
+    return True
 
 
 def start_forward(args, directory, local_port, remote_port):
@@ -547,6 +603,11 @@ def monitor(args, directory, initial, process, clock=time.monotonic, sleep=time.
                         saved.update(pid=process.pid, candidate=expected)
                         maintainer.write_json(directory / "connection.json", saved)
                 authorized_timeout(RECOVERY_DEADLINE)
+                if getattr(args, "connection_confirmation", None) is not None:
+                    # Only this actual browser-side probe renews connector
+                    # evidence. The worker command leaves producer leases alone.
+                    confirmation = dict(args.connection_confirmation, candidate=expected)
+                    connection_observation_remote(args, confirmation, renew=True, timeout=authorized_timeout(4.5))
                 record("monitoring", transport="verified", candidate=expected, error=None)
             except OwnerExpired as error:
                 record("producer_expired", error=str(error))
@@ -563,7 +624,7 @@ def monitor(args, directory, initial, process, clock=time.monotonic, sleep=time.
         return state
     finally:
         if not state.get("forward_retained"):
-            stop_child(process)
+            state["forward_retained"] = not release_forward(args, process)
 
 
 def supervise(args):
@@ -591,6 +652,8 @@ def supervise(args):
                 final = monitor(args, directory, result, process)
                 retained = final.get("forward_retained", False)
         except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+            if isinstance(error, RetainedForward):
+                process, retained = error.process, True
             if sys.stdout.closed:
                 maintainer.write_json(directory / "monitor.json", {"task": args.task, "status": "unavailable",
                                       "transport": "unobserved", "error": str(error)})
@@ -601,7 +664,7 @@ def supervise(args):
             return 1
         finally:
             if not retained:
-                stop_child(process)
+                release_forward(args, process)
     return 0
 
 

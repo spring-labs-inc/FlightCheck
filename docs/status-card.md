@@ -105,6 +105,10 @@ For a verified route without a tab yet, put the same endpoint observation in
 second tab. The candidate-aware action is authoritative for selected flights;
 the legacy task-only helper cannot override it. Native and connector observations
 retain their candidate/time/session verification and expire after thirty seconds.
+The existing browser-side SSH monitor renews only its attempt's connector evidence
+after a current endpoint probe; this never extends producer ownership. A failed
+adoption or owned-forward teardown restores the prior verification. If rejection
+cannot be confirmed, retain that forward and report its exact recovery action.
 Worker publication and ordinary checks do not renew browser evidence.
 
 An owner-confirmed manual destination is separate private connection

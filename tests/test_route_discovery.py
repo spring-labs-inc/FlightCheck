@@ -1,6 +1,7 @@
 """Focused adapter-boundary witnesses; observed browser data is synthetic here."""
 
 import argparse
+import fcntl
 from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import importlib.util
@@ -254,6 +255,18 @@ with Server(('127.0.0.1',int(local)),Relay) as server:server.serve_forever()
         first = connect("first", ports[0], ["--ssh", "worker-fixture"])
         self.checked(fixture, first)
         stop_owned()
+        # A stopped TCP listener does not prove its supervisor has finished
+        # attempt-bound rejection and released recovery ownership.
+        for lock_path in (root / "browser-state").glob("connections/*/monitor.lock"):
+            with lock_path.open("a") as lock:
+                deadline = time.monotonic() + 5
+                while True:
+                    try:
+                        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        break
+                    except BlockingIOError:
+                        self.assertLess(time.monotonic(), deadline, "Previous route owner did not finish teardown")
+                        time.sleep(.05)
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
             try:

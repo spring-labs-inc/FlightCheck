@@ -219,7 +219,10 @@ def prepare(checkout, state, args):
                 confirmation = json.loads(getattr(args, "connection_confirmation", None) or "null")
             except ValueError:
                 raise ValueError("Invalid connector confirmation") from None
-            expected = {"candidate": maintainer.candidate(checkout), "host_url": host_url, "context": context}
+            if not isinstance(confirmation, dict) or not re.fullmatch(r"[a-f0-9]{32}", str(confirmation.get("attempt", ""))):
+                raise ValueError("Connector confirmation needs an exact attempt identity")
+            expected = {"candidate": maintainer.candidate(checkout), "host_url": host_url, "context": context,
+                        "attempt": confirmation["attempt"], "user_url": args.user_url}
             if confirmation != expected:
                 raise ValueError("Connector candidate or route changed before confirmation; no route was adopted")
         cfg = manual_configuration(previous, context, checkout, directory)
@@ -245,11 +248,17 @@ def prepare(checkout, state, args):
                                   context, getattr(args, "reconcile_route", False), confirmed_reuse)
             current = maintainer.candidate(checkout)
             live = published_card(args.task, endpoint["port"], current)
-            if confirmation is not None and confirmation != {"candidate": current, "host_url": record["host_url"], "context": context}:
+            if confirmation is not None and (not live or confirmation != {
+                    "candidate": current, "host_url": record["host_url"], "context": context,
+                    "attempt": confirmation["attempt"], "user_url": args.user_url}):
                 raise ValueError("Connector candidate or route changed during confirmation; no route was adopted")
             if args.user_url:
                 record["route_verification"] = {"candidate": current, "observed_at": time.time(),
                                                 "source": "connector" if getattr(args, "connection_adapter", False) else "declared"}
+                if confirmation is not None:
+                    record["route_verification"]["attempt"] = confirmation["attempt"]
+                    maintainer.write_json(directory / ("connection-" + confirmation["attempt"] + ".json"),
+                                          {"confirmation": confirmation, "previous": previous})
                 if not getattr(args, "connection_adapter", False):
                     if not cfg or cfg["url"] != args.user_url:
                         cfg = {"schema": 1, "task": args.task, "url": args.user_url, "checkout": str(checkout.resolve()),
@@ -295,6 +304,50 @@ def prepare(checkout, state, args):
             result = observation(record, maintainer.candidate(checkout), False)
             result["error"] = str(error)
         return result
+
+
+def connection_observation(checkout, state, args, renew=False):
+    """Confirm or reject one connector observation without publishing or renewing ownership."""
+    confirmation = json.loads(args.connection_confirmation or "null")
+    if (not args.connection_adapter or not isinstance(confirmation, dict)
+            or not isinstance(confirmation.get("context"), dict)
+            or not re.fullmatch(r"[a-f0-9]{32}", str(confirmation.get("attempt", "")))):
+        raise ValueError("Select an exact connector attempt to reject")
+    directory = maintainer.task_dir(state, args.task)
+    with (directory / "reply.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        record = read_object(directory / "reply-route.json")
+        context = route_context(checkout, args.session)
+        if (read_object(directory / "monitor.json").get("checkout") != str(checkout.resolve())
+                or any(confirmation.get("context", {}).get(key) != context.get(key) for key in ("host", "repository"))):
+            raise ValueError("Connector rejection belongs to another recorded checkout, host or repository")
+        proof = record.get("route_verification", {})
+        if (not isinstance(proof, dict) or proof.get("source") != "connector" or proof.get("attempt") != confirmation["attempt"]
+                or record.get("context") != confirmation.get("context") or record.get("user_url") != confirmation.get("user_url")):
+            return {"status": "connection-superseded", "task": args.task}
+        if renew:
+            endpoint = read_object(directory / "endpoint.json")
+            current = maintainer.candidate(checkout)
+            if (type(endpoint.get("port")) is not int or confirmation.get("candidate") != current
+                    or confirmation.get("host_url") != record.get("host_url")
+                    or record.get("host_url") != maintainer.card_url(args.task, endpoint.get("port"))
+                    or not published_card(args.task, endpoint.get("port"), current)):
+                raise ValueError("Connector observation no longer matches the published candidate")
+            record["route_verification"] = dict(proof, candidate=current, observed_at=time.time())
+            record.pop("route_unverified", None)
+            maintainer.write_json(directory / "reply-route.json", record)
+            return {"status": "connection-confirmed", "task": args.task}
+        backup = read_object(directory / ("connection-" + confirmation["attempt"] + ".json"))
+        previous = backup.get("previous")
+        original = backup.get("confirmation", {})
+        if (isinstance(original, dict) and all(original.get(key) == confirmation.get(key)
+                for key in ("attempt", "host_url", "user_url", "context"))
+                and isinstance(previous, dict) and previous.get("task") == args.task):
+            record = previous
+        else:
+            record["route_unverified"] = True
+        maintainer.write_json(directory / "reply-route.json", record)
+        return {"status": "connection-rejected", "task": args.task}
 
 
 def check(checkout, state, args):
@@ -356,7 +409,7 @@ def observe(checkout, state, args, recover=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("prepare", "check", "observe", "recover", "identify"))
+    parser.add_argument("command", choices=("prepare", "check", "observe", "recover", "identify", "reject-connection", "confirm-connection"))
     parser.add_argument("--context", choices=("controller", "ordinary", "reviewer"), default="controller")
     parser.add_argument("--task", type=task_id)
     parser.add_argument("--title")
@@ -399,6 +452,8 @@ def main():
             pass
         elif args.command in ("observe", "recover"):
             result = observe(checkout, state, args, args.command == "recover")
+        elif args.command in ("reject-connection", "confirm-connection"):
+            result = connection_observation(checkout, state, args, args.command == "confirm-connection")
         else:
             result = prepare(checkout, state, args) if args.command == "prepare" else check(checkout, state, args)
     except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
@@ -414,7 +469,7 @@ def main():
                   "footer": footer(None), "known_url": known_url,
                   "publication": "unavailable", "browser_reachability": "unobserved", "browser_rendering": "unobserved"}
     print(json.dumps(result, indent=2))
-    return 0 if result["status"] in ("published", "observed", "identified") else 1
+    return 0 if result["status"] in ("published", "observed", "identified", "connection-rejected", "connection-superseded", "connection-confirmed") else 1
 
 
 if __name__ == "__main__":
