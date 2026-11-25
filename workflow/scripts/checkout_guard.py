@@ -19,7 +19,7 @@ import time
 from urllib.parse import urlparse
 
 import launch_detection
-from flight_associations import AssociationError, Registry, encoded, repository_identity, validate_record
+from flight_associations import AssociationError, Registry, encoded, repository_identity, validate_record, reservation_conflicts
 from project_config import META, normalize, protected
 
 
@@ -409,6 +409,20 @@ def _configuration(checkout, record):
     return config
 
 
+def _reserved_checkout(state, records, record):
+    """Preserve retained ownership without blocking unrelated checkouts."""
+    ref = "refs/heads/" + state["branch"] if state["branch"] else None
+    for owner in records:
+        same_clone = owner["repository"] == record["repository"]
+        matches = reservation_conflicts(owner, path=state["path"], ref=ref if same_clone else None)
+        if owner["flight"] == record["flight"]:
+            matches = [row for row in matches if row["kind"] == "native_operation"]
+        else:
+            matches = [row for row in matches if row["kind"] != "remote_branch"]
+        if matches:
+            raise CheckoutError("Checkout/ref is reserved by retained or unresolved flight " + owner["flight"])
+
+
 def _validate_checkout(state, item, record, base, policy, phase, check_identity=True):
     config = _configuration(state["path"], record)
     if state["git_common_dir"] != record["repository"]["git_common_dir"]:
@@ -507,6 +521,7 @@ def adopt(checkout, registry, record, *, base, client_observation, decision=None
     identity = repository_identity(checkout, record["repository"]["id"])
     if identity != record["repository"]:
         raise CheckoutError("Proposed repository identity does not match the actual common Git directory")
+    _reserved_checkout(state, [*previous["records"], record] if existing is None else previous["records"], record)
     client = _client(client_observation, record["client"])
     if client["name"] != record["client"]["name"]:
         raise CheckoutError("Observed native client does not match the proposed flight client")
@@ -523,6 +538,7 @@ def adopt(checkout, registry, record, *, base, client_observation, decision=None
     main_policy = None
     for item in [record["checkout"], *record["children"]]:
         actual = state if item["path"] == state["path"] else observe(item["path"])
+        _reserved_checkout(actual, [*previous["records"], record] if existing is None else previous["records"], record)
         if actual["branch"] != item["branch"] or actual["commit"] != item["commit"]:
             raise CheckoutError("Proposed checkout branch/commit differs from actual native selection; refresh the explicit adoption record")
         observed_policy = _policy(actual["path"], identity["id"], policy)
@@ -577,6 +593,7 @@ def verify(checkout, registry, flight=None, *, phase="implementation", session=N
         raise CheckoutError("Flight configuration revision changed; explicitly reconcile required checkout/check/evidence revalidation")
     if record["lifecycle"]["state"] not in ("active", "review"):
         raise CheckoutError("Flight is paused or completed; explicitly reconcile resume before execution")
+    _reserved_checkout(state, previous["records"], record)
     if session is not None:
         if isinstance(session, dict):
             client = session.get("client") or session.get("name")
@@ -590,6 +607,7 @@ def verify(checkout, registry, flight=None, *, phase="implementation", session=N
     observed_policy = None
     for item in [record["checkout"], *record["children"]]:
         actual = state if item["path"] == state["path"] else observe(item["path"])
+        _reserved_checkout(actual, previous["records"], record)
         current_policy = _policy(actual["path"], record["repository"]["id"], policy)
         item_phase = phase if item["path"] == state["path"] else "implementation"
         _validate_checkout(actual, item, record, guard["base"], current_policy, item_phase)
@@ -630,6 +648,7 @@ def reconcile(registry, flight, checkout, reference, *, previous_path=None, clie
     state = observe(checkout)
     if state["git_common_dir"] != record["repository"]["git_common_dir"]:
         raise CheckoutError("Cross-clone recovery cannot silently change repository ownership")
+    _reserved_checkout(state, previous["records"], record)
     if not _ancestor(checkout, item["commit"], state["commit"]):
         raise CheckoutError("Reconciliation cannot establish preservation of the prior unfinished commit")
     moved = state["path"] != old_path
@@ -655,6 +674,7 @@ def reconcile(registry, flight, checkout, reference, *, previous_path=None, clie
         if other is item:
             continue
         other_state = observe(other["path"])
+        _reserved_checkout(other_state, previous["records"], record)
         other_policy = _policy(other["path"], record["repository"]["id"], policy)
         _validate_checkout(other_state, other, record, guard["base"], other_policy, "implementation")
         anchor = guard["anchors"].get(other["path"], {})
@@ -689,7 +709,8 @@ def reconcile(registry, flight, checkout, reference, *, previous_path=None, clie
     return _report(registry, saved["revision"], saved["record"], state, "implementation", current_policy)
 
 
-def release(registry, flight, reference, *, policy=None, control_checkout=None):
+def release(registry, flight, reference, *, policy=None, control_checkout=None,
+            client_state=None, preservation=None):
     registry = _registry(registry)
     _text(reference, "closeout/handoff reference")
     previous = registry.read()
@@ -705,17 +726,22 @@ def release(registry, flight, reference, *, policy=None, control_checkout=None):
         control = control_checkout or record["checkout"]["path"]
         if not Path(control).is_dir():
             raise CheckoutError("Removed execution checkout requires an explicit retained control_checkout for closeout")
-        disposition = closure_status(control, registry, flight, policy=policy)
-        if not disposition.get("complete"):
+        disposition = closure_status(control, registry, flight, policy=policy,
+                                     client_state=client_state, preservation=preservation)
+        if not disposition.get("disposition_complete", disposition.get("complete")):
             raise CheckoutError("PR & Merge cleanup/disposition pending: " + "; ".join(disposition.get("blockers", [])))
-        record["cleanup"]["state"] = "complete"
-        record["cleanup"]["closure"] = {"plan_sha256": disposition["plan_sha256"], "artifacts": disposition["artifacts"]}
+        record["cleanup"]["state"] = ("complete" if disposition.get("cleanup_complete", True)
+                                         else "closed_with_retained_artifacts")
+        record["cleanup"]["closure"] = copy.deepcopy(disposition)
     guard["history"].append({"action": "release", "reference": reference,
                              "checkout": copy.deepcopy(record["checkout"]), "children": copy.deepcopy(record["children"]),
                              "previous_lifecycle": copy.deepcopy(record["lifecycle"]),
-                             "disposition": "Execution ownership released; files, refs and child provenance retained"})
+                             "disposition": "Execution session released; retained artifact ownership/reservations survive",
+                             "cleanup_complete": record.get("cleanup", {}).get("closure", {}).get("cleanup_complete")})
     guard["generation"] += 1
     record["lifecycle"]["state"] = "closed"
+    if record.get("cleanup", {}).get("state") == "closed_with_retained_artifacts":
+        record["lifecycle"]["disposition"] = "closed with retained artifacts"
     saved = registry.save(record, expected_revision=previous["revision"])
     return {"schema": 1, "status": "released", "flight": flight, "registry": str(registry.directory),
             "registry_revision": saved["revision"], "record": saved["record"],
@@ -756,10 +782,17 @@ def guard_context(checkout, task=None, phase="implementation", *, policy=None):
                     "limits": ["Standalone legacy context; no selected flight checkout protection"]}
         raise
     root = str(Path(_out(checkout, "rev-parse", "--show-toplevel")).resolve())
-    owners = [record for record in registry.read()["records"] if record["lifecycle"]["state"] != "closed"
+    records = registry.read()["records"]
+    owners = [record for record in records if record["lifecycle"]["state"] != "closed"
               and any(item["path"] == root for item in [record["checkout"], *record["children"]])]
     if owners:
         return verify(checkout, registry, owners[0]["flight"], phase=phase, session=session, policy=policy)
+    common = str(Path(_out(checkout, "rev-parse", "--path-format=absolute", "--git-common-dir")).resolve())
+    branch = _out(checkout, "branch", "--show-current")
+    for owner in records:
+        ref = "refs/heads/" + branch if branch and owner["repository"]["git_common_dir"] == common else None
+        if any(row["kind"] != "remote_branch" for row in reservation_conflicts(owner, path=root, ref=ref)):
+            raise CheckoutError("Retained or unresolved artifact requires explicit ownership reconciliation with " + owner["flight"])
     return {"schema": 1, "status": "unbound", "checkout": {"path": str(Path(checkout).resolve())},
             "limits": ["Standalone legacy context; no selected flight checkout protection"]}
 
@@ -780,6 +813,8 @@ def main(argv=None):
     parser.add_argument("--previous-observation", type=Path)
     parser.add_argument("--session")
     parser.add_argument("--control-checkout", type=Path, help="Same-repository retained controller for completed disposable checkout")
+    parser.add_argument("--client-state", type=Path, help="Current bounded client availability/safe-leave observation for closeout")
+    parser.add_argument("--preservation", type=Path, help="Current exact private-asset preservation receipt for closeout")
     args = parser.parse_args(argv)
     try:
         registry = _registry(args.registry) if args.registry else default_registry(args.checkout)
@@ -796,7 +831,8 @@ def main(argv=None):
                                previous_path=args.previous_path, client_observation=read(args.client_observation),
                                session=args.session, previous_observation=read(args.previous_observation))
         else:
-            result = release(registry, args.flight, args.reference, control_checkout=args.control_checkout)
+            result = release(registry, args.flight, args.reference, control_checkout=args.control_checkout,
+                             client_state=read(args.client_state), preservation=read(args.preservation))
         print(json.dumps(result, indent=2))
         return 0
     except (AssociationError, OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:

@@ -91,6 +91,138 @@ def _snapshot(value):
     return copy.deepcopy(value)
 
 
+def _resolved_artifact(cleanup, row):
+    # Retain the original closed-flight decision. Later controlled cleanup can
+    # release its reservation through the existing append-only operation log.
+    # An ordinary removal outcome cannot resolve an uncertain native creation.
+    if row.get("kind") == "native_operation":
+        return False
+    events = cleanup.get("operations", [])
+    # The observed last operation belongs to this retention decision, not to a
+    # later cleanup. In particular, an old removal cannot discharge a newly
+    # retained artifact recreated at the same OID.
+    boundary = -1
+    if "last_operation" in row:
+        matches = [index for index, event in enumerate(events) if event == row["last_operation"]]
+        if not matches:
+            return False
+        boundary = matches[-1]
+    for event in reversed(events[boundary + 1:]):
+        if (event.get("artifact_id") != row.get("id") or event.get("event") not in ("outcome", "native_ack")
+                or event.get("state") not in ("removed", "already_absent") or not event.get("operation_id")):
+            continue
+        intent = next((item for item in events if item.get("event") == "intent"
+                       and item.get("artifact_id") == row.get("id")
+                       and item.get("operation_id") == event["operation_id"]), None)
+        if intent is not None and intent.get("expected_oid") == row.get("expected_oid"):
+            return True
+    return False
+
+
+def retained_artifacts(record):
+    """Derive retained/unresolved obligations from existing Registry records.
+
+    Historical markerless closures do not acquire invented retention acceptance.
+    Unknown native operations reserve only their explicitly recorded namespace;
+    a requested name is not evidence of a physical checkout or successful action.
+    """
+    cleanup = record.get("cleanup", {})
+    if not isinstance(cleanup, dict) or cleanup.get("protocol") != "required-v1":
+        return []
+    inventory = cleanup.get("inventory", [])
+    closure = cleanup.get("closure", {})
+    rows = []
+    seen = set()
+    for original in closure.get("artifacts", []) if isinstance(closure, dict) else []:
+        if original.get("disposition") != "retained_accepted" or _resolved_artifact(cleanup, original):
+            continue
+        row = copy.deepcopy(original)
+        text(row.get("id"), "retained artifact id")
+        text(row.get("identity"), "retained artifact identity")
+        if row.get("kind") not in ("worktree", "local_branch", "remote_branch", "native_operation"):
+            raise AssociationError("Retained artifact kind is unsupported")
+        if row.get("operation_state") not in ("blocked", "failed", "unknown"):
+            raise AssociationError("Retained operation outcome must remain blocked, failed or unknown")
+        item = next((value for value in inventory if value.get("id") == row["id"]), None)
+        if item is None or any(row.get(key) != item.get(key) for key in ("kind", "identity", "remote")):
+            raise AssociationError("Retained identity must match the frozen artifact inventory")
+        if row["kind"] == "native_operation":
+            for key in ("client", "requested_name", "outcome", "observation_reference"):
+                if key in row and row[key] != item.get(key):
+                    raise AssociationError("Retained native observation cannot change its frozen identity/outcome")
+                row[key] = copy.deepcopy(item.get(key))
+            if row["operation_state"] != item.get("outcome"):
+                raise AssociationError("Retained native operation must preserve its unresolved outcome")
+            reserved = row.get("reservations")
+            original_reserved = item.get("reservations")
+            if (not isinstance(reserved, dict) or not isinstance(original_reserved, dict)
+                    or any(sorted(reserved.get(key, [])) != sorted(original_reserved.get(key, []))
+                           for key in ("paths", "refs", "names"))):
+                raise AssociationError("Retained native operation must preserve its frozen reserved namespace")
+        for key in ("reason", "next_action", "policy_reference"):
+            text(row.get(key), "retained artifact " + key)
+        rows.append(row)
+        seen.add(row["id"])
+    for item in inventory:
+        if item.get("kind") not in ("native_operation", "unresolved_native_operation") or item.get("id") in seen:
+            continue
+        row = copy.deepcopy(item)
+        row["kind"] = "native_operation"
+        text(row.get("identity"), "native operation identity")
+        outcome = row.get("outcome")
+        if outcome not in ("unknown", "failed"):
+            raise AssociationError("Unresolved native operation outcome must remain unknown or failed")
+        code = "native_unknown" if outcome == "unknown" else "native_failed"
+        policy = cleanup.get("registration", {}).get("retention_policy") or record.get("grants", {}).get("retention", {})
+        allowed = policy.get("allowed_reasons", {}).get(code, {}) if isinstance(policy, dict) else {}
+        row.update(disposition="retention_pending", operation_state=outcome, reason_code=code,
+                   reason="Recorded native operation remains unresolved", next_action=allowed.get("next_action")
+                   or "Reconcile the original native operation before any conflicting mutation",
+                   policy_reference=policy.get("reference") if isinstance(policy, dict) else None)
+        rows.append(row)
+    for row in rows:
+        reservations = row.setdefault("reservations", {})
+        if not isinstance(reservations, dict) or set(reservations) - {"paths", "refs", "names"}:
+            raise AssociationError("Retained reservations must identify paths, refs or names")
+        for key in ("paths", "refs", "names"):
+            values = reservations.setdefault(key, [])
+            if not isinstance(values, list) or any(not isinstance(value, str) or not value.strip() or "\0" in value for value in values):
+                raise AssociationError("Retained reservation identities must be explicit strings")
+        if row["kind"] == "worktree":
+            reservations["paths"] = sorted(set([*reservations["paths"], row["identity"]]))
+            original = next((item for item in inventory if item.get("id") == row.get("id")), {})
+            if original.get("branch"):
+                reservations["refs"] = sorted(set([*reservations["refs"], "refs/heads/" + original["branch"]]))
+        elif row["kind"] in ("local_branch", "remote_branch"):
+            reservations["refs"] = sorted(set([*reservations["refs"], row["identity"]]))
+        elif row["kind"] == "native_operation" and row.get("requested_name"):
+            reservations["names"] = sorted(set([*reservations["names"], row["requested_name"]]))
+        row["flight"] = record["flight"]
+    return rows
+
+
+def reservation_conflicts(record, *, path=None, ref=None, name=None, endpoint=None):
+    """Return matching obligations; callers qualify clone/repository resources.
+
+    Remote ref ownership is repository-qualified by the caller, not discarded
+    because the same endpoint uses a different SSH/HTTPS transport spelling.
+    """
+    proposed = Path(path).resolve() if path is not None else None
+    names = {name.casefold()} if isinstance(name, str) else set()
+    if proposed is not None:
+        names.update((proposed.name.casefold(), proposed.parent.name.casefold()))
+    result = []
+    for row in retained_artifacts(record):
+        reserved = row["reservations"]
+        paths = [Path(value).resolve() for value in reserved["paths"]]
+        overlaps = proposed is not None and any(proposed == value or value in proposed.parents
+                                                 or proposed in value.parents for value in paths)
+        if (overlaps or ref is not None and ref in reserved["refs"]
+                or names & {value.casefold() for value in reserved["names"]}):
+            result.append(row)
+    return result
+
+
 def validate_record(record):
     """Validate recorded facts, without claiming current checkout verification."""
     if not isinstance(record, dict) or record.get("schema") != 1:
@@ -136,6 +268,7 @@ def validate_record(record):
         if not isinstance(cleanup.get("inventory"), list) or not isinstance(cleanup.get("operations"), list):
             raise AssociationError("Required cleanup inventory/history must remain structured")
         text(cleanup.get("state"), "cleanup.state")
+        retained_artifacts(value)  # Reject malformed new obligations, not legacy archives.
     encoded(value)  # Reject non-JSON or nonfinite input before persistence.
     return value
 
@@ -258,6 +391,24 @@ class Registry:
                 for key in ("frozen_binding", "frozen_delivery"):
                     if key in prior and current.get(key) != prior[key]:
                         raise AssociationError("Interrupted cleanup must preserve frozen identities and leases")
+                if old["lifecycle"]["state"] == "closed":
+                    prior_closure = prior.get("closure") or {}
+                    current_closure = current.get("closure") or {}
+                    retained = [row for row in prior_closure.get("artifacts", [])
+                                if row.get("disposition") == "retained_accepted"]
+                    current_rows = {row.get("id"): row for row in current_closure.get("artifacts", [])}
+                    if any(current_rows.get(row.get("id")) != row for row in retained):
+                        raise AssociationError("Preserve closed retained decisions; reconcile through append-only operations")
+            if record["lifecycle"]["state"] != "closed":
+                for item in [record["checkout"], *record["children"]]:
+                    ref = "refs/heads/" + item["branch"] if item["branch"] else None
+                    for owner in records:
+                        if owner["flight"] == record["flight"]:
+                            continue
+                        same_clone = owner["repository"] == record["repository"]
+                        matches = reservation_conflicts(owner, path=item["path"], ref=ref if same_clone else None)
+                        if any(row["kind"] != "remote_branch" for row in matches):
+                            raise AssociationError("Checkout/ref is reserved by retained flight " + owner["flight"])
             records = [item for item in records if item["flight"] != record["flight"]] + [record]
             self._unique(records)
             raw = encoded({"schema": 1, "records": records})

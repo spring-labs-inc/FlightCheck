@@ -18,7 +18,7 @@ import sys
 import time
 from urllib.parse import unquote, urlsplit
 
-from flight_associations import AssociationError, Registry
+from flight_associations import AssociationError, Registry, retained_artifacts, reservation_conflicts
 from project_config import PRIVATE_FILES
 
 COMMAND_SECONDS = 10
@@ -385,9 +385,15 @@ def _policy(reader, root, repository_id, branch_names, supplied, enabled):
 
 
 def _minimal_owner(record, identity_match=None):
-    return {"flight": record["flight"], "issues": record["issues"], "pull_requests": record["pull_requests"],
+    result = {"flight": record["flight"], "issues": record["issues"], "pull_requests": record["pull_requests"],
             "client": record["client"], "lifecycle": record["lifecycle"]["state"],
             "identity_match": identity_match, "source": "explicit repository-qualified Registry association"}
+    exception = record.get("cleanup", {}).get("owner_accepted_disposition")
+    if isinstance(exception, dict):
+        result["owner_accepted_disposition"] = {key: exception.get(key) for key in
+                                               ("reference", "disposition", "cleanup_complete")}
+        result["owner_accepted_disposition"]["normal_policy_binding"] = False
+    return result
 
 
 def _owners(records, *, path=None, ref=None):
@@ -399,6 +405,14 @@ def _owners(records, *, path=None, ref=None):
             if matches:
                 result.append(record)
                 break
+        else:
+            # Explicit accepted artifact identities retain ownership after
+            # session release. An uncertain native name/ref is a reservation,
+            # not proof that a newly observed physical artifact belongs to it.
+            if any((path is not None and row["kind"] == "worktree" and row["identity"] == path)
+                   or (ref is not None and row["kind"] == "local_branch" and row["identity"] == ref)
+                   for row in retained_artifacts(record)):
+                result.append(record)
     return result
 
 
@@ -522,6 +536,9 @@ def _recommendation(row):
                      "Fresh ownership, identity, protection, integration and checkout-state revalidation"]
     if protected["status"] == "protected" or row.get("repository_main"):
         classification, reason, action = "preserve", "Repository main/default/protected/shared artifact", "Preserve " + label
+    elif row.get("retained_obligations"):
+        classification, reason = "preserve", "Retained ownership or unresolved native operation remains recorded"
+        action = "; ".join(dict.fromkeys(item["next_action"] for item in row["retained_obligations"]))
     elif active["recorded_unfinished_owner"] or active["native"] == "active" or row.get("checked_out_in"):
         classification, reason, action = "preserve", "Unfinished owner, active client or checked-out branch", "Resume or coordinate the recorded owner of " + label
     elif state.get("locked") or state.get("dirty") or state.get("untracked_count"):
@@ -598,7 +615,8 @@ def audit(checkout, registry, repository_id, remote=True, policy=None, client_ob
             checked.setdefault(row["ref"], []).append(row["path"])
     default_target = "refs/heads/" + protection["default_branch"] if protection.get("available") else None
 
-    def make(kind, identity, matching, state, *, branch=None, checked_paths=None, primary=False, origin_policy=True):
+    def make(kind, identity, matching, state, *, branch=None, checked_paths=None, primary=False,
+             origin_policy=True, retained_rows=None):
         if len(artifacts) >= MAX_ARTIFACTS:
             omitted_artifacts[0] += 1
             return None
@@ -637,7 +655,8 @@ def audit(checkout, registry, repository_id, remote=True, policy=None, client_ob
                     indicator["unpushed"] = dict(_count(reader, root, comparison, oid), freshness=upstream_state.get("freshness"))
             except (AuditUnavailable, ValueError):
                 pass
-        row = {"id": ":".join(str(item) for item in [kind, identity.get("remote"), identity.get("endpoint"), identity.get("path") or identity.get("ref")] if item),
+        row = {"id": ":".join(str(item) for item in [kind, identity.get("remote"), identity.get("endpoint"),
+                                                   identity.get("path") or identity.get("ref") or identity.get("operation") or identity.get("artifact_id")] if item),
                "kind": kind, "identity": identity,
                "owners": [_minimal_owner(item, oid in [entry["commit"] for entry in [item["checkout"], *item["children"]]] + [item["delivery"].get("head")]) for item in matching],
                "state": state, "checked_out_in": checked_paths or [], "repository_main": primary,
@@ -645,6 +664,18 @@ def audit(checkout, registry, repository_id, remote=True, policy=None, client_ob
                "protected": _protection(branch, protection if origin_policy else {}, configured if origin_policy else set()),
                "target": target, "integration": integration_cache[key], "branch_indicators": indicator,
                "cleanup_authorized": False}
+        obligations = list(retained_rows) if retained_rows is not None else []
+        if retained_rows is None:
+            for item in records:
+                for obligation in reservation_conflicts(item, path=identity.get("path"), ref=identity.get("ref"),
+                                                        endpoint=identity.get("endpoint")):
+                    if obligation["kind"] == "remote_branch" and (kind != "remote_branch" or not origin_policy):
+                        continue
+                    if kind == "remote_branch" and obligation["kind"] not in ("remote_branch", "native_operation"):
+                        continue
+                    obligations.append(obligation)
+        if obligations:
+            row["retained_obligations"] = obligations
         row["recorded_cleanup_scopes"] = [{"flight": item["flight"], "artifact_id": artifact.get("id"),
                                             "authority": "Recorded scope only; not ownership or a current execution grant"}
                                            for item in records for artifact in item.get("cleanup", {}).get("inventory", [])
@@ -706,6 +737,13 @@ def audit(checkout, registry, repository_id, remote=True, policy=None, client_ob
                 if (delivery and delivery.get("head_ref") == ref[len("refs/heads/"):]
                         and (delivery.get("head_repository") or "").lower() == (endpoint.get("repository") or "").lower()):
                     matching.append(record)
+            if (endpoint.get("repository") or "").lower() == repository_id.lower():
+                for record in records:
+                    if record in matching:
+                        continue
+                    if any(row["kind"] == "remote_branch" and row["identity"] == ref
+                           for row in retained_artifacts(record)):
+                        matching.append(record)
             try:
                 available = _object_available(reader, root, oid)
             except AuditUnavailable:
@@ -716,6 +754,28 @@ def audit(checkout, registry, repository_id, remote=True, policy=None, client_ob
                  branch=ref[len("refs/heads/"):],
                  origin_policy=endpoint.get("repository", "").lower() == repository_id.lower()
                  if endpoint.get("repository") else False)
+    # Keep every retained obligation visible, including operations whose actual
+    # checkout identity/existence is unknown or absent from this observation.
+    represented = {(row["flight"], row.get("id")) for artifact in artifacts
+                   for row in artifact.get("retained_obligations", [])}
+    for record in records + foreign:
+        for obligation in retained_artifacts(record):
+            if obligation["kind"] != "native_operation" and (record["flight"], obligation.get("id")) in represented:
+                continue
+            kind = obligation["kind"]
+            identity = {"artifact_id": obligation.get("id"), "recorded_kind": kind,
+                        "recorded_identity": obligation["identity"]}
+            if kind == "native_operation":
+                identity.update(operation=obligation["identity"], requested_name=obligation.get("requested_name"))
+            elif kind == "worktree":
+                identity["path"] = obligation["identity"]
+            else:
+                identity.update(ref=obligation["identity"], remote=obligation.get("remote"),
+                                endpoint=obligation.get("endpoint"))
+            make("native_operation" if kind == "native_operation" else "retained_artifact", identity, [record],
+                 {"available": False, "existence": "unknown", "operation_state": obligation.get("operation_state"),
+                  "reason": "Retained obligation has no authoritative physical artifact observation in this bounded inventory"},
+                 retained_rows=[obligation])
     try:
         after = registry_reader.read()["revision"] if registry_reader is not None else None
     except (OSError, ValueError):
@@ -743,6 +803,10 @@ def audit(checkout, registry, repository_id, remote=True, policy=None, client_ob
                          "integration": "Local objects and fresh recorded-PR provider metadata only; missing objects remain unavailable",
                          "git_configuration": "Global/system Git configuration ignored; safe explicit endpoints only. Configured executable/URL helpers are not invoked"},
             "artifacts": artifacts,
+            "retention_policies": [{"flight": record["flight"],
+                                    "policy": record.get("cleanup", {}).get("registration", {}).get("retention_policy")}
+                                   for record in records + foreign
+                                   if record.get("cleanup", {}).get("registration", {}).get("retention_policy")],
             "recommendations": [{"artifact_id": row["id"], **row["recommendation"]} for row in artifacts]}
 
 

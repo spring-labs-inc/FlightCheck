@@ -20,14 +20,22 @@ separate cleanup manager or universal command-interception claim.
 
 At setup, consume the [lifecycle contract](../../../docs/flight-lifecycle.md):
 record exact authorized flight-owned worktree/local-ref/actual-remote-ref inventory
-and private/ignored preservation obligations separately from delivery. Historical
-handoffs and names confer no cleanup authority. After confirmed merge, reconcile
+and private/ignored preservation obligations separately from delivery. Bind any
+explicit setup-approved retention policy with permitted reasons, next actions and
+responsibility. Historical handoffs and names confer no cleanup authority. After confirmed merge, reconcile
 actual integration and perform eligible disposition within PR & Merge before
 closing. Prefer native cleanup, safely leave the execution path, retain a verified
 external helper/card runtime and private history, and acknowledge actual removal.
 Preserve active/locked/dirty/untracked/unknown-private, protected/shared/main and
-unintegrated artifacts; report blockers rather than force a clean close. Interrupted
-or repeated operations keep the same scope and old-OID conditions. The full
+unintegrated artifacts. Attempt independently eligible authorized cleanup despite
+other blocked artifacts; preserve checked-out branches. Close with retained
+artifacts only under the explicit policy and complete per-artifact accounting;
+retain actual failed/unknown outcomes and reservations, never relabel success.
+Unknown operations block conflicting mutations after closure and remain visible
+to launch/audit. Retention does not waive implementation, tests, reviews or merge.
+Explicit Git-managed worker authority is not permission to manually remove
+client-managed artifacts. Report unavailable native coverage without more probes.
+Interrupted/repeated operations keep the same scope and old-OID conditions. The full
 optional on-demand audit remains strictly read-only, including no fetch/prune;
 report actionable recommendations and unavailable coverage without executing them.
 This adds no outer review cycle or worktree/retention manager.
