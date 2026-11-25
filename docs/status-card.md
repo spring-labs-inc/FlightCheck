@@ -132,11 +132,14 @@ known failed or mismatched endpoint still makes the route unavailable.
 
 The SSH connector retains successful connection configuration in the browser
 machine's private `connection-profiles` directory. Profiles bind the SSH alias,
-helper/interpreter/state settings and actual remote host/repository, separately
+helper/interpreter settings, a default state directory and actual remote host/repository, separately
 from task-specific URLs, candidates and owned forwards. A later `connect` can omit
 `--ssh` when one compatible profile exists; pass the NEW task and checkout. The
 exact recorded checkout is always required: a transport profile never supplies
 another flight's execution location, including another checkout in the same clone.
+Pass `--remote-state-dir` for that flight's isolated private state. This explicit
+override reuses authentication without changing the established state default or
+creating another equivalent transport profile.
 The connector prepares and checks that new task/candidate, rather than displaying the
 old flight. Multiple compatible profiles need an explicit `--profile ID`; initial
 setup needs one existing SSH alias. No URL question or SSH configuration change is

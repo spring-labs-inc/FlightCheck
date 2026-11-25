@@ -184,10 +184,11 @@ def resolve_profile(args):
             if (value.get("schema") != 1 or not isinstance(value.get("context"), dict)
                     or not isinstance(settings, dict)):
                 raise ValueError("Invalid saved connection profile; reconcile it explicitly")
-            # Checkout and task are deliberately not compatibility keys: a new
-            # worker in this clone must prove its new identity at preparation.
+            # Checkout/task/state root are flight configuration. An explicit
+            # private state override must not prevent transport/auth reuse;
+            # the new worker still proves its identity before publication.
             if all(getattr(args, key, None) in (None, settings.get(key))
-                   for key in ("ssh", "card_dir", "remote_python", "remote_state_dir")):
+                   for key in ("ssh", "card_dir", "remote_python")):
                 selected.append((path.stem, value))
     if getattr(args, "ssh", None) and getattr(args, "checkout", None) and not name:
         return args
@@ -210,13 +211,30 @@ def remember_profile(args, remote):
     if getattr(args, "profile_context", context) != context:
         raise ValueError("Saved connection belongs to another host or repository; no route was adopted")
     settings = {key: getattr(args, key) for key in ("ssh", "card_dir", "remote_python", "remote_state_dir")}
-    identity = {key: value for key, value in settings.items() if key != "checkout"}
+    identity = {key: settings[key] for key in ("ssh", "card_dir", "remote_python")}
     key = hashlib.sha256(json.dumps([identity, context], sort_keys=True).encode()).hexdigest()[:24]
     profiles = maintainer.private_dir(connection_state() / "connection-profiles")
-    path = profiles / (key + ".json")
-    if path.is_symlink():
-        raise ValueError("Connection profile cannot be a symlink")
-    maintainer.write_json(path, {"schema": 1, "settings": settings, "context": context})
+    # A flight override is not a new transport profile or a change to defaults.
+    # Serialize first use so parallel flights cannot replace established defaults.
+    lock_path = profiles / "profiles.lock"
+    if lock_path.is_symlink():
+        raise ValueError("Connection profile lock cannot be a symlink")
+    with lock_path.open("a") as lock:
+        os.chmod(lock_path, 0o600)
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        for path in profiles.glob("*.json"):
+            if path.is_symlink() or path.stat().st_uid != os.geteuid() or path.stat().st_mode & 0o077:
+                raise ValueError("Connection profiles must remain private regular files")
+            value = maintainer.read_json(path)
+            saved = value.get("settings", {})
+            if (value.get("schema") == 1 and value.get("context") == context
+                    and isinstance(saved, dict)
+                    and all(saved.get(k) == v for k, v in identity.items())):
+                return  # Preserve the original profile bytes and state default.
+        path = profiles / (key + ".json")
+        if path.exists() or path.is_symlink():
+            raise ValueError("Connection profile identity conflicts; reconcile it explicitly")
+        maintainer.write_json(path, {"schema": 1, "settings": settings, "context": context})
 
 
 def connection_directory(args):

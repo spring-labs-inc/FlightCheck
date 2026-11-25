@@ -194,6 +194,13 @@ class RouteDiscoveryTests(unittest.TestCase):
 
     def test_ssh_controller_resume_witness(self):
         fixture = self.project(); root, checkout, env = fixture
+        extra_states = []
+        def stop_extra_listeners():
+            for state in extra_states:
+                for path in state.glob("*/tasks/*/endpoint.json"):
+                    try: os.kill(json.loads(path.read_text())["pid"], signal.SIGTERM)
+                    except ProcessLookupError: pass
+        self.addCleanup(stop_extra_listeners)
         self.prepared(fixture)
         binary = root / "bin"; binary.mkdir(); script = binary / "ssh"
         script.write_text("#!" + sys.executable + "\n" + '''import json,os,socket,socketserver,subprocess,sys,threading
@@ -242,14 +249,29 @@ with Server(('127.0.0.1',int(local)),Relay) as server:server.serve_forever()
                         if str(script) in probe.stdout:
                             try: os.kill(row["pid"], signal.SIGTERM)
                             except ProcessLookupError: pass
+            # Wait for owned supervisors' rejection writes before temporary
+            # state cleanup; a SIGTERM or closed listener is not completion.
+            for lock_path in (root / "browser-state").glob("connections/*/monitor.lock"):
+                with lock_path.open("a") as lock:
+                    deadline = time.monotonic() + 5
+                    while True:
+                        try:
+                            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                            break
+                        except BlockingIOError:
+                            self.assertLess(time.monotonic(), deadline, "Owned monitor did not finish teardown")
+                            time.sleep(.05)
         self.addCleanup(stop_owned)
         def free_port():
             with socket.socket() as free:free.bind(("127.0.0.1", 0)); return free.getsockname()[1]
-        ports = [free_port() for _ in range(3)]
-        def connect(task, number, extra=(), expected=0, project=None):
+        ports = []
+        while len(ports) < 4:
+            number = free_port()
+            if number not in ports: ports.append(number)
+        def connect(task, number, extra=(), expected=0, project=None, state=None):
             command = [sys.executable, "-B", str(checkout / "status-card/connect.py"), "--checkout", str(project or checkout),
                        "--task", task, "--card-dir", "status-card", "--remote-python", sys.executable,
-                       "--remote-state-dir", str(root / "state"), "--local-port", str(number), *extra]
+                       "--remote-state-dir", str(state or root / "state"), "--local-port", str(number), *extra]
             result = subprocess.run(command, cwd=root, env=connector_env, capture_output=True, text=True, timeout=45)
             data = json.loads(result.stdout);self.assertEqual(result.returncode, expected, data);return data
         first = connect("first", ports[0], ["--ssh", "worker-fixture"])
@@ -276,15 +298,37 @@ with Server(('127.0.0.1',int(local)),Relay) as server:server.serve_forever()
         resumed = connect("first", ports[1], ["--reconcile-route"])
         self.assertEqual(resumed["task"], "first"); self.assertIn(str(ports[1]), resumed["user_url"])
         self.checked(fixture, resumed)
+        profile, = (root / "browser-state" / "connection-profiles").glob("*.json")
+        original_profile = profile.read_bytes()
+        first_directory, = (root / "state").glob("*/tasks/first")
+        first_route = json.loads((first_directory / "reply-route.json").read_text())
         second_checkout = root / "second-worker"
         subprocess.run(["git", "worktree", "add", "--detach", str(second_checkout), "HEAD"], cwd=checkout, check=True, capture_output=True)
         (second_checkout / "second-candidate.txt").write_text("Separate flight source\n")
-        second_fixture = (root, second_checkout, env)
+        second_state = root / "second-state"; extra_states.append(second_state)
+        second_fixture = (root, second_checkout, dict(env, FLIGHTCHECK_STATE_DIR=str(second_state)))
         self.prepared(second_fixture, task="second", session="controller2")
-        second = connect("second", ports[2], project=second_checkout)
+        second = connect("second", ports[2], project=second_checkout, state=second_state)
         self.assertIn("/task/second/", second["user_url"])
         self.assertIn(str(ports[2]), second["user_url"])
         self.checked(second_fixture, second, task="second", session="controller2")
+        third_checkout = root / "third-worker"
+        subprocess.run(["git", "worktree", "add", "--detach", str(third_checkout), "HEAD"], cwd=checkout, check=True, capture_output=True)
+        (third_checkout / "third-candidate.txt").write_text("Third independent flight source\n")
+        third_state = root / "third-state"; extra_states.append(third_state)
+        third_fixture = (root, third_checkout, dict(env, FLIGHTCHECK_STATE_DIR=str(third_state)))
+        self.prepared(third_fixture, task="third", session="controller3")
+        third = connect("third", ports[3], project=third_checkout, state=third_state)
+        self.assertIn("/task/third/", third["user_url"])
+        self.checked(third_fixture, third, task="third", session="controller3")
+        self.assertEqual(list((root / "browser-state" / "connection-profiles").glob("*.json")), [profile])
+        self.assertEqual(profile.read_bytes(), original_profile)
+        current_first = json.loads((first_directory / "reply-route.json").read_text())
+        for key in ("task", "user_url", "host_url", "context", "connection_owner"):
+            self.assertEqual(current_first.get(key), first_route.get(key))
+        self.assertEqual(json.loads((first_directory / "status.json").read_text())["candidate"], resumed["candidate"])
+        self.assertFalse(list((root / "state").glob("*/tasks/second")))
+        self.assertFalse(list((root / "state").glob("*/tasks/third")))
         wrong_flight = connect("first", free_port(), project=second_checkout, expected=1)
         self.assertIn("checkout", wrong_flight["error"])
         first_directory, = (root / "state").glob("*/tasks/first")
