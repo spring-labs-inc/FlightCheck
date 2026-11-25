@@ -70,13 +70,15 @@ def ssh_failure(phase, code, diagnostic="", log=None):
 
 def prepare_remote(args, user_url=None):
     command = [args.remote_python, "-B", str(PurePosixPath(args.card_dir) / "reply.py"),
-               "prepare", "--task", args.task, "--execution", "remote"]
+               "prepare", "--task", args.task, "--execution", "remote", "--connection-adapter"]
     if args.title is not None:
         command += ["--title", args.title]
     if args.details:
         command += ["--details", args.details]
     if user_url:
         command += ["--user-url", user_url]
+        if getattr(args, "reconcile_route", False):
+            command += ["--reconcile-route"]
     if args.remote_state_dir:
         command = ["env", "FLIGHTCHECK_STATE_DIR=" + args.remote_state_dir, *command]
     script = "cd " + shlex.quote(args.checkout) + " && " + shlex.join(command)
@@ -112,30 +114,121 @@ def available(number):
     return True
 
 
-def connection_directory(args):
-    validate(args)
+def connection_state():
     base = Path(os.environ.get("FLIGHTCHECK_STATE_DIR") or
                 Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "flightcheck")
     if not base.is_absolute():
         raise ValueError("Connection state must use an absolute private directory")
     if base.is_symlink():
         raise ValueError("Connection state cannot use a symlink directory")
-    base = maintainer.private_dir(base).resolve()
+    return maintainer.private_dir(base).resolve()
+
+
+def resolve_profile(args):
+    """Reuse only confirmed connector configuration, never an old task URL.
+
+    A unique compatible profile supplies existing SSH authentication parameters.
+    The remote host/repository is checked again before forwarding. Ambiguity is
+    a once-per-connection selection, not another task-URL interview.
+    """
+    args = argparse.Namespace(**vars(args))
+    if not getattr(args, "checkout", None):
+        raise ValueError("Select the exact recorded flight checkout with --checkout; a transport profile cannot select execution ownership")
+    profiles = connection_state() / "connection-profiles"
+    name = getattr(args, "profile", None)
+    if name and not re.fullmatch(r"[a-f0-9]{24}", name):
+        raise ValueError("Choose the recorded 24-character connection profile ID")
+    selected = []
+    if profiles.exists():
+        maintainer.private_dir(profiles)
+        paths = [profiles / (name + ".json")] if name else sorted(profiles.glob("*.json"))
+        for path in paths:
+            if path.is_symlink() or path.stat().st_uid != os.geteuid() or path.stat().st_mode & 0o077:
+                raise ValueError("Connection profiles must remain private regular files")
+            value = maintainer.read_json(path)
+            settings = value.get("settings", {})
+            if (value.get("schema") != 1 or not isinstance(value.get("context"), dict)
+                    or not isinstance(settings, dict)):
+                raise ValueError("Invalid saved connection profile; reconcile it explicitly")
+            # Checkout and task are deliberately not compatibility keys: a new
+            # worker in this clone must prove its new identity at preparation.
+            if all(getattr(args, key, None) in (None, settings.get(key))
+                   for key in ("ssh", "card_dir", "remote_python", "remote_state_dir")):
+                selected.append((path.stem, value))
+    if getattr(args, "ssh", None) and getattr(args, "checkout", None) and not name:
+        return args
+    if len(selected) != 1:
+        raise ValueError("No unique compatible connection profile; run connect once on the browser machine with --ssh EXISTING_ALIAS and --checkout, or select --profile ID. No URL is needed.")
+    ident, value = selected[0]
+    for key, setting in value["settings"].items():
+        if key in ("ssh", "card_dir", "remote_python", "remote_state_dir") and getattr(args, key, None) is None:
+            setattr(args, key, setting)
+    args.profile = ident
+    args.profile_context = value["context"]
+    return args
+
+
+def remember_profile(args, remote):
+    context = remote.get("context")
+    if not isinstance(context, dict) or not context.get("host") or not context.get("repository"):
+        return  # An absent identity cannot establish a reusable profile.
+    context = {key: context[key] for key in ("host", "repository")}
+    if getattr(args, "profile_context", context) != context:
+        raise ValueError("Saved connection belongs to another host or repository; no route was adopted")
+    settings = {key: getattr(args, key) for key in ("ssh", "card_dir", "remote_python", "remote_state_dir")}
+    identity = {key: value for key, value in settings.items() if key != "checkout"}
+    key = hashlib.sha256(json.dumps([identity, context], sort_keys=True).encode()).hexdigest()[:24]
+    profiles = maintainer.private_dir(connection_state() / "connection-profiles")
+    path = profiles / (key + ".json")
+    if path.is_symlink():
+        raise ValueError("Connection profile cannot be a symlink")
+    maintainer.write_json(path, {"schema": 1, "settings": settings, "context": context})
+
+
+def connection_directory(args):
+    validate(args)
+    base = connection_state()
     key = hashlib.sha256(json.dumps([args.ssh, args.checkout, args.card_dir, args.remote_state_dir, args.task]).encode()).hexdigest()[:24]
     directory = maintainer.private_dir(maintainer.private_dir(maintainer.private_dir(base) / "connections") / key)
     return directory
+
+
+def identify_remote(args):
+    """Check a saved profile before any mutating remote preparation."""
+    command = [args.remote_python, "-B", str(PurePosixPath(args.card_dir) / "reply.py"), "identify", "--task", args.task]
+    script = "cd " + shlex.quote(args.checkout) + " && " + shlex.join(command)
+    result = subprocess.run(["ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", "--", args.ssh, script],
+                            stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=20)
+    try:
+        value = json.loads(result.stdout)
+    except ValueError:
+        raise ValueError("Read-only connection identity unavailable; no remote preparation attempted") from None
+    if (result.returncode or not isinstance(value, dict) or value.get("status") != "identified"
+            or value.get("task") != args.task or not isinstance(value.get("context"), dict)):
+        raise ValueError("Read-only connection identity unavailable; no remote preparation attempted")
+    return {key: value.get("context", {}).get(key) for key in ("host", "repository")}
 
 
 def establish(args, directory, allow_start=True):
     with (directory / "connection.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         saved = maintainer.read_json(directory / "connection.json")
+        expected = getattr(args, "profile_context", None)
+        if expected is not None and identify_remote(args) != expected:
+            raise ValueError("Saved connection belongs to another host or repository; no publication or forward was started")
         remote = prepare_remote(args)
+        if expected is not None and {key: remote.get("context", {}).get(key) for key in ("host", "repository")} != expected:
+            raise ValueError("Saved connection belongs to another host or repository; no forward was started")
         remote_port = urlsplit(remote["host_url"]).port
         local_port = args.local_port or saved.get("local_port") or remote_port
         port(local_port)
-        if saved and (saved.get("local_port") != local_port or saved.get("remote_port") != remote_port):
+        if saved and (saved.get("local_port") != local_port or saved.get("remote_port") != remote_port) and not getattr(args, "reconcile_route", False):
             raise ValueError("The recorded route changed; reconcile the saved connection explicitly")
+        if not saved and args.local_port is None and not available(local_port):
+            # Ask the OS for one free loopback port; never scan or evict an owner.
+            with socket.socket() as free:
+                free.bind(("127.0.0.1", 0))
+                local_port = free.getsockname()[1]
         url = maintainer.card_url(args.task, local_port)
         process = None
         try:
@@ -163,6 +256,7 @@ def establish(args, directory, allow_start=True):
             confirmed = prepare_remote(args, url)
             if (confirmed.get("user_url") != url or confirmed["candidate"] != remote["candidate"]
                     or confirmed["host_url"] != remote["host_url"]
+                    or confirmed.get("context") != remote.get("context")
                     or not maintainer.current_card(args.task, local_port, remote["candidate"], remote_port)):
                 raise ValueError("Remote card or forwarded route changed during verification; retry on the same route")
             maintainer.write_json(directory / "connection.json", {
@@ -175,6 +269,9 @@ def establish(args, directory, allow_start=True):
             confirmed.update(status="published", user_url=url, footer="FlightCheck: [&lt; status /&gt;](" + url + ")",
                              browser_reachability="verified", browser_rendering="unobserved",
                              guidance="Forwarded task and candidate verified on this machine. Open the status link in your regular browser.")
+            remember_profile(args, confirmed)
+            if isinstance(confirmed.get("context"), dict):
+                args.profile_context = {key: confirmed["context"].get(key) for key in ("host", "repository")}
             return confirmed, process
         except BaseException:
             # Only a process created by this attempt belongs to us. A reused
@@ -241,6 +338,10 @@ def remote_observation(args, recover=False, timeout=4.5):
     if isinstance(data, dict) and (data.get("error_code") == "wrong_task"
                                    or (data.get("task") is not None and data.get("task") != args.task)):
         raise RouteMismatch("Wrong remote task; leave its owner running")
+    expected = getattr(args, "profile_context", None)
+    if expected is not None and (not isinstance(data, dict)
+            or {key: data.get("context", {}).get(key) for key in ("host", "repository")} != expected):
+        raise RouteMismatch("Remote host or repository changed; leave its owner running")
     if result.returncode or not isinstance(data, dict) or data.get("task") != args.task:
         raise ValueError("Remote observation unavailable: " + str(data.get("error", "wrong task") if isinstance(data, dict) else "invalid response"))
     return data
@@ -532,6 +633,9 @@ def bind_helpers(directory):
 
 
 def connect(args):
+    args = resolve_profile(args)
+    args.card_dir = args.card_dir or ".flightcheck/status-card"
+    args.remote_python = args.remote_python or "python3"
     directory = connection_directory(args)
     helpers = bind_helpers(directory)
     fd, name = tempfile.mkstemp(prefix="supervisor-", suffix=".json", dir=directory)
@@ -587,15 +691,17 @@ def internal_main():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ssh", required=True, help="Existing SSH host alias, used from the browser machine")
-    parser.add_argument("--checkout", required=True, help="Absolute project path on the SSH worker")
+    parser.add_argument("--ssh", help="Existing SSH alias; optional after one compatible successful connection")
+    parser.add_argument("--checkout", required=True, help="Exact recorded flight checkout on the SSH worker; never selected by a transport profile")
+    parser.add_argument("--profile", help="Select a private saved connection profile when more than one is compatible")
     parser.add_argument("--task", type=task_id, required=True)
     parser.add_argument("--title")
-    parser.add_argument("--card-dir", default=".flightcheck/status-card")
-    parser.add_argument("--remote-python", default="python3")
+    parser.add_argument("--card-dir")
+    parser.add_argument("--remote-python")
     parser.add_argument("--remote-state-dir")
     parser.add_argument("--details", help="Existing initialized private details file on the SSH worker")
     parser.add_argument("--local-port", type=port)
+    parser.add_argument("--reconcile-route", action="store_true", help="Explicitly reconcile a changed saved route without stopping unrelated owners")
     args = parser.parse_args()
     try:
         result = connect(args)

@@ -250,7 +250,8 @@ class ReplyTests(unittest.TestCase):
         self.assertIsNone(remote["user_url"])
         self.assertEqual(remote["browser_reachability"], "unobserved")
         self.assertEqual(remote["browser_rendering"], "unobserved")
-        self.assertIn("ssh -N -L 127.0.0.1:", remote["guidance"])
+        self.assertIn("existing status-card/connect.py", remote["guidance"])
+        self.assertIn("first connection only", remote["guidance"])
         route = urlsplit(remote["host_url"])
         self.assertEqual(route.hostname, "127.0.0.1")
         with socket.socket() as user_listener:
@@ -352,6 +353,16 @@ class ReplyTests(unittest.TestCase):
         self.assertEqual(hook("UserPromptSubmit", "initial"), {})
         forwarded = "http://127.0.0.1:31337/task/test-change/"
         prepared = self.api("prepare", "--execution", "remote", "--user-url", forwarded, env=env)
+        # Exercise native observation freshness, separately from the owner's
+        # durable manual destination configuration used by fallback callers.
+        native = self.root / "native-route.json"
+        snapshot = dict(self.snapshot(), publicationPort=self.endpoint()["port"])
+        native.write_text(json.dumps({"schema": 1, "observed_at": time.time(), "context": prepared["context"],
+                                      "can_reveal": True, "can_open": True,
+                                      "tabs": [{"id": "native", "url": forwarded, "visible": True,
+                                                "endpoint_reached": True, "snapshot": snapshot}]}))
+        native.chmod(0o600)
+        self.api("prepare", "--execution", "remote", "--browser-observation", str(native), env=env)
         exact = subprocess.check_output(
             [sys.executable, "-B", str(self.checkout / "status-card/maintainer.py"), "card",
              "--task", "test-change", "--title", "Synthetic native Stop fixture"],
@@ -363,7 +374,12 @@ class ReplyTests(unittest.TestCase):
             self.assertEqual(hook("Stop", "initial", invalid)["decision"], "block")
         self.readme.write_text("Candidate changed before native Stop\n")
         self.assertEqual(hook("Stop", "initial", exact)["decision"], "block")
-        self.assertEqual(self.api("prepare", "--execution", "remote", env=env)["footer"], exact)
+        stale = self.api("prepare", "--execution", "remote", env=env, expected=1)
+        self.assertNotIn("http", stale["footer"])
+        self.assertEqual(hook("Stop", "initial", exact)["decision"], "block")
+        # A fresh explicit route declaration binds the new candidate; worker
+        # publication by itself cannot renew the browser-side observation.
+        self.assertEqual(self.api("prepare", "--execution", "remote", "--user-url", forwarded, env=env)["footer"], exact)
         self.assertEqual(hook("Stop", "initial", exact), {})
         self.assertEqual(hook("UserPromptSubmit", "resume"), {})
         # Portable preparation alone must associate a compatible controller

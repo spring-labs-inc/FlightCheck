@@ -58,6 +58,100 @@ footer in the regular browser. The connector does not open a browser on the
 worker or claim rendering. SSH uses batch mode and existing authentication; a
 failure never changes SSH configuration or prompts inside an agent session.
 
+### Automatic route discovery and connection reuse
+
+Current source helpers can consume supported native browser observations without
+asking the owner to paste a URL. `reply.py prepare` and maintainer `card` accept
+`--browser-observation /private/browser.json`. This is an adapter result captured
+through existing client APIs, not a form for the owner to fill in. First prepare
+the worker card to obtain its private `context`, candidate and publication port.
+The adapter inventories browser tabs and reads the exact task's `status.json`
+**on the browser machine**. It saves a mode-0600 file with this shape (synthetic
+values below):
+
+```json
+{
+  "schema": 1,
+  "observed_at": 1795600000,
+  "context": {"host": "worker", "repository": "/project/.git", "session": "current-session"},
+  "can_reveal": true,
+  "can_open": true,
+  "tabs": [{
+    "id": "observed-tab-id",
+    "url": "http://localhost:43102/task/example/",
+    "visible": false,
+    "endpoint_reached": true,
+    "snapshot": {"snapshot": "live", "task": "example", "candidate": "current-candidate",
+                 "publicationPort": 43101, "completeness": {"ready": true}}
+  }]
+}
+```
+
+Use the actual current epoch time and exact returned context/snapshot. Fresh
+observations expire after thirty seconds. The helper accepts only a unique
+verified loopback task URL, matching current task, candidate and publication port.
+It returns `browser_action: keep` or `reveal` with the existing `tab_id` where
+supported. The controller carries out reveal through the native API and observes
+the result; it must not open a duplicate tab. Visibility and endpoint reachability
+do not establish rendering. Include `rendered_candidate` on a tab only after an
+actual render observation for that candidate. Missing controls, ambiguous origins,
+wrong identities or stale observations return a concrete fallback; queued preview
+requests alone never become verified routes.
+
+For a verified route without a tab yet, put the same endpoint observation in
+`endpoints` and keep `tabs` empty. An actual native response may supply
+`activation: {"status":"queued","url":"EXACT_VERIFIED_URL"}`. This returns
+`browser_action: requested`, unobserved visibility/rendering, and never opens a
+second tab. The candidate-aware action is authoritative for selected flights;
+the legacy task-only helper cannot override it. Native and connector observations
+retain their candidate/time/session verification and expire after thirty seconds.
+Worker publication and ordinary checks do not renew browser evidence.
+
+An owner-confirmed manual destination is separate private connection
+configuration. It retains the exact task, host, repository and recorded checkout,
+the original declaration context/time, and explicitly authorized route callers.
+An authorized second controller uses `--reconcile-route` once for this same-flight
+handoff, without supplying the URL again; later ordinary preparations/checks reuse
+the configuration. This transfers no editing or owned-transport/process authority.
+Unregistered callers remain unavailable and preserve the known URL/provenance.
+Manual reuse always reports browser reachability/rendering as unobserved; it does
+not inherit a different session's fresh observation or renew native evidence. A
+known failed or mismatched endpoint still makes the route unavailable.
+
+The SSH connector retains successful connection configuration in the browser
+machine's private `connection-profiles` directory. Profiles bind the SSH alias,
+helper/interpreter/state settings and actual remote host/repository, separately
+from task-specific URLs, candidates and owned forwards. A later `connect` can omit
+`--ssh` when one compatible profile exists; pass the NEW task and checkout. The
+exact recorded checkout is always required: a transport profile never supplies
+another flight's execution location, including another checkout in the same clone.
+The connector prepares and checks that new task/candidate, rather than displaying the
+old flight. Multiple compatible profiles need an explicit `--profile ID`; initial
+setup needs one existing SSH alias. No URL question or SSH configuration change is
+needed. Profile files are private configuration, never published card content.
+The connector first runs the worker helper's read-only `identify` operation for a
+reused profile, before any task publication, listener or forward. Its preparation
+preserves the selected controller session; route setup is not an ownership
+transfer. It also refuses to publish an existing task from another recorded
+checkout in the same clone. Matching current helpers are required for these source capabilities;
+an unsupported identity operation reports unavailable and never upgrades an
+installed project implicitly.
+
+Resume preserves its established route. If the route must move, explicitly use
+`--reconcile-route` with the verified replacement observation, or the connector's
+replacement `--local-port`. A saved occupied/mismatched port is never reclaimed
+from an unrelated process. For a new connection only, an occupied initial port
+can use one OS-assigned loopback port without scanning. Existing owned-process
+recovery, bounded attempts and authentication remain unchanged.
+
+Some desktop APIs return only a queued request; browser inventory or browser
+machine execution can also be unavailable. Report those concrete limits and offer
+the existing connector command once per connection. An owner may observe that the
+queued card rendered while its URL remains unavailable to automation; retain both
+facts. Optional rendering does not add a new delivery gate. Route setup does not
+approve changed product UI or bypass mandatory publication. Existing installed
+copies and immutable packages remain pinned until separately authorized delivery.
+
 The tunnel uses a separate foreground SSH connection. For that invocation only,
 the connector disables connection sharing (`-S none`, `ControlMaster=no`,
 `ControlPersist=no`) and backgrounding (`ForkAfterAuthentication=no`). Otherwise,

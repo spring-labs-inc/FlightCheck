@@ -30,7 +30,7 @@
     ["status-card/maintainer.py", ".flightcheck/status-card/maintainer.py", "shared"],
     ["status-card/reply.py", ".flightcheck/status-card/reply.py", "shared"],
     ["status-card/connect.py", ".flightcheck/status-card/connect.py", "shared"],
-    ["status-card/task_tab.py", ".flightcheck/status-card/task_tab.py", "codex"],
+    ["status-card/task_tab.py", ".flightcheck/status-card/task_tab.py", "shared"],
     ["workflow/skills/develop-change/SKILL.md", ".agents/skills/develop-change/SKILL.md", "codex"],
     ["workflow/skills/develop-change/references/task-status.md", ".agents/skills/develop-change/references/task-status.md", "codex"],
     ["workflow/reviewers/workflow-code-reviewer.toml", ".codex/agents/workflow-code-reviewer.toml", "codex"],
