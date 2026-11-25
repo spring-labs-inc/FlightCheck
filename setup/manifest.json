@@ -59,6 +59,9 @@
     ["workflow/scripts/flight_associations.py", ".flightcheck/scripts/flight_associations.py", "shared"],
     ["workflow/scripts/launch_detection.py", ".flightcheck/scripts/launch_detection.py", "shared"],
     ["docs/shared-foundations.md", ".flightcheck/docs/shared-foundations.md", "shared"],
-    ["docs/checkout-verification.md", ".flightcheck/docs/checkout-verification.md", "shared"]
+    ["docs/checkout-verification.md", ".flightcheck/docs/checkout-verification.md", "shared"],
+    ["workflow/scripts/flight_lifecycle.py", ".flightcheck/scripts/flight_lifecycle.py", "shared"],
+    ["workflow/scripts/repository_audit.py", ".flightcheck/scripts/repository_audit.py", "shared"],
+    ["docs/flight-lifecycle.md", ".flightcheck/docs/flight-lifecycle.md", "shared"]
   ]
 }

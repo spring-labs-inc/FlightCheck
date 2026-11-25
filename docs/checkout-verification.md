@@ -92,8 +92,11 @@ verified detached commit; the publisher/listener directory is not a substitute.
 #81 receives main/children, native/manual management, preserved-existing versus
 disposable-temporary classification, commits, delivery targets and disposition.
 
-Release execution ownership only with the recorded closeout/handoff decision in
-PR & Merge. Keep records, outstanding obligations and all files/refs intact.
+Release execution ownership only after the recorded closeout/handoff decision
+and the required [lifecycle disposition gate](flight-lifecycle.md) pass inside
+PR & Merge. Retain records, outstanding obligations and all preservation proof.
+New cleanup-required records cannot close while eligible artifacts remain.
+Existing markerless records remain compatible without acquiring deletion grants.
 #81 owns cleanup authorization, integration/preservation proof and native
 cleanup/reconciliation; #82 supplies no deletion, retention or snapshot system.
 Preserve an existing repository checkout used for branch-only work. Temporary

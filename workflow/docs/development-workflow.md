@@ -161,6 +161,32 @@ Send a failed current check directly to implementation through the existing `nex
 
 These defaults apply to fresh flights using the merged source containing this change, including later reviewed source installs and development builds. Existing copied adopter projects and the published 0.1.0 wheel, sdist and Homebrew installed source remain unchanged. This source change performs no automatic update, backport, release or installation.
 
+## Launch, required disposition and optional audit
+
+Use the [lifecycle contract](../../docs/flight-lifecycle.md) alongside checkout
+verification. At launch, run association-first lightweight detection and record
+concrete flight-owned local/remote refs and temporary worktrees with explicit
+cleanup authorization. Keep it separate from delivery; preserve historical and
+unexpected artifacts without inventing grants. Include external preservation of
+expressly owned ignored/private assets and durable evidence/card/helper runtime.
+
+After actual merge, complete required safe disposition inside PR & Merge. Verify
+all relevant source changes at the pinned integration commit and its reachability
+from the actual target, including squash/rebase delivery. Recheck exact identities,
+source heads, ownership, protection, locks and checkout/private-data state before
+each authorized action. Prefer native cleanup, capture its real result, and verify
+actual path/admin/ref outcomes. Preserve blocked artifacts and keep the stage
+pending; a merged PR alone does not close a flight. Resume an interrupted operation
+with the same inventory and leases. Release ownership only after the current gate
+passes; use a same-clone retained control root and verified external helpers when
+the main temporary checkout has been removed.
+
+The full on-demand repository audit is separate from launch and execution. It
+reports all discoverable branches/worktrees, including manual artifacts, with
+recommendations and honest remote/client/protection/integration limits. Never
+fetch/prune or run mutation/client-cleanup commands during audit. Recommendations
+require a separate scoped authorization and fresh revalidation before action.
+
 ## Independent review
 
 Launch `workflow-evidence-reviewer` for the final code and evidence verdict. Launch `workflow-code-reviewer` only when the early review criteria apply. Give each applicable reviewer a separate read-only session in the selected client with the tools and evidence needed for their review. Check the effective sandbox and available tools before using the role. A role's instructions do not set its sandbox. Reviewers must have no provider write tools or access to secrets, and no executable hooks should run in the review session. If the client cannot provide that boundary or the reviewer cannot inspect required evidence, keep the review pending. [Codex custom agents](https://learn.chatgpt.com/docs/agent-configuration/subagents)

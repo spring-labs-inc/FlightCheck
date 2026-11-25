@@ -27,7 +27,7 @@ BEGIN = "<!-- FlightCheck:begin -->"
 END = "<!-- FlightCheck:end -->"
 STATE = ".flightcheck/installation.json"
 CONFIG = ".flightcheck/project.json"
-SCRIPTS = ("capture_check", "handoff", "proof", "recovery", "behavior", "disposition", "checkout_guard")
+SCRIPTS = ("capture_check", "handoff", "proof", "recovery", "behavior", "disposition", "checkout_guard", "flight_lifecycle", "repository_audit")
 
 
 class SetupError(ValueError):
@@ -161,6 +161,7 @@ def render(data, source_name, destination, config):
     text = text.replace("workflow/docs/development-workflow.md", ".flightcheck/docs/development-workflow.md")
     if destination.endswith("docs/development-workflow.md"):
         text = text.replace("](../../docs/checkout-verification.md)", "](checkout-verification.md)")
+        text = text.replace("](../../docs/flight-lifecycle.md)", "](flight-lifecycle.md)")
         text = text.replace("](../../examples/existing-project/docs/first-flight.md)", "](first-flight.md)")
         text = text.replace("](../../examples/existing-project/examples/evidence-bootstrap/README.md)", "](../examples/evidence-bootstrap/README.md)")
         text = text.replace("](../.flightcheck/scripts/", "](../scripts/")
@@ -172,6 +173,7 @@ def render(data, source_name, destination, config):
         text = text.replace("](../../../.flightcheck/docs/development-workflow.md", "](development-workflow.md")
     if destination.endswith("SKILL.md"):
         text = text.replace("](../../../docs/checkout-verification.md)", "](../../../.flightcheck/docs/checkout-verification.md)")
+        text = text.replace("](../../../docs/flight-lifecycle.md)", "](../../../.flightcheck/docs/flight-lifecycle.md)")
         if "/.claude/" in "/" + destination and config["activation"] == "opt-in":
             text = text.replace("description: Run", "disable-model-invocation: true\ndescription: Run", 1)
         text += "\n## Installed status card\n\nThe standard card is installed. Read `.flightcheck/docs/status.md`; start or restore it for each selected flight. A terminal session can use the live browser card through its task URL. Record unavailable capabilities instead of silently omitting the card.\n"
@@ -501,7 +503,43 @@ def checkout_main(argv):
         return 1
 
 
+def _lifecycle_operation_main(helper_name, argv):
+    """Run a pinned shared operation; never install or upgrade a project."""
+    try:
+        base = Path(__file__).resolve().parent
+        installation = base / "installation.json"
+        if installation.is_file():
+            state = json.loads(installation.read_text())
+            selected = ".flightcheck/scripts/" + helper_name + ".py"
+            if selected not in state["files"]:
+                raise SetupError("Operation is unavailable in this pinned installation")
+            for name, record in state["files"].items():
+                if name.startswith(".flightcheck/scripts/") and name.endswith(".py"):
+                    path = safe_path(base.parent, name)
+                    if sha(path.read_bytes()) != record["sha256"]:
+                        raise SetupError("Modified installed operation dependency: " + name)
+            helper = safe_path(base.parent, selected)
+        else:
+            helper = base.parent / "workflow/scripts" / (helper_name + ".py")
+            if not helper.is_file():
+                raise SetupError("Operation helper is unavailable in the selected source")
+        return subprocess.run([sys.executable, "-B", str(helper), *argv], check=False).returncode
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        print(json.dumps({"status": "incomplete", "error": str(error)}))
+        return 1
+
+
+def lifecycle_main(argv):
+    return _lifecycle_operation_main("flight_lifecycle", argv)
+
+
+def audit_main(argv):
+    return _lifecycle_operation_main("repository_audit", argv)
+
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] in ("lifecycle", "audit"):
+        return {"lifecycle": lifecycle_main, "audit": audit_main}[sys.argv[1]](sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == "checkout":
         return checkout_main(sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == "config":
