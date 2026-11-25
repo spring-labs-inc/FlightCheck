@@ -131,6 +131,11 @@ def validate_record(record):
             ("active", "paused", "review", "merged", "closed")):
         raise AssociationError("lifecycle.state must be active, paused, review, merged or closed")
     text(lifecycle.get("disposition"), "lifecycle.disposition")
+    cleanup = value.get("cleanup")
+    if isinstance(cleanup, dict) and cleanup.get("protocol") == "required-v1":
+        if not isinstance(cleanup.get("inventory"), list) or not isinstance(cleanup.get("operations"), list):
+            raise AssociationError("Required cleanup inventory/history must remain structured")
+        text(cleanup.get("state"), "cleanup.state")
     encoded(value)  # Reject non-JSON or nonfinite input before persistence.
     return value
 
@@ -240,6 +245,19 @@ class Registry:
                     raise AssociationError("Configuration changes require explicit reconfigure history and unchanged grants")
             elif old and record["grants"] != old["grants"]:
                 text(record.get("grant_reference"), "explicit grant decision reference")
+            if old and isinstance(old.get("cleanup"), dict) and old["cleanup"].get("protocol") == "required-v1":
+                prior = old["cleanup"]
+                current = record.get("cleanup", {})
+                if not isinstance(current, dict) or current.get("protocol") != "required-v1":
+                    raise AssociationError("Required cleanup protocol cannot be removed or downgraded")
+                if not isinstance(current.get("operations"), list) or current["operations"][:len(prior.get("operations", []))] != prior.get("operations", []):
+                    raise AssociationError("Preserve original cleanup intents and outcomes")
+                for key in ("inventory", "reference", "grant_sha256", "registration"):
+                    if prior.get("registration") and current.get(key) != prior.get(key):
+                        raise AssociationError("Registered cleanup scope cannot silently change: " + key)
+                for key in ("frozen_binding", "frozen_delivery"):
+                    if key in prior and current.get(key) != prior[key]:
+                        raise AssociationError("Interrupted cleanup must preserve frozen identities and leases")
             records = [item for item in records if item["flight"] != record["flight"]] + [record]
             self._unique(records)
             raw = encoded({"schema": 1, "records": records})

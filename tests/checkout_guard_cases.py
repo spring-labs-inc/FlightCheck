@@ -141,6 +141,32 @@ class CheckoutCases:
                                 client_observation=kwargs.pop("client_observation", self.observation),
                                 policy=kwargs.pop("policy", self.policy), **kwargs)
 
+    def retained_legacy(self, path, record):
+        """Represent a verified pre-81 association, without new-flight adoption.
+
+        This is the original version-1 record shape. It neither adds historical
+        acceptance nor supplies cleanup authority. Normal adopt still initializes
+        the required cleanup contract, exercised by the lifecycle witnesses.
+        """
+        record = copy.deepcopy(record)
+        client = self.guard._client(self.observation, record["client"])
+        record["client"] = {"name": client["name"], "sessions": client["sessions"]}
+        anchors = {}
+        for item in [record["checkout"], *record["children"]]:
+            actual = self.guard.observe(item["path"])
+            item.update(branch=actual["branch"], commit=actual["commit"], execution_host=actual["execution_host"])
+            anchors[item["path"]] = self.guard._anchor(actual, item)
+        record["checkout_guard"] = {
+            "version": 1, "base": {"ref": self.base, "commit": self.base}, "generation": 1,
+            "configuration_revision": record["configuration"]["revision"],
+            "client_observation": client, "anchors": anchors,
+            "history": [{"action": "adopt", "decision": {"reference": "Retained markerless pre-81 fixture"},
+                         "checkout": copy.deepcopy(record["checkout"]),
+                         "children": copy.deepcopy(record["children"]), "client": client}],
+        }
+        self.registry.save(record, expected_revision=self.registry.read()["revision"])
+        return self.verify(path)
+
     def verify(self, path, flight="fixture", **kwargs):
         return self.guard.verify(path, self.registry, flight, policy=kwargs.pop("policy", self.policy), **kwargs)
 

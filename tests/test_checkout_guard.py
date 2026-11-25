@@ -346,7 +346,7 @@ class CheckoutGuardTests(CheckoutCases, unittest.TestCase):
             record["issues"] = [82, 83, 111]
             record["pull_requests"] = [182, 211]
             record["identity"] = {"label": "issue-83 identity", "provider_links": ["issue-111-association"]}
-            observed = self.adopt(main, record, decision={"reference": "Owner adopts child work", "adopt_existing": True})
+            observed = self.retained_legacy(main, record)
             before = {str(p): self.preserved_state(p) for p in (main, child)}
             old = self.registry.get("fixture")
             self.guard.release(self.registry, "fixture", "Owner closes execution ownership", policy=self.policy)

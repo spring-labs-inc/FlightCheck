@@ -264,7 +264,7 @@ def _pattern(pattern, branch, default):
         raise CheckoutError("Unsupported provider ref pattern") from error
 
 
-def resolve_policy(checkout, repository_id):
+def resolve_policy(checkout, repository_id, *, branch_names=None):
     """Read current GitHub defaults/protection, including unpublished branch rules.
 
     REST GETs and one fixed read-only GraphQL query each have a deadline;
@@ -291,11 +291,28 @@ def resolve_policy(checkout, repository_id):
     # Rulesets can protect an unpublished working branch. Query ruleset patterns
     # rather than requiring that branch to exist on the provider.
     rulesets = _pages(endpoint + "/rulesets?includes_parents=true", deadline)
-    branch = observe(checkout)["branch"]
+    if branch_names is None:
+        names = [observe(checkout)["branch"]]
+    else:
+        # Audit supplies metadata names; never hash untracked/private contents
+        # merely to classify protection of all discoverable branch names.
+        root = Path(checkout).resolve(strict=True)
+        if Path(_out(root, "rev-parse", "--show-toplevel")).resolve() != root:
+            raise CheckoutError("Policy observation must use the actual checkout root")
+        _out(root, "rev-parse", "--path-format=absolute", "--git-common-dir")
+        if not isinstance(branch_names, (list, tuple, set)):
+            raise CheckoutError("Branch policy names must be an explicit collection")
+        names = []
+        for name in branch_names:
+            _text(name, "policy branch name")
+            _git(root, "check-ref-format", "refs/heads/" + name)
+            names.append(name)
+        names = sorted(set(names))
     applied = []
     classic_patterns = _classic_patterns(repository_id, deadline)
-    if branch and any(_pattern("refs/heads/" + pattern, branch, default) for pattern in classic_patterns):
-        protected_names.add(branch)
+    for branch in names:
+        if branch and any(_pattern("refs/heads/" + pattern, branch, default) for pattern in classic_patterns):
+            protected_names.add(branch)
     for summary in rulesets:
         if not isinstance(summary, dict) or not isinstance(summary.get("id"), int):
             raise CheckoutError("Malformed authoritative ruleset response")
@@ -306,13 +323,14 @@ def resolve_policy(checkout, repository_id):
         if (not isinstance(condition, dict) or not isinstance(condition.get("include"), list)
                 or not isinstance(condition.get("exclude"), list)):
             raise CheckoutError("Cannot establish authoritative ruleset branch applicability")
-        if branch and any(_pattern(pattern, branch, default) for pattern in condition["include"]) and not any(
-                _pattern(pattern, branch, default) for pattern in condition["exclude"]):
-            protected_names.add(branch)
-            applied.append(summary["id"])
+        for branch in names:
+            if branch and any(_pattern(pattern, branch, default) for pattern in condition["include"]) and not any(
+                    _pattern(pattern, branch, default) for pattern in condition["exclude"]):
+                protected_names.add(branch)
+                applied.append(summary["id"])
     return {"repository": repository_id, "default_branch": default,
             "protected_branches": sorted(protected_names | {default}),
-            "source": "github-api-current", "applied_rulesets": sorted(applied), "classic_patterns": classic_patterns}
+            "source": "github-api-current", "applied_rulesets": sorted(set(applied)), "classic_patterns": classic_patterns}
 
 
 def _policy(checkout, repository, supplied):
@@ -481,6 +499,8 @@ def adopt(checkout, registry, record, *, base, client_observation, decision=None
             if existing[key] != record[key]:
                 raise CheckoutError("Current-flight verifier adoption must preserve existing association " + key)
         record = copy.deepcopy(existing)
+    from flight_lifecycle import initialize
+    record = initialize(record)
     state = observe(checkout)
     if state["path"] != record["checkout"]["path"]:
         raise CheckoutError("Proposed main checkout is not the actual execution checkout")
@@ -669,7 +689,7 @@ def reconcile(registry, flight, checkout, reference, *, previous_path=None, clie
     return _report(registry, saved["revision"], saved["record"], state, "implementation", current_policy)
 
 
-def release(registry, flight, reference, *, policy=None):
+def release(registry, flight, reference, *, policy=None, control_checkout=None):
     registry = _registry(registry)
     _text(reference, "closeout/handoff reference")
     previous = registry.read()
@@ -680,6 +700,16 @@ def release(registry, flight, reference, *, policy=None):
     guard = record.get("checkout_guard")
     if not isinstance(guard, dict):
         raise CheckoutError("Unverified association needs explicit closeout reconciliation")
+    if isinstance(record.get("cleanup"), dict) and record["cleanup"].get("protocol") == "required-v1":
+        from flight_lifecycle import closure_status
+        control = control_checkout or record["checkout"]["path"]
+        if not Path(control).is_dir():
+            raise CheckoutError("Removed execution checkout requires an explicit retained control_checkout for closeout")
+        disposition = closure_status(control, registry, flight, policy=policy)
+        if not disposition.get("complete"):
+            raise CheckoutError("PR & Merge cleanup/disposition pending: " + "; ".join(disposition.get("blockers", [])))
+        record["cleanup"]["state"] = "complete"
+        record["cleanup"]["closure"] = {"plan_sha256": disposition["plan_sha256"], "artifacts": disposition["artifacts"]}
     guard["history"].append({"action": "release", "reference": reference,
                              "checkout": copy.deepcopy(record["checkout"]), "children": copy.deepcopy(record["children"]),
                              "previous_lifecycle": copy.deepcopy(record["lifecycle"]),
@@ -749,6 +779,7 @@ def main(argv=None):
     parser.add_argument("--previous-path", type=Path)
     parser.add_argument("--previous-observation", type=Path)
     parser.add_argument("--session")
+    parser.add_argument("--control-checkout", type=Path, help="Same-repository retained controller for completed disposable checkout")
     args = parser.parse_args(argv)
     try:
         registry = _registry(args.registry) if args.registry else default_registry(args.checkout)
@@ -765,7 +796,7 @@ def main(argv=None):
                                previous_path=args.previous_path, client_observation=read(args.client_observation),
                                session=args.session, previous_observation=read(args.previous_observation))
         else:
-            result = release(registry, args.flight, args.reference)
+            result = release(registry, args.flight, args.reference, control_checkout=args.control_checkout)
         print(json.dumps(result, indent=2))
         return 0
     except (AssociationError, OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:

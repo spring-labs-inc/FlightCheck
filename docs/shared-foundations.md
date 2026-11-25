@@ -153,3 +153,18 @@ creating another ownership store or changing project defaults. Configuration
 updates preserve active snapshots and grants; explicit reconciliation revalidates
 affected assumptions. This integration does not complete #81 cleanup/audit, #80
 Settings or #83 presentation, or close their parent epic on partial delivery.
+
+## Required lifecycle and full audit
+
+The [lifecycle contract](flight-lifecycle.md) consumes this configuration, Registry
+and launch interface. `setup/install.py lifecycle` records concrete cleanup scope,
+proves actual delivery and reconciles authorized native worktree/ref disposition
+inside PR & Merge. New flight records require completion before ownership release;
+legacy markerless records remain compatible without receiving new grants. Private
+operation intents/outcomes remain in the existing Registry, with external proof
+references rather than a second ownership store.
+
+`setup/install.py audit` supplies the complete optional repository-wide report,
+including manual/unowned artifacts, actual remote heads and cached observations.
+It is an explicit read-only operation with no fetch/prune or cleanup authority.
+#80 retains Settings, #83 presentation and #111 synchronization.

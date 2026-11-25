@@ -18,6 +18,20 @@ client handoffs explicitly without losing unfinished work or unrelated valid
 proof. Release execution ownership with the #81 handoff inside PR & Merge; no
 separate cleanup manager or universal command-interception claim.
 
+At setup, consume the [lifecycle contract](../../../docs/flight-lifecycle.md):
+record exact authorized flight-owned worktree/local-ref/actual-remote-ref inventory
+and private/ignored preservation obligations separately from delivery. Historical
+handoffs and names confer no cleanup authority. After confirmed merge, reconcile
+actual integration and perform eligible disposition within PR & Merge before
+closing. Prefer native cleanup, safely leave the execution path, retain a verified
+external helper/card runtime and private history, and acknowledge actual removal.
+Preserve active/locked/dirty/untracked/unknown-private, protected/shared/main and
+unintegrated artifacts; report blockers rather than force a clean close. Interrupted
+or repeated operations keep the same scope and old-OID conditions. The full
+optional on-demand audit remains strictly read-only, including no fetch/prune;
+report actionable recommendations and unavailable coverage without executing them.
+This adds no outer review cycle or worktree/retention manager.
+
 During Plan, give a separate read-only reviewer `handoff.py challenge-brief` before the implementation narrative. Retain its actual proposal with `handoff.py challenges`. Map each behavioral acceptance case and independent challenge to exact native witnesses and qualify its expected outcome using the guide's baseline or mutation controls. Include public observations, representation variants, and lifecycle timing where relevant to the project's contract. A green suite alone is insufficient.
 
 Run the configured cheap checks, including fast checks for affected behavior, and resolve failures before interactive HTML approval or conditional early CODE review. Use the trusted recorder for gates assigned to the worker. At handoff, use `handoff.py checks` to carry verified receipts and identify the checks still due. Follow the guide for final code and evidence review and verdict routing. On resume, reconcile the current candidate, original results, owner decisions, and provider state before repeating work.
