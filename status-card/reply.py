@@ -146,7 +146,10 @@ def configured_route(record, context, checkout, directory):
 
 
 def route_caller_matches(record, context, checkout, directory):
-    if read_object(directory / "monitor.json").get("checkout") != str(checkout.resolve()):
+    # Incomplete publication intentionally has no producer monitor yet. Its
+    # route still binds the exact execution checkout independently of that lease.
+    recorded = read_object(directory / "monitor.json").get("checkout") or record.get("checkout")
+    if recorded != str(checkout.resolve()):
         return False
     return configured_route(record, context, checkout, directory) or record.get("context") == context
 
@@ -215,7 +218,8 @@ def prepare(checkout, state, args):
         mode = execution_mode(args.execution)
         context = route_context(checkout, args.session)
         flight_binding = read_object(directory / "monitor.json")
-        if (flight_binding.get("checkout") not in (None, str(checkout.resolve()))
+        recorded_checkout = flight_binding.get("checkout") or previous.get("checkout")
+        if (recorded_checkout not in (None, str(checkout.resolve()))
                 and (getattr(args, "connection_adapter", False) or not getattr(args, "reconcile_route", False))):
             raise ValueError("The task belongs to another recorded checkout; reconcile the actual flight before publication")
         if getattr(args, "connection_adapter", False) and previous.get("context"):
@@ -250,6 +254,7 @@ def prepare(checkout, state, args):
         # Reject conflicting routes before publication or state changes.
         record = route_record(previous, args.task, host_url, mode, args.user_url, context,
                               getattr(args, "reconcile_route", False), confirmed_reuse)
+        record["checkout"] = str(checkout.resolve())
         try:
             maintainer.show_card(checkout, state, argparse.Namespace(
                 task=args.task, title=args.title,
@@ -258,6 +263,7 @@ def prepare(checkout, state, args):
             endpoint = read_object(directory / "endpoint.json")
             record = route_record(previous, args.task, maintainer.card_url(args.task, endpoint["port"]), mode, args.user_url,
                                   context, getattr(args, "reconcile_route", False), confirmed_reuse)
+            record["checkout"] = str(checkout.resolve())
             current = maintainer.candidate(checkout)
             live = published_card(args.task, endpoint["port"], current)
             if confirmation is not None and (not live or confirmation != {

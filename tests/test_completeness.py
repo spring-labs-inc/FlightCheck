@@ -166,6 +166,9 @@ class CompletenessTests(unittest.TestCase):
         self.draft.write_text("Update.\n\n" + incomplete["footer"])
         result = self.api("check", "--reply-file", str(self.draft), expected=1)
         self.assertEqual(result["status"], "incomplete")
+        self.assertFalse((self.directory() / "monitor.json").exists())
+        foreign = self.api("check", "--session", "another-controller", "--reply-file", str(self.draft), expected=1)
+        self.assertEqual(foreign["status"], "unavailable")
         self.assertEqual(hook("Stop", self.draft.read_text())["decision"], "block")
         self.assertIn("complete --details", hook("Stop", self.draft.read_text())["reason"])
         ready = self.api("prepare", "--details", str(self.details()))
@@ -178,6 +181,21 @@ class CompletenessTests(unittest.TestCase):
         self.assertEqual(hook("Stop", self.draft.read_text()), {})
         self.assertEqual(ready["completeness"], self.snapshot()["completeness"])
         self.assertEqual(ready["browser_rendering"], "unobserved")
+
+    def test_incomplete_route_rejects_another_checkout_without_monitor(self):
+        self.env["CODEX_THREAD_ID"] = "completeness-controller"
+        self.api("prepare", expected=1)
+        self.assertFalse((self.directory() / "monitor.json").exists())
+        before = self.snapshot()
+        route = (self.directory() / "reply-route.json").read_bytes()
+        linked = self.root / "other recorded checkout"
+        self.git("worktree", "add", "--detach", str(linked), "HEAD")
+        other = subprocess.run([sys.executable, "-B", "status-card/reply.py", "prepare", "--task", "test-change",
+                                "--execution", "local"], cwd=linked, env=self.env, capture_output=True, text=True)
+        self.assertEqual(other.returncode, 1, other.stdout + other.stderr)
+        self.assertIn("recorded checkout", json.loads(other.stdout)["error"])
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual((self.directory() / "reply-route.json").read_bytes(), route)
 
     def test_host_and_origin_policy_preserves_loopback_forwarding(self):
         self.api("prepare", "--details", str(self.details()))

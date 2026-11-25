@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 
 from card_fixture import initialized_details
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(os.environ.get("FLIGHTCHECK_PRODUCT_ROOT", Path(__file__).resolve().parents[1]))
 
 
 class MaintainerCardTests(unittest.TestCase):
@@ -192,13 +192,18 @@ class MaintainerCardTests(unittest.TestCase):
 
         linked = self.checkout.parent / "linked checkout"
         self.run_git("worktree", "add", "-b", "codex/linked-branch", str(linked))
-        self.assertEqual(self.card(checkout=linked), footer)
+        # This is an explicit same-flight fixture move, never implicit route
+        # reuse from a different recorded execution checkout.
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.card(checkout=linked)
+        self.assertEqual(json.loads(self.request(footer, "status.json"))["branch"], primary["branch"])
+        self.assertEqual(self.card("--reconcile-route", checkout=linked), footer)
         worktree = json.loads(self.request(footer, "status.json"))
         self.assertEqual(worktree["worktree"], "linked checkout")
         self.assertNotIn("branch", worktree)
 
         self.run_git("switch", "--detach")
-        self.assertEqual(self.card(), footer)
+        self.assertEqual(self.card("--reconcile-route"), footer)
         detached = json.loads(self.request(footer, "status.json"))
         self.assertNotIn("branch", detached)
         self.assertNotIn("worktree", detached)
