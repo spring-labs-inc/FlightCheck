@@ -386,7 +386,8 @@ def check_turn(checkout, state, event):
         mode = execution_mode("auto")
         selected = Path(record["checkout"])
         route_ready = (route.get("execution") == mode and route.get("user_url")
-                       and route_caller_matches(route, route_context(selected, session), selected, task_dir(state, task))
+                       and route_caller_matches(route, route_context(selected, session), selected, task_dir(state, task),
+                                                incomplete=bool(status and status.get("completeness", {}).get("ready") is False))
                        and (mode == "local" or verified_route(route, current, configured_route(
                            route, route_context(selected, session), selected, task_dir(state, task)))))
         if status and status.get("completeness", {}).get("ready") and route_ready:

@@ -145,10 +145,12 @@ def configured_route(record, context, checkout, directory):
     return bool(cfg and context.get("session") in cfg["sessions"])
 
 
-def route_caller_matches(record, context, checkout, directory):
-    # Incomplete publication intentionally has no producer monitor yet. Its
-    # route still binds the exact execution checkout independently of that lease.
-    recorded = read_object(directory / "monitor.json").get("checkout") or record.get("checkout")
+def route_caller_matches(record, context, checkout, directory, *, incomplete=False):
+    # Only verified incomplete publication can lack a producer monitor. A ready
+    # snapshot left by failed registration cannot use this identity fallback.
+    recorded = read_object(directory / "monitor.json").get("checkout")
+    if recorded is None and incomplete:
+        recorded = record.get("checkout")
     if recorded != str(checkout.resolve()):
         return False
     return configured_route(record, context, checkout, directory) or record.get("context") == context
@@ -416,12 +418,13 @@ def check(checkout, state, args):
     if mode != record["execution"]:
         raise ValueError("Execution context changed; prepare the route again before replying")
     context = route_context(checkout, args.session)
-    if not route_caller_matches(record, context, checkout, directory):
-        raise ValueError("Host, repository or session changed; prepare and verify this connection before replying")
-    if args.user_url and args.user_url != record.get("user_url"):
-        raise ValueError("Use the prepared task's exact browser URL")
     current = maintainer.candidate(checkout)
     published = published_card(args.task, endpoint.get("port"), current)
+    incomplete = bool(published and published.get("completeness", {}).get("ready") is False)
+    if not route_caller_matches(record, context, checkout, directory, incomplete=incomplete):
+        raise ValueError("Prepared route identity is unavailable; prepare and verify this connection before replying")
+    if args.user_url and args.user_url != record.get("user_url"):
+        raise ValueError("Use the prepared task's exact browser URL")
     result = observation(record, current, published, published["verdict"] if published else "Pending",
                          configured_route(record, context, checkout, directory))
     if not args.reply_file:

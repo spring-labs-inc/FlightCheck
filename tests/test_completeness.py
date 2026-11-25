@@ -197,6 +197,51 @@ class CompletenessTests(unittest.TestCase):
         self.assertEqual(self.snapshot(), before)
         self.assertEqual((self.directory() / "reply-route.json").read_bytes(), route)
 
+    def test_failed_first_registration_cannot_authorize_ready_footer(self):
+        self.env["CODEX_THREAD_ID"] = "completeness-controller"
+        def hook(event, reply=""):
+            payload = {"hook_event_name": event, "cwd": str(self.checkout), "session_id": self.env["CODEX_THREAD_ID"],
+                       "turn_id": "failed-registration", "last_assistant_message": reply}
+            return json.loads(subprocess.check_output([sys.executable, "-B", "status-card/maintainer.py", "hook"],
+                              input=json.dumps(payload), cwd=self.checkout, env=self.env, text=True, timeout=10))
+        self.assertEqual(hook("UserPromptSubmit"), {})
+        initial = self.api("prepare", expected=1)
+        self.assertEqual(initial["status"], "incomplete")
+        self.assertFalse((self.directory() / "monitor.json").exists())
+        outside = self.details()
+        # An ignored invalid details location keeps the exact source candidate
+        # stable while exercising the real late registration rejection.
+        exclude = Path(self.git("rev-parse", "--git-path", "info/exclude"))
+        if not exclude.is_absolute(): exclude = self.checkout / exclude
+        with exclude.open("a") as stream: stream.write("\n/invalid-details.json\n")
+        inside = self.checkout / "invalid-details.json"
+        inside.write_bytes(outside.read_bytes())
+        failed = self.api("prepare", "--details", str(inside), expected=1)
+        self.assertEqual(failed["status"], "unavailable")
+        self.assertIn("outside", failed["error"])
+        self.assertTrue(self.snapshot()["completeness"]["ready"])
+        self.assertEqual(self.snapshot()["candidate"], initial["candidate"])
+        self.assertFalse((self.directory() / "monitor.json").exists())
+        clickable = "FlightCheck: [&lt; status /&gt;](" + initial["user_url"] + ")"
+        self.draft.write_text("Update.\n\n" + clickable)
+        checked = subprocess.run([sys.executable, "-B", "status-card/reply.py", "check", "--task", "test-change",
+                                  "--execution", "local", "--reply-file", str(self.draft)],
+                                 cwd=self.checkout, env=self.env, capture_output=True, text=True, timeout=20)
+        stopped = hook("Stop", self.draft.read_text())
+        # Gather both real public observations before either assertion or recovery.
+        with self.subTest(boundary="public-check"):
+            self.assertEqual(checked.returncode, 1, checked.stdout + checked.stderr)
+            self.assertNotEqual(json.loads(checked.stdout)["status"], "published")
+            self.assertNotIn("http", json.loads(checked.stdout)["footer"])
+        with self.subTest(boundary="native-stop"):
+            self.assertEqual(stopped.get("decision"), "block", stopped)
+        ready = self.api("prepare", "--details", str(outside))
+        self.assertEqual(ready["status"], "published")
+        self.assertTrue((self.directory() / "monitor.json").exists())
+        self.draft.write_text("Update.\n\n" + ready["footer"])
+        self.assertEqual(self.api("check", "--reply-file", str(self.draft))["status"], "published")
+        self.assertEqual(hook("Stop", self.draft.read_text()), {})
+
     def test_host_and_origin_policy_preserves_loopback_forwarding(self):
         self.api("prepare", "--details", str(self.details()))
         for target in ("/task/test-change/status.json", "/task/test-change/", "/task.js", "/card.css"):
