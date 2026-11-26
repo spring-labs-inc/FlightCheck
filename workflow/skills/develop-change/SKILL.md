@@ -40,6 +40,17 @@ optional on-demand audit remains strictly read-only, including no fetch/prune;
 report actionable recommendations and unavailable coverage without executing them.
 This adds no outer review cycle or worktree/retention manager.
 
+Invoke the existing `status-sync` lifecycle operation once after actual scoped
+work starts/resumes, when the scoped full work is ready for its applicable review,
+on a real return to repair, and after accepted full-issue completion. Use the
+same confirmed configuration and Registry, explicit owned work scopes and a
+separate exact tracker-status grant. Follow the [lifecycle event contract](../../../docs/status-synchronization.md).
+Honor a required-policy unsynchronized blocker; report advisory limitations
+plainly. Planning, early CODE, card refreshes and messages are not status events.
+Partial delivery or a merge never implies Done/closure. Completion reconciles
+actual accepted issue closure only after verified delivery/integration/disposition,
+from retained control after release when needed; never re-adopt a removed worker.
+
 During Plan, give a separate read-only reviewer `handoff.py challenge-brief` before the implementation narrative. Retain its actual proposal with `handoff.py challenges`. Map each behavioral acceptance case and independent challenge to exact native witnesses and qualify its expected outcome using the guide's baseline or mutation controls. Include public observations, representation variants, and lifecycle timing where relevant to the project's contract. A green suite alone is insufficient.
 
 Run the configured cheap checks, including fast checks for affected behavior, and resolve failures before interactive HTML approval or conditional early CODE review. Use the trusted recorder for gates assigned to the worker. At handoff, use `handoff.py checks` to carry verified receipts and identify the checks still due. Follow the guide for final code and evidence review and verdict routing. On resume, reconcile the current candidate, original results, owner decisions, and provider state before repeating work.

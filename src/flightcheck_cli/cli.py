@@ -393,10 +393,10 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "config":
         return configuration_main(argv[1:])
-    if argv and argv[0] in ("checkout", "lifecycle", "audit"):
+    if argv and argv[0] in ("checkout", "lifecycle", "audit", "status-sync"):
         try:
             with installer() as (module, source, manifest, identity):
-                operation = getattr(module, argv[0] + "_main", None)
+                operation = getattr(module, argv[0].replace("-", "_") + "_main", None)
                 if operation is None:
                     raise ValueError("Operation is unavailable in the selected pinned source")
                 return operation(argv[1:])
@@ -408,7 +408,7 @@ def main(argv=None):
         return card_main(argv[1:])
     parser = argparse.ArgumentParser(description="Run from your normal terminal to configure FlightCheck. No project changes occur when installing the application.")
     parser.add_argument("--version", action="version", version="flightcheck " + metadata.version("flightcheck"))
-    parser.add_argument("command", choices=("inspect", "init", "doctor", "recover", "card", "checkout", "lifecycle", "audit"))
+    parser.add_argument("command", choices=("inspect", "init", "doctor", "recover", "card", "checkout", "lifecycle", "audit", "status-sync"))
     parser.add_argument("target", nargs="?", default=".")
     parser.add_argument("--agent", choices=("codex", "claude", "both"))
     parser.add_argument("--config", help="Reviewed project configuration JSON")

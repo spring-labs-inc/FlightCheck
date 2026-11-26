@@ -162,6 +162,7 @@ def render(data, source_name, destination, config):
     if destination.endswith("docs/development-workflow.md"):
         text = text.replace("](../../docs/checkout-verification.md)", "](checkout-verification.md)")
         text = text.replace("](../../docs/flight-lifecycle.md)", "](flight-lifecycle.md)")
+        text = text.replace("](../../docs/status-synchronization.md)", "](status-synchronization.md)")
         text = text.replace("](../../examples/existing-project/docs/first-flight.md)", "](first-flight.md)")
         text = text.replace("](../../examples/existing-project/examples/evidence-bootstrap/README.md)", "](../examples/evidence-bootstrap/README.md)")
         text = text.replace("](../.flightcheck/scripts/", "](../scripts/")
@@ -174,6 +175,7 @@ def render(data, source_name, destination, config):
     if destination.endswith("SKILL.md"):
         text = text.replace("](../../../docs/checkout-verification.md)", "](../../../.flightcheck/docs/checkout-verification.md)")
         text = text.replace("](../../../docs/flight-lifecycle.md)", "](../../../.flightcheck/docs/flight-lifecycle.md)")
+        text = text.replace("](../../../docs/status-synchronization.md)", "](../../../.flightcheck/docs/status-synchronization.md)")
         if "/.claude/" in "/" + destination and config["activation"] == "opt-in":
             text = text.replace("description: Run", "disable-model-invocation: true\ndescription: Run", 1)
         text += "\n## Installed status card\n\nThe standard card is installed. Read `.flightcheck/docs/status.md`; start or restore it for each selected flight. A terminal session can use the live browser card through its task URL. Record unavailable capabilities instead of silently omitting the card.\n"
@@ -537,9 +539,13 @@ def audit_main(argv):
     return _lifecycle_operation_main("repository_audit", argv)
 
 
+def status_sync_main(argv):
+    return _lifecycle_operation_main("status_sync", argv)
+
+
 def main():
-    if len(sys.argv) > 1 and sys.argv[1] in ("lifecycle", "audit"):
-        return {"lifecycle": lifecycle_main, "audit": audit_main}[sys.argv[1]](sys.argv[2:])
+    if len(sys.argv) > 1 and sys.argv[1] in ("lifecycle", "audit", "status-sync"):
+        return {"lifecycle": lifecycle_main, "audit": audit_main, "status-sync": status_sync_main}[sys.argv[1]](sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == "checkout":
         return checkout_main(sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == "config":

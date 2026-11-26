@@ -1,6 +1,7 @@
 """Public shared-model and synchronization-schema acceptance witnesses."""
 
 import copy
+import contextlib
 import hashlib
 import importlib.util
 import json
@@ -10,6 +11,7 @@ import stat
 import subprocess
 import sys
 import unittest
+from unittest.mock import patch
 
 from foundation_config_cases import ConfigurationCases
 from foundation_flight_cases import FlightCases
@@ -227,6 +229,31 @@ class StatusSyncConfigurationTests(unittest.TestCase):
             self.assertEqual(local_model.normalize(root, json.loads((root / engine.CONFIG).read_bytes()), trusted_metadata=True),
                              engine.project_model().snapshot(root)["values"])
             self.assertEqual(schema.normalize(self.policy(provider="another-tracker"))["provider"], "another-tracker")
+            for entry in (PRODUCT / "setup/install.py", root / ".flightcheck/install.py"):
+                result = subprocess.run([sys.executable, "-B", str(entry), "status-sync", "--help"],
+                                        capture_output=True, text=True, timeout=25, env=self.config_env)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn("--event", result.stdout)
+                self.assertIn("--registry", result.stdout)
+            self.assertIn("](status-synchronization.md)", (root / ".flightcheck/docs/development-workflow.md").read_text())
+            self.assertIn("](../../../.flightcheck/docs/status-synchronization.md)",
+                          (root / ".agents/skills/develop-change/SKILL.md").read_text())
+            @contextlib.contextmanager
+            def selected_source():
+                yield engine, PRODUCT, {}, "fixture pinned source"
+            with patch.object(cli, "installer", selected_source):
+                self.assertEqual(cli.main(["status-sync", "--help"]), 0)
+            unknown = {"values": {"status_sync": self.policy(provider="another-tracker")}}
+            probe = ("import json,sys\nsys.path.insert(0," + repr(str(PRODUCT / "workflow/scripts")) + ")\n"
+                     "from status_sync import resolve\nfrom status_sync_github import ProviderError\n"
+                     "assert resolve('owner/repository',{'values':{}}) is None\n"
+                     "try:\n resolve('owner/repository',json.loads(sys.argv[1]))\n"
+                     "except ProviderError as error:\n assert error.reason=='unsupported_provider'\n print(error.reason)\n"
+                     "else:\n raise AssertionError('Unsupported provider claimed resolved')\n")
+            result = subprocess.run([sys.executable, "-B", "-c", probe, json.dumps(unknown)],
+                                    capture_output=True, text=True, timeout=25, env=self.config_env)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("unsupported_provider", result.stdout)
             # The installed model must reject modified adapter bytes before
             # executing them, including through the setup entry point.
             adapter = root / ".flightcheck/scripts/status_sync_config.py"
