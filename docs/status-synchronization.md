@@ -68,6 +68,15 @@ Status observation; a deliberate manual/native departure is a conflict, never
 authority to reassert. An explicitly authorized reconciliation supplies
 `expected` keyed by issue number and its `reconciliation_reference`; use a fresh
 provider observation and actual scoped decision, not a copied old board state.
+A detected conflict retains its intent, including on the first start, so replaying
+that start cannot reinterpret an observed manual Todo as untouched initial work.
+To resolve a retained or exhausted intent, supply the fresh exact observation and
+a scoped reconciliation decision. A new decision (a new reference or a changed
+exact expected observation) retires the old replay authority, records its complete
+intent/attempt budget with outcome still unknown, then records a separate bounded
+intent before mutation. Repeating the same reference and observation cannot reset
+that new intent's attempt budget. Configuration/target changes require resolving
+the original scope first; this recovery never grants another issue or field.
 
 The operation uses the captured `{revision, values}` configuration and the
 separate `tracker_status` grant. The GitHub Projects v2 adapter uses existing
@@ -88,6 +97,10 @@ and cannot silently retarget another event or configuration. GitHub exposes no
 atomic compare-and-set: these are optimistic checks, not a guarantee that an
 unobserved simultaneous external write cannot occur between the final read and
 mutation. Readback detects a changed result; it never grants permission to undo it.
+If ownership or completion/disposition verification stops the operation before
+provider inspection, the result explicitly reports automation inspection as not
+started. Neither an available-metadata fixture nor an unavailable one then proves
+that the live native workflow triggers/actions were inspected.
 
 Read actual native workflow metadata when available and report its coverage.
 GitHub's supported workflow API exposes IDs, names and enabled flags but not the

@@ -147,8 +147,9 @@ def synchronize(registry, flight, event, *, checkout, provider=None, verifier=No
     sync.setdefault("observations", {})
     sync.setdefault("pending", {})
     sync.setdefault("outcomes", [])
+    sync.setdefault("reconciliations", [])
     if (not isinstance(sync["observations"], dict) or not isinstance(sync["pending"], dict)
-            or not isinstance(sync["outcomes"], list)):
+            or not isinstance(sync["outcomes"], list) or not isinstance(sync["reconciliations"], list)):
         raise ValueError("Recorded synchronization observations/intents/outcomes are invalid; preserve and reconcile them")
     try:
         proof = (verifier or _verify)(checkout, registry, record, event)
@@ -160,7 +161,9 @@ def synchronize(registry, flight, event, *, checkout, provider=None, verifier=No
     except (ProviderError, ValueError, OSError) as error:
         reason = getattr(error, "reason", "ownership_unverified")
         return dict(result, state="unsynchronized", blocked=required,
-                    outcomes=[{"state": "unsynchronized", "reason": reason, "detail": str(error)}])
+                    outcomes=[{"state": "unsynchronized", "reason": reason, "detail": str(error)}],
+                    automation={"available": False, "semantics_available": False, "inspection": "not_started",
+                                "detail": "Ownership/completion verification stopped provider inspection: " + str(error)})
     automation = provider.automation()
     result.update(automation=automation, concurrency=getattr(provider, "concurrency", "Provider-specific conditional status update"))
     for issue in issues:
@@ -212,7 +215,12 @@ def synchronize(registry, flight, event, *, checkout, provider=None, verifier=No
                     raise ProviderError("reconciliation_required", "Explicit observed-state reconciliation needs its scoped owner decision reference.")
                 if expected is not None and not isinstance(expected, dict):
                     raise ProviderError("reconciliation_required", "Expected Status must be a fresh complete provider observation.")
-                if pending:
+                reconciliation = event.get("reconciliation_reference") if expected is not None else None
+                fresh_decision = (expected is not None and (reconciliation != (pending or {}).get("reconciliation_reference")
+                                  or (pending and status_identity(expected) != status_identity(pending["before"]))))
+                if expected is not None and status_identity(current) != status_identity(expected):
+                    raise ProviderError("conflict", "Explicit expected Status is stale; preserve the current owner decision.")
+                if pending and not fresh_decision:
                     expected = pending["before"]
                 elif expected is None and prior and prior.get("configuration_revision") == record["configuration"]["revision"]:
                     expected = prior["observation"]
@@ -223,13 +231,25 @@ def synchronize(registry, flight, event, *, checkout, provider=None, verifier=No
                     raise ProviderError("conflict", "Current Status differs from the last verified/explicit expected observation; preserve the manual/native decision and reconcile explicitly.")
                 if current.get("writable") is not True:
                     raise ProviderError("permission_denied", "Required project write capability is unavailable; no status mutation.")
+                if pending and fresh_decision:
+                    # A new, exact scoped owner decision retires automatic replay
+                    # authority, not uncertainty about what the old write did.
+                    # Persist this audit together with the new intent before any
+                    # provider mutation; a crash cannot erase the old budget.
+                    audit = {"issue": issue, "retired_intent": copy.deepcopy(pending),
+                             "reference": reconciliation, "expected": status_identity(current), "old_outcome": "unknown"}
+                    sync["reconciliations"] = (sync["reconciliations"] + [audit])[-32:]
+                    row["reconciliation"] = audit
+                    sync["pending"].pop(key, None)
+                    pending = None
                 operation = pending["operation"] if pending else hashlib.sha256(json.dumps(
-                    [flight, issue, event["kind"], event["reference"], status_identity(current)], sort_keys=True).encode()).hexdigest()
+                    [flight, issue, event["kind"], event["reference"], reconciliation, status_identity(current)], sort_keys=True).encode()).hexdigest()
                 attempts = pending.get("attempts", 0) if pending else 0
                 while attempts < 2:
                     attempts += 1
                     sync["pending"][key] = {"operation": operation, "before": current, "logical": logical,
-                                            "configuration_revision": record["configuration"]["revision"], "attempts": attempts}
+                                            "configuration_revision": record["configuration"]["revision"], "attempts": attempts,
+                                            "reconciliation_reference": reconciliation}
                     record = _save(registry, record, sync)  # Intent precedes mutation.
                     try:
                         written = provider.write(issue, target, current, operation)
@@ -238,7 +258,8 @@ def synchronize(registry, flight, event, *, checkout, provider=None, verifier=No
                             raise ProviderError("conflict", "Status changed between planning and apply; preserved the newer provider decision.")
                     except ProviderError as error:
                         if not error.ambiguous:
-                            sync["pending"].pop(key, None)
+                            if error.reason != "conflict":
+                                sync["pending"].pop(key, None)
                             raise
                         try:
                             actual = provider.observe(issue)
@@ -246,7 +267,6 @@ def synchronize(registry, flight, event, *, checkout, provider=None, verifier=No
                             raise ProviderError("ambiguous", "Write outcome remains unknown; retained its intent. Reconcile actual state before retry.") from error
                         if actual.get("option_id") != target:
                             if status_identity(actual) != status_identity(current):
-                                sync["pending"].pop(key, None)
                                 raise ProviderError("conflict", "A newer manual/native status follows the uncertain write; preserved it without replay.") from error
                             if attempts < 2:
                                 pause(0.05 * attempts)
@@ -254,7 +274,6 @@ def synchronize(registry, flight, event, *, checkout, provider=None, verifier=No
                             raise ProviderError("retry_exhausted", "Two bounded attempts remain unverified; retained intent requires explicit reconciliation.") from error
                     if (actual.get("option_id") != target
                             or any(actual.get(k) != current.get(k) for k in ("repository", "issue", "project_id", "field_id", "item_id", "state", "state_reason"))):
-                        sync["pending"].pop(key, None)
                         raise ProviderError("conflict", "Readback differs from the warranted status/issue state; preserve the observed result and inspect automation/concurrent changes.")
                     row.update(state="synchronized", reason="verified_write", before=status_identity(current),
                                observation=actual, operation=operation, attempts=attempts)
