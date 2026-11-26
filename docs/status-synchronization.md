@@ -92,6 +92,11 @@ Intent and the last verified observation use a bounded extension of the existing
 Registry. The operation reads before writes, checks the Status value/timestamp
 again immediately before mutation, and verifies readback. An uncertain response
 is reconciled against actual state before at most two attempts with brief backoff.
+An acknowledged mutation whose readback is unavailable remains an uncertain
+write: its intent and consumed attempt survive same-event reconciliation and
+restart. A read failure before dispatch remains distinct and makes no mutation.
+A later retry's pre-dispatch failure does not resolve an earlier uncertain
+write: its original operation, preimage and consumed budget remain reserved.
 A newer manual/native decision is preserved. Unresolved intents remain visible
 and cannot silently retarget another event or configuration. GitHub exposes no
 atomic compare-and-set: these are optimistic checks, not a guarantee that an

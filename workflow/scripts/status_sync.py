@@ -245,6 +245,9 @@ def synchronize(registry, flight, event, *, checkout, provider=None, verifier=No
                 operation = pending["operation"] if pending else hashlib.sha256(json.dumps(
                     [flight, issue, event["kind"], event["reference"], reconciliation, status_identity(current)], sort_keys=True).encode()).hexdigest()
                 attempts = pending.get("attempts", 0) if pending else 0
+                # A retained operation may already have dispatched before an
+                # interruption. Later pre-dispatch failures cannot resolve it.
+                unverified_dispatch = pending is not None
                 while attempts < 2:
                     attempts += 1
                     sync["pending"][key] = {"operation": operation, "before": current, "logical": logical,
@@ -258,9 +261,10 @@ def synchronize(registry, flight, event, *, checkout, provider=None, verifier=No
                             raise ProviderError("conflict", "Status changed between planning and apply; preserved the newer provider decision.")
                     except ProviderError as error:
                         if not error.ambiguous:
-                            if error.reason != "conflict":
+                            if error.reason != "conflict" and not unverified_dispatch:
                                 sync["pending"].pop(key, None)
                             raise
+                        unverified_dispatch = True
                         try:
                             actual = provider.observe(issue)
                         except ProviderError:
