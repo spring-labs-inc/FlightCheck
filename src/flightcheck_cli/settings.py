@@ -100,7 +100,17 @@ class Settings:
         self.verify_context()
         if getattr(cli.configuration_model(self.engine, self.root), "SETTINGS_SCHEMA", None) != 1:
             raise ValueError("Explicit configuration-adapter update required before Settings editing")
-        plan, _ = cli.configuration_plan(self.engine, self.root, data["changes"], data["expected_revision"], data["reference"])
+        # The local capability already carries the owner's explicit write
+        # authorization. Record the deliberate preview/save decision internally,
+        # retaining explicit references supplied by existing API callers.
+        reference = data.get("reference") or self.reference + "#settings-" + secrets.token_hex(12)
+        changes = copy.deepcopy(data["changes"])
+        if changes.get("activation") == "default-for-coding" and "activation_reference" not in changes:
+            changes["activation_reference"] = reference
+        policy = changes.get("checkout_policy")
+        if not data.get("reference") and policy and policy.get("git_fallback") and not policy.get("fallback_reference"):
+            policy["fallback_reference"] = reference
+        plan, _ = cli.configuration_plan(self.engine, self.root, changes, data["expected_revision"], reference)
         self.verify_context()
         identifier = sha(encoded(plan))
         self.plans[identifier] = plan
@@ -154,7 +164,8 @@ class Settings:
         if old["repository"]["git_common_dir"] != self.engine.git(self.root, "rev-parse", "--path-format=absolute", "--git-common-dir"):
             raise ValueError("Active flight belongs to another repository")
         current = cli.configuration_model(self.engine, self.root).snapshot(self.root)
-        updated = associations.reconfigure(old, current, data["reference"])
+        reference = data.get("reference") or self.reference + "#active-settings-" + secrets.token_hex(12)
+        updated = associations.reconfigure(old, current, reference)
         plan = {"kind": "active-reconfiguration", "registry_revision": state["revision"], "configuration_revision": current["revision"], "record": updated}
         identifier = sha(encoded(plan)); self.plans[identifier] = plan
         return {"status": "reconfiguration_preview", "plan_id": identifier, "effects": updated["reconfiguration"], "grants_unchanged": True,

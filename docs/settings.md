@@ -33,6 +33,21 @@ revokes it. Loopback Host validation alone does not authorize a write.
 
 ## Fields and authority
 
+Settings presents separate location fields, an activation checkbox, classified
+check-command rows, checkout choices and separate cleanup checkboxes. Project
+synchronization uses a board selector and status-mapping dropdowns backed by the
+same `status_sync` policy as setup and CLI. Existing recorded boards are offered
+without a provider request. To configure another board, expand Board connection
+details and supply its exact existing project, field and option IDs. This records
+configuration; it does not inspect the provider or create membership or authority.
+
+Choose Review changes to see a concise description, then Save changes or Back to
+editing. Cancel changes reloads the saved values. The local authorization remains
+explicit at launch; Settings records each preview/save decision internally without
+requiring another reference textbox. Technical identity, provenance and validation
+are under Advanced â†’ Details. Recovery appears only for an interrupted update.
+Task status opens in a separate tab, keeping the private editing session open.
+
 | Group | Common fields | Boundaries |
 | --- | --- | --- |
 | Project | `resources`, `default_branch`, `protected_branches` | Repository identity comes from the actual checkout. Resource pointers may name an explicit unavailable reason. Shared pointers should be repository-relative; private log paths and references stay local. Synchronization's confirmed project identity is `status_sync`, not a second independent board configuration. |
@@ -66,8 +81,8 @@ For a board destination, `resources.project_board` may hold `{ "url": "https://â
 Read with `config read`, preview with `config preview --changes FILE
 --expected-revision SHA --reference OWNER_REFERENCE`, and apply the resulting
 private plan with `config apply --apply PLAN`. Settings calls these same common
-model/transaction functions. Preview shows old/new values and affected file
-hashes/modes. Apply recomputes the exact plan under the existing transaction lock.
+model/transaction functions. Its preview describes changed values, with affected
+file details available on expansion. Apply recomputes the exact plan under the existing transaction lock.
 Stale revisions, changed preimages or component drift require a new preview;
 concurrent owner changes survive. `config recover` or Settings Recover restores
 the previous complete working configuration after an interrupted update.

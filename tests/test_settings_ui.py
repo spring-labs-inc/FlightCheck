@@ -23,6 +23,7 @@ const fs = require("fs"), vm = require("vm"), readline = require("readline"), as
   const root = {parent: null};
   class Element {
     constructor(tag) {this.tagName = tag.toUpperCase(); this.children = []; this.dataset = {}; this.handlers = {}; this.attrs = {}; this.value = ""; this.disabled = false; this.checked = false; this.hidden = false; all.push(this);}
+    set textContent(value) {this._text = String(value); this.children = [];} get textContent() {return (this._text || "") + this.children.map(child => child.textContent).join("");}
     set id(value) {this._id = value; ids.set(value, this);} get id() {return this._id;}
     append(...items) {for (const item of items) {this.children.push(item); item.parent = this;}}
     replaceChildren(...items) {for (const old of this.children) old.parent = null; this.children = []; this.append(...items);}
@@ -41,11 +42,15 @@ const fs = require("fs"), vm = require("vm"), readline = require("readline"), as
   assert(ids.has("field-review_client"), doc.getElementById("message").textContent);
   assert.equal(doc.getElementById("groups").children.length, 4);
   for (const name of ["preview", "save", "reload", "recover", "audit", "reconfigure", "adopt"]) assert.equal(doc.getElementById(name).tagName, "BUTTON");
-  doc.getElementById("reference").value = "Explicit synthetic owner UI decision";
-  doc.getElementById("field-review_client").value = "First UI preview";
+  assert.equal(doc.getElementById("reference"), null);
+  assert.equal(doc.getElementById("recovery").hidden, true);
+  assert.equal(doc.getElementById("field-activation").type, "checkbox");
+  for (const key of ["check-phase-0", "checkout-mode", "sync-board", "sync-todo", "review_client", "delivery"]) assert.equal(doc.getElementById("field-" + key).tagName, "SELECT");
+  for (const key of ["issue_tracker", "project_board", "style_guide", "documentation", "runbook", "logs"]) assert.equal(doc.getElementById("field-resource-" + key).tagName, "INPUT");
+  doc.getElementById("field-review_client").value = "Claude";
   await doc.getElementById("settings").emit("submit");
   assert.equal(doc.getElementById("save").disabled, false);
-  assert.match(doc.getElementById("effects").textContent, /First UI preview/);
+  assert.match(doc.getElementById("effects").textContent, /Claude/);
   assert.equal(active.id, "effects");
   console.log("ready-for-concurrent-edit");
   await lines.next();
@@ -56,12 +61,40 @@ const fs = require("fs"), vm = require("vm"), readline = require("readline"), as
   assert.equal(doc.getElementById("save").disabled, true);
   await doc.getElementById("reload").emit("click");
   assert.equal(doc.getElementById("field-review_client").value, "Concurrent owner choice");
-  doc.getElementById("field-review_client").value = "Explicit fresh UI choice";
+  doc.getElementById("field-review_client").value = "Codex";
   await doc.getElementById("settings").emit("submit");
   await doc.getElementById("save").emit("click");
   assert.match(doc.getElementById("message").textContent, /Saved future defaults/);
-  assert.equal(doc.getElementById("field-review_client").value, "Explicit fresh UI choice");
-  console.log(JSON.stringify({groups: 4, conflictFocused: true, staleSaveRefused: true, concurrentChoicePreserved: true, explicitFreshSave: true}));
+  assert.equal(doc.getElementById("field-review_client").value, "Codex");
+  // Exercise the native typed controls through the actual HTTP update path.
+  doc.getElementById("field-resource-style_guide").value = "docs/style.md";
+  doc.getElementById("field-activation").checked = true;
+  doc.getElementById("field-check-command-0").value = "python3 -B -m unittest 'tests with spaces'";
+  doc.getElementById("field-check-phase-0").value = "authoritative";
+  doc.getElementById("field-checkout-mode").value = "worktree-required";
+  doc.getElementById("field-checkout-fallback").checked = true;
+  doc.getElementById("field-cleanup-local_branches").checked = true;
+  doc.getElementById("field-sync-project-id").value = "SYNTHETIC_PROJECT";
+  doc.getElementById("field-sync-field-id").value = "SYNTHETIC_STATUS";
+  for (const state of ["todo", "ready", "in_progress", "review", "done"]) doc.getElementById("field-sync-option-" + state).value = "OPTION_" + state;
+  await doc.getElementById("configure-board").emit("click");
+  doc.getElementById("field-sync-enabled").checked = true;
+  await doc.getElementById("field-sync-enabled").emit("change");
+  doc.getElementById("field-sync-todo").value = "OPTION_ready";
+  doc.getElementById("field-sync-ready").value = "OPTION_todo";
+  await doc.getElementById("settings").emit("submit");
+  assert.equal(doc.getElementById("save").disabled, false, doc.getElementById("message").textContent);
+  assert.equal(doc.getElementById("groups").hidden, true);
+  assert.match(doc.getElementById("effects").textContent, /docs\/style.md/);
+  await doc.getElementById("cancel").emit("click");
+  assert.equal(doc.getElementById("groups").hidden, false);
+  assert.equal(doc.getElementById("save").disabled, true);
+  await doc.getElementById("settings").emit("submit");
+  await doc.getElementById("save").emit("click");
+  assert.match(doc.getElementById("message").textContent, /Saved future defaults/);
+  assert.equal(doc.getElementById("field-activation").checked, true);
+  assert.equal(doc.getElementById("field-sync-todo").value, "OPTION_ready");
+  console.log(JSON.stringify({groups: 4, typedFormSave: true, cancelPreview: true, conflictFocused: true, staleSaveRefused: true, concurrentChoicePreserved: true, explicitFreshSave: true}));
   process.exit(0);
 })().catch(error => {console.error(error.stack); process.exit(1);});
 '''
@@ -104,7 +137,19 @@ class SettingsUIEventsTests(unittest.TestCase):
                     self.assertEqual(process.returncode, 0, output + error)
                     result = json.loads(output.strip())
                     self.assertTrue(result['staleSaveRefused']); self.assertTrue(result['conflictFocused']); self.assertTrue(result['concurrentChoicePreserved']); self.assertTrue(result['explicitFreshSave'])
-                    self.assertEqual(cli.configuration_model(engine, root).snapshot(root)['values']['review_client'], 'Explicit fresh UI choice')
+                    values = cli.configuration_model(engine, root).snapshot(root)['values']
+                    self.assertEqual(values['review_client'], 'Codex')
+                    self.assertEqual(values['resources']['style_guide'], 'docs/style.md')
+                    self.assertEqual(values['checks'][0]['command'], ['python3', '-B', '-m', 'unittest', 'tests with spaces'])
+                    self.assertEqual(values['checks'][0]['phase'], 'authoritative')
+                    self.assertEqual(values['activation'], 'default-for-coding')
+                    self.assertIn('#settings-', values['activation_reference'])
+                    self.assertTrue(values['cleanup_policy']['local_branches'])
+                    self.assertFalse(values['cleanup_policy']['remote_branches'])
+                    self.assertEqual(values['checkout_policy']['mode'], 'worktree-required')
+                    self.assertIn('#settings-', values['checkout_policy']['fallback_reference'])
+                    self.assertEqual(values['status_sync']['mode'], 'advisory')
+                    self.assertEqual(values['status_sync']['options']['todo'], 'OPTION_ready')
                 finally:
                     if process.poll() is None: process.kill(); process.communicate()
                     server.shutdown(); thread.join()

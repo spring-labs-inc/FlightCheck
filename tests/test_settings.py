@@ -324,14 +324,19 @@ class SettingsTests(unittest.TestCase):
         byid = {attrs["id"]: (tag, attrs) for tag, attrs in surface.tags if "id" in attrs}
         for name in ("preview", "save", "reload", "recover", "audit", "reconfigure", "adopt"):
             self.assertEqual(byid[name][0], "button"); self.assertNotEqual(byid[name][1].get("tabindex"), "-1")
-        self.assertEqual(byid["reference"][0], "input"); self.assertEqual(byid["effects"][1]["tabindex"], "0")
+        self.assertNotIn("reference", byid); self.assertEqual(byid["effects"][1]["tabindex"], "0")
+        self.assertIn("hidden", byid["recovery"][1])
+        self.assertNotIn("open", byid["advanced"][1])
+        task_link = next(attrs for tag, attrs in surface.tags if tag == "a" and attrs.get("href") == "../")
+        self.assertEqual(task_link["target"], "_blank"); self.assertEqual(task_link["rel"], "noopener noreferrer")
         js = (PRODUCT / "status-card/settings.js").read_text(); css = (PRODUCT / "status-card/card.css").read_text()
         node = shutil.which("node")
         self.assertIsNotNone(node, "Existing Node runtime is required for the focused script syntax check")
         parsed = subprocess.run([node, "--check", str(PRODUCT / "status-card/settings.js")], capture_output=True, text=True, timeout=15)
         self.assertEqual(parsed.returncode, 0, parsed.stdout + parsed.stderr)
-        for required in ("caption.htmlFor", 'control.setAttribute("aria-describedby"', 'arrow.target = "_blank"', 'arrow.rel = "noopener noreferrer"', 'document.createElement("details")', 'history.replaceState', 'byId("message").focus()', 'api("preview"', 'api("apply"', 'api("recover"'):
+        for required in ("caption.htmlFor", 'control.setAttribute("aria-describedby"', 'arrow.target = "_blank"', 'arrow.rel = "noopener noreferrer"', 'node("details")', 'history.replaceState', 'byId("message").focus()', 'api("preview"', 'api("apply"', 'api("recover"'):
             self.assertIn(required, js)
+        self.assertNotIn('"readonly-json"', js); self.assertNotIn('"json"', js)
         self.assertIn(":focus-visible", css); self.assertNotIn("innerHTML", js)
         self.assertIn('href="settings/"', (PRODUCT / "status-card/task.html").read_text())
 
