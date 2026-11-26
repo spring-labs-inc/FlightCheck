@@ -382,8 +382,14 @@ def check_turn(checkout, state, event):
         port = read_json(task_dir(state, task) / "endpoint.json").get("port")
         status = current_card(task, port, current) if port else None
         route = read_json(task_dir(state, task) / "reply-route.json")
-        from reply import execution_mode
-        route_ready = (route.get("execution") == execution_mode("auto") and route.get("user_url"))
+        from reply import configured_route, execution_mode, route_context, route_caller_matches, usable_route
+        mode = execution_mode("auto")
+        selected = Path(record["checkout"])
+        route_ready = (route.get("execution") == mode and route.get("user_url")
+                       and route_caller_matches(route, route_context(selected, session), selected, task_dir(state, task),
+                                                incomplete=bool(status and status.get("completeness", {}).get("ready") is False))
+                       and usable_route(route, current, configured_route(
+                           route, route_context(selected, session), selected, task_dir(state, task))))
         if status and status.get("completeness", {}).get("ready") and route_ready:
             footer = chat_status({"task": task}, prepared_card_url(task_dir(state, task), task, port), "start")
             if has_footer(event.get("last_assistant_message") or "", footer):
@@ -413,6 +419,8 @@ def main():
     card.add_argument("--session", default=os.environ.get("CODEX_THREAD_ID"))
     card.add_argument("--execution", choices=("auto", "local", "remote"), default="auto")
     card.add_argument("--user-url", help="Explicit client-observed loopback browser route")
+    card.add_argument("--browser-observation", type=Path, help="Private fresh native browser observations")
+    card.add_argument("--reconcile-route", action="store_true", help="Reconcile a browser route or authorized same-flight route caller")
     commands.add_parser("hook")
     probe = commands.add_parser("probe", help="Bounded read-only checkout-host publication probe")
     probe.add_argument("--task", type=task_id, required=True)

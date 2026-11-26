@@ -156,7 +156,7 @@ args=sys.argv[1:]
 with Path(os.environ['SSH_RECORDS']).open('a') as f:f.write(json.dumps({'pid':os.getpid(),'args':args})+'\\n')
 if os.environ.get('SSH_FAILURE')=='auth':sys.exit(255)
 if '-N' not in args:
- if os.environ.get('SSH_FAILURE')=='confirm' and '--user-url' in args[-1]:sys.exit(255)
+ if os.environ.get('SSH_FAILURE')=='confirm' and ('--user-url' in args[-1] or 'confirm-connection' in args[-1]):sys.exit(255)
  r=subprocess.run(args[-1],shell=True,capture_output=True,text=True)
  if os.environ.get('SSH_FAILURE')=='identity':
   d=json.loads(r.stdout);d['task']='other-task';print(json.dumps(d));sys.exit(r.returncode)
