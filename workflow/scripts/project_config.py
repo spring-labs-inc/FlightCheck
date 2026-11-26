@@ -14,7 +14,7 @@ import subprocess
 CONFIG = ".flightcheck/project.json"
 PRIVATE_FILES = (CONFIG, ".flightcheck/docs/status.md")
 META = "_flightcheck"
-MUTABLE = {"checkout_policy", "protected_branches", "default_branch", "checks", "resources"}
+MUTABLE = {"checkout_policy", "protected_branches", "default_branch", "checks", "resources", "status_sync"}
 PUBLIC = {"checkout_policy", "protected_branches", "default_branch", "activation"}
 HOST = {"python", "observed_python", "evidence_dir", "checks", "reviewer_access", "delivery",
         "policy_reference", "activation_reference", "nit_tracker"}
@@ -52,6 +52,27 @@ def text(value, name):
     if not isinstance(value, str) or not value.strip() or "\x00" in value:
         raise ValueError("Invalid configuration field: " + name)
     return value
+
+
+def sync_schema():
+    """Load the adjacent schema, verifying installed bytes before execution.
+
+    The installer loads this model by filename rather than changing sys.path;
+    use that same small loading boundary for its synchronization adapter.
+    """
+    path = Path(__file__).with_name("status_sync_config.py")
+    if path.is_symlink():
+        raise ValueError("Synchronization schema cannot be a symlink")
+    raw = path.read_bytes()
+    if path.parent.parent.name == ".flightcheck":
+        state = json.loads((path.parent.parent / "installation.json").read_bytes())
+        expected = state.get("files", {}).get(".flightcheck/scripts/status_sync_config.py", {}).get("sha256")
+        if revision(raw) != expected:
+            raise ValueError("Modified installed synchronization schema; refusing execution")
+    namespace = {"__file__": str(path), "__name__": "flightcheck_status_sync_config"}
+    exec(compile(raw, str(path), "exec"), namespace)
+    from types import SimpleNamespace
+    return SimpleNamespace(**namespace)
 
 
 def normalize(root, supplied, detected=None, origin="legacy", trusted_metadata=False, probe_runtime=True):
@@ -120,6 +141,7 @@ def normalize(root, supplied, detected=None, origin="legacy", trusted_metadata=F
     if not isinstance(protected, list):
         raise ValueError("protected_branches must be an array")
     value["protected_branches"] = sorted({branch(root, b) for b in protected} | {value["default_branch"]})
+    value["status_sync"] = sync_schema().normalize(value.get("status_sync"))
     resources = value.get("resources", {})
     if not isinstance(resources, dict):
         raise ValueError("resources must be an object")
@@ -132,7 +154,7 @@ def normalize(root, supplied, detected=None, origin="legacy", trusted_metadata=F
     fields = {}
     for key in set(value) - {META}:
         previous = old_meta.get("fields", {}).get(key)
-        scope = "project" if key in PUBLIC or key == "resources" else "host"
+        scope = "project" if key in PUBLIC or key in ("resources", "status_sync") else "host"
         value_sha = revision(encoded(value[key]))
         if previous is not None:
             if (not isinstance(previous, dict) or set(previous) != {"source", "scope", "confirmed", "confirmation_reference", "last_validation", "value_sha256"}

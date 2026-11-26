@@ -56,6 +56,7 @@
     ["examples/existing-project/examples/first-flight/test_existing.py", ".flightcheck/examples/first-flight/test_existing.py", "shared"],
     ["examples/existing-project/docs/first-flight.md", ".flightcheck/docs/first-flight.md", "shared"],
     ["workflow/scripts/project_config.py", ".flightcheck/scripts/project_config.py", "shared"],
+    ["workflow/scripts/status_sync_config.py", ".flightcheck/scripts/status_sync_config.py", "shared"],
     ["workflow/scripts/flight_associations.py", ".flightcheck/scripts/flight_associations.py", "shared"],
     ["workflow/scripts/launch_detection.py", ".flightcheck/scripts/launch_detection.py", "shared"],
     ["docs/shared-foundations.md", ".flightcheck/docs/shared-foundations.md", "shared"],
