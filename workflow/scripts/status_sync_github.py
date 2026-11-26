@@ -187,4 +187,11 @@ class GitHubProjects:
             value:{singleSelectOptionId:$option},clientMutationId:$client}){projectV2Item{id}}}
         """, {"project": self.policy["project_id"], "item": current["item_id"],
                  "field": self.policy["field_id"], "option": option_id, "client": mutation_id}, mutation=True)
-        return {"state": "written", "observation": self.observe(issue)}
+        try:
+            observed = self.observe(issue)
+        except ProviderError as error:
+            # Dispatch already happened. A read-only request's error must not
+            # turn the uncertain write into a definitively unissued operation.
+            raise ProviderError(error.reason, "Status mutation was dispatched but its readback is unverified; "
+                                "reconcile actual state before retry. " + str(error), ambiguous=True) from error
+        return {"state": "written", "observation": observed}
