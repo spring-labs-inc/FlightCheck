@@ -25,6 +25,11 @@ class StatusSynchronizationTests(unittest.TestCase):
 
     @contextlib.contextmanager
     def fixture(self, mode="advisory"):
+        # The reporter itself lives in the current scripts directory. An
+        # original-product control must never fall back to those new modules.
+        for name in ("status_sync", "status_sync_config", "status_sync_github"):
+            self.assertTrue((PRODUCT / "workflow/scripts" / (name + ".py")).is_file(),
+                            "The explicit product snapshot must supply " + name)
         names = ("status_sync", "status_sync_config", "status_sync_github", "project_config",
                  "flight_associations", "flight_lifecycle", "launch_detection", "checkout_guard")
         previous = {name: sys.modules.pop(name, None) for name in names}
@@ -34,6 +39,8 @@ class StatusSynchronizationTests(unittest.TestCase):
             schema = importlib.import_module("status_sync_config")
             model = importlib.import_module("project_config")
             associations = importlib.import_module("flight_associations")
+            self.assertEqual(Path(sync.__file__).resolve(), PRODUCT / "workflow/scripts/status_sync.py")
+            self.assertEqual(Path(schema.__file__).resolve(), PRODUCT / "workflow/scripts/status_sync_config.py")
             with tempfile.TemporaryDirectory(prefix="status-sync-fixture-") as tmp:
                 area = Path(tmp).resolve()
                 root = self.flight_repo(area / "repository")
