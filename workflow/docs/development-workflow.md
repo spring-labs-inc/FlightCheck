@@ -48,6 +48,17 @@ presentation; #111 consumes the same associations.
 
 ## Run and resume
 
+At actual scoped start/resume, review readiness and repair, invoke the shared
+`status-sync` operation using the existing confirmed configuration and Registry.
+This is a required lifecycle step, not an optional card action. Disabled policy
+does no provider work. Required policy's explicit unsynchronized outcome blocks
+the applicable transition; advisory policy proceeds while reporting the limit.
+Use the exact event/ownership/authority contract in
+[status synchronization](../../docs/status-synchronization.md). The schema/early
+CODE checkpoint is not full-work review readiness. Card polling, planning and
+ordinary replies never write tracker status. Keep explicit scopes rather than
+promoting associated parent or roadmap links.
+
 1. Record task scope, acceptance, checkout, base, current diff, and intended delivery. Give each deterministic criterion a reproducible assertion and structured proof mapping. Complete the preflight below before implementation or review. Present a bounded implementation plan before editing.
 2. Implement and run applicable cheap checks on the candidate. Record failures from independent checks together when they can run safely. Repair failures and refresh affected checks before moving on. For owner-facing UI, then provide the exact interactive HTML URLs and synthetic fixture identities, bind the preview to the candidate surface, and pause for the owner's answer. Get new approval after a surface edit unless the owner explicitly waives the preview pause. Show rendered images only on request.
 3. [Decide whether to run early CODE review](#decide-on-early-code-review). If triggered, ask the reviewer to inspect the candidate and scripted acceptance after the cheap checks pass. Repair blocking findings and refresh affected cheap checks before any CODE re-review. Run the remaining required gates and retain any earlier receipts that cover the required command, scope, and current inputs. Bind any visual findings and freshness check to the report from that run. Execute deterministic checks within the project tool boundary and record live-only checks separately.
@@ -186,6 +197,14 @@ A merged PR alone is insufficient. Resume with the same inventory and leases.
 Release execution ownership only after the current verified-disposition gate
 passes; use a same-clone retained control root and verified external helpers when
 the main temporary checkout has been removed.
+
+After full issue acceptance, authorized delivery and complete disposition,
+perform separately authorized accepted issue closure and invoke
+`status-sync` with `accepted_completion`. It verifies actual completed closure
+and provider status, using closed Registry/delivery bindings from stable control
+even after worker removal. A status-only grant never grants closure through
+unverified native automation. Partial delivery, blocked disposition and cancelled
+closure remain distinct; do not add auto-close PR keywords for partial work.
 
 The full on-demand repository audit is separate from launch and execution. It
 reports all discoverable branches/worktrees, including manual artifacts, with

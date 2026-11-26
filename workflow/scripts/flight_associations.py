@@ -286,6 +286,8 @@ def reconfigure(record, configuration, reference):
         affected.append("checkout")
     if set(changed) & {"checks", "python", "observed_python", "required_runtimes", "preview"}:
         affected.append("checks")
+    if "status_sync" in changed:
+        affected.append("status_sync")
     if changed:
         affected.append("evidence")
     value.setdefault("configuration_history", []).append(copy.deepcopy(old))
