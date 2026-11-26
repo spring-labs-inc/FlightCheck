@@ -39,8 +39,8 @@ class StatusSynchronizationTests(unittest.TestCase):
             schema = importlib.import_module("status_sync_config")
             model = importlib.import_module("project_config")
             associations = importlib.import_module("flight_associations")
-            self.assertEqual(Path(sync.__file__).resolve(), PRODUCT / "workflow/scripts/status_sync.py")
-            self.assertEqual(Path(schema.__file__).resolve(), PRODUCT / "workflow/scripts/status_sync_config.py")
+            for name in ("status_sync", "status_sync_config", "status_sync_github", "project_config", "flight_associations"):
+                self.assertEqual(Path(sys.modules[name].__file__).resolve(), PRODUCT / "workflow/scripts" / (name + ".py"))
             with tempfile.TemporaryDirectory(prefix="status-sync-fixture-") as tmp:
                 area = Path(tmp).resolve()
                 root = self.flight_repo(area / "repository")
