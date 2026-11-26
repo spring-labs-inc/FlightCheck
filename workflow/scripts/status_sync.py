@@ -249,7 +249,7 @@ def synchronize(registry, flight, event, *, checkout, provider=None, verifier=No
                     attempts += 1
                     sync["pending"][key] = {"operation": operation, "before": current, "logical": logical,
                                             "configuration_revision": record["configuration"]["revision"], "attempts": attempts,
-                                            "reconciliation_reference": reconciliation}
+                                            "reconciliation_reference": pending.get("reconciliation_reference") if pending else reconciliation}
                     record = _save(registry, record, sync)  # Intent precedes mutation.
                     try:
                         written = provider.write(issue, target, current, operation)
