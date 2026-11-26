@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>FlightCheck · Settings</title><link rel="stylesheet" href="card.css"><link rel="stylesheet" href="settings.css"><script src="settings.js" defer></script></head>
+<body><main class="shell task-card settings-card">
+<header class="masthead"><div class="identity"><span class="mark" aria-hidden="true">FC</span><span>FlightCheck <span class="muted">/ Settings</span></span></div><a href="../">Task status</a></header>
+<section class="hero"><div><p class="eyebrow">Confirmed configuration</p><h1>Project settings</h1><p class="summary">One configuration shared by setup, CLI and this card.</p><p>Defaults revision <code id="revision">Unconfigured</code></p></div></section>
+<p id="message" class="notice" role="status" tabindex="-1">Opening Settings…</p>
+<p id="locked">Editing requires an explicitly authorized local session for this project and task. Launch <code>setup/install.py settings</code> or <code>flightcheck settings</code> with the task, session, private card status and owner reference. Ordinary card viewing grants no write access.</p>
+<form id="settings" hidden>
+<p id="repository"></p><p>Changes apply to future flights. Existing flight decisions and grants stay captured until separately reconfigured.</p>
+<div id="groups"></div>
+<section class="panel"><h2>Active flights and captured decisions</h2><div id="flights"></div><p id="capabilities"></p><p>Native worktree count, retention and archive controls are managed by your coding client.</p></section>
+<section class="panel"><h2>Review changes</h2><label for="reference">Owner configuration decision reference</label><input id="reference" required autocomplete="off"><div class="settings-actions"><button id="preview" type="submit">Preview changes</button><button id="save" type="button" disabled>Save reviewed changes</button><button id="reload" type="button">Reload current values</button><button id="recover" type="button">Recover interrupted update</button></div><pre id="effects" tabindex="0" aria-label="Changed values and effects"></pre></section>
+<section class="panel"><h2>Branches and worktrees</h2><p>Read-only report of current ownership, retained work and coverage. Recommendations grant no cleanup authority.</p><label><input id="audit-remote" type="checkbox"> Include permitted read-only remote observations</label><button id="audit" type="button">Review branches and worktrees</button><pre id="audit-report" tabindex="0" aria-label="Read-only audit report"></pre><div id="audit-destinations"></div></section>
+<section class="panel"><h2>Explicit active-flight reconfiguration</h2><p>Adopt saved defaults separately. Prior configuration and grants are preserved; affected checks, checkout assumptions, synchronization and evidence must be revalidated before execution.</p><button id="reconfigure" type="button">Preview this flight’s reconfiguration</button><button id="adopt" type="button" disabled>Confirm active reconfiguration</button><pre id="active-effects" tabindex="0" aria-label="Active flight reconfiguration effects"></pre></section>
+</form>
+</main></body></html>

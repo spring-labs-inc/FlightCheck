@@ -286,9 +286,12 @@ def reconfigure(record, configuration, reference):
         affected.append("checkout")
     if set(changed) & {"checks", "python", "observed_python", "required_runtimes", "preview"}:
         affected.append("checks")
-    if "status_sync" in changed:
+    # Status authority captures the entire configuration revision, even when
+    # the mapping itself is unchanged. Never silently rebind its grant.
+    enabled = new["values"].get("status_sync", {}).get("mode", "disabled") != "disabled"
+    if "status_sync" in changed or enabled and old["revision"] != new["revision"]:
         affected.append("status_sync")
-    if changed:
+    if changed or old["revision"] != new["revision"]:
         affected.append("evidence")
     value.setdefault("configuration_history", []).append(copy.deepcopy(old))
     value["configuration"] = new

@@ -1,0 +1,11 @@
+.settings-field { margin: 1rem 0; }
+.settings-field label { display: block; font-weight: 600; margin-bottom: .4rem; }
+.settings-field input, .settings-field select, .settings-field textarea, #reference { width: 100%; max-width: 100%; box-sizing: border-box; padding: .65rem; border: 1px solid #596571; border-radius: .4rem; font: inherit; color: inherit; background: transparent; }
+.settings-field textarea { min-height: 6rem; font-family: ui-monospace, monospace; font-size: .85rem; }
+.settings-field [readonly] { opacity: .8; }
+.settings-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1rem; }
+.settings-card button { cursor: pointer; padding: .6rem .9rem; font: inherit; }
+.settings-card button:disabled { cursor: default; opacity: .5; }
+.settings-card :focus-visible { outline: 3px solid #087eaa; outline-offset: 3px; }
+.settings-card pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 30rem; overflow: auto; }
+.settings-field input[type="checkbox"] { width: auto; margin-right: .5rem; }

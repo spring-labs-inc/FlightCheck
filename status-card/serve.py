@@ -55,6 +55,11 @@ class StatusHandler(BaseHTTPRequestHandler):
         if not self.allowed_request():
             return
         path = urlsplit(self.path).path
+        if self.server.task_route and path.startswith(self.server.task_route + "settings/"):
+            adapter = self.settings_request()
+            if adapter is not None:
+                adapter.do_GET()
+                return
         if self.server.task_route:
             route = self.server.task_route
             if path == f"{route}status.json":
@@ -64,6 +69,10 @@ class StatusHandler(BaseHTTPRequestHandler):
                 route: ("task.html", "text/html; charset=utf-8"),
                 "/task.js": ("task.js", "text/javascript; charset=utf-8"),
                 "/card.css": ASSETS["/card.css"],
+                route + "settings/": ("settings.html", "text/html; charset=utf-8"),
+                route + "settings/settings.js": ("settings.js", "text/javascript; charset=utf-8"),
+                route + "settings/card.css": ASSETS["/card.css"],
+                route + "settings/settings.css": ("settings.css", "text/css; charset=utf-8"),
             }
         else:
             if path == "/status.json":
@@ -99,11 +108,45 @@ class StatusHandler(BaseHTTPRequestHandler):
         self.reply(status, body, "application/json; charset=utf-8")
 
     def do_POST(self):
+        if not self.allowed_request():
+            return
+        if self.server.task_route and urlsplit(self.path).path.startswith(self.server.task_route + "settings/api/"):
+            adapter = self.settings_request()
+            if adapter is not None:
+                adapter.do_POST()
+                return
         self.reply(405, b"Read-only endpoint.\n", "text/plain; charset=utf-8")
 
-    do_PUT = do_POST
-    do_PATCH = do_POST
-    do_DELETE = do_POST
+    def read_only(self):
+        self.reply(405, b"Read-only endpoint.\n", "text/plain; charset=utf-8")
+
+    do_PUT = read_only
+    do_PATCH = read_only
+    do_DELETE = read_only
+
+    def settings_request(self):
+        if not (self.server.task_file.parent / "settings-session.json").exists():
+            return None
+        import sys
+        source = ROOT.parent / "src"
+        if not (source / "flightcheck_cli/settings.py").exists():
+            source = ROOT.parent / "cli"
+            import hashlib
+            try:
+                state = json.loads((ROOT.parent / "installation.json").read_bytes())
+                for name in ("__init__.py", "cli.py", "source.py", "transaction.py", "settings.py"):
+                    path = source / "flightcheck_cli" / name
+                    relative = ".flightcheck/cli/flightcheck_cli/" + name
+                    if path.is_symlink() or hashlib.sha256(path.read_bytes()).hexdigest() != state["files"][relative]["sha256"]:
+                        return None
+            except (OSError, ValueError, KeyError, TypeError):
+                return None
+        sys.path.insert(0, str(source))
+        from flightcheck_cli.settings import card_request
+        try:
+            return card_request(self, ROOT)
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
 
     def reply(self, status, body, content_type):
         self.send_response(status)

@@ -14,6 +14,13 @@ from . import transaction as tx
 from .source import encoded, installer, load_installer, sha
 
 PIN = ".flightcheck/distribution.json"
+ADAPTER_COMPONENTS = (
+    "workflow/scripts/project_config.py", "workflow/scripts/status_sync_config.py", "workflow/scripts/flight_associations.py", "setup/install.py",
+    "src/flightcheck_cli/__init__.py", "src/flightcheck_cli/cli.py", "src/flightcheck_cli/transaction.py",
+    "src/flightcheck_cli/source.py", "src/flightcheck_cli/settings.py",
+    "status-card/serve.py", "status-card/settings.html", "status-card/settings.js", "status-card/settings.css", "status-card/card.css", "status-card/task.html",
+    "docs/settings.md", "docs/settings-external-links.json",
+)
 
 
 def target(module, value):
@@ -37,6 +44,21 @@ def runtime_identity(config):
             raise ValueError("Select the project's existing Python, not a wrapper around the FlightCheck tool environment")
     return {"requested": str(requested), "resolved": str(resolved), "sha256": sha(resolved.read_bytes()),
             "observed": {**config["observed_python"], **observed}}
+
+
+def runtime_structure(config, pin):
+    """Check the recorded executable without executing it, including offline reads."""
+    requested = Path(config["python"]).absolute()
+    if str(requested) != pin.get("requested"):
+        raise ValueError("Pinned runtime changed; explicit reconciliation required")
+    if any(pin.get("observed", {}).get(k) != v for k, v in config.get("observed_python", {}).items()):
+        raise ValueError("Recorded runtime observation differs from its pin")
+    if not requested.exists():
+        return {"status": "unavailable", "reason": "Pinned runtime path is unavailable; saved pin preserved"}
+    resolved = requested.resolve(strict=True)
+    if str(resolved) != pin.get("resolved") or sha(resolved.read_bytes()) != pin.get("sha256"):
+        raise ValueError("Pinned runtime bytes changed; explicit reconciliation required")
+    return {"status": "recorded", "note": "Bytes checked; runtime not executed"}
 
 
 
@@ -228,7 +250,12 @@ def configuration_integrity(module, root, preimages=None):
         if sha(actual) != record["sha256"]:
             raise ValueError("Modified installed component: " + name)
     manifest = read(".flightcheck/manifest.json")
-    if sha(manifest) != state["source"]["manifest_sha256"]:
+    adapter = state.get("configuration_adapter")
+    if adapter and (adapter.get("schema") != 1 or not adapter.get("reference") or not adapter.get("source")
+                    or adapter.get("workflow_source") != state["source"] or not isinstance(adapter.get("components"), dict)):
+        raise ValueError("Invalid explicit configuration-adapter provenance")
+    expected_manifest = adapter["manifest_sha256"] if adapter else state["source"]["manifest_sha256"]
+    if sha(manifest) != expected_manifest:
         raise ValueError("Installed source manifest identity mismatch")
     installed_manifest = json.loads(manifest)
     required = {row[1] for row in module.selected(installed_manifest, state["agent"])} | {module.CONFIG, ".flightcheck/docs/status.md"}
@@ -243,23 +270,95 @@ def configuration_integrity(module, root, preimages=None):
     config = json.loads(read(module.CONFIG))
     pin_raw = read(PIN)
     pin = json.loads(pin_raw) if pin_raw is not None else None
-    if pin and (runtime_identity(config) != pin["runtime"] or pin["source_revision"] != state["source"]["revision"]):
-        raise ValueError("Pinned runtime/source changed; explicit reconciliation required")
+    if pin:
+        runtime_structure(config, pin["runtime"])
+        if pin["source_revision"] != state["source"]["revision"]:
+            raise ValueError("Pinned source changed; explicit reconciliation required")
     if preimages is not None:
         preimages.update(observed)
     return state, pin
 
 
-def configuration_plan(module, root, changes, expected_revision, reference):
+def configuration_model(module, root):
+    """Use the verified installed model, including prior supported installations."""
+    configuration_integrity(module, root)
+    path = module.safe_path(root, ".flightcheck/scripts/project_config.py")
+    if not path.is_file():
+        raise ValueError("Installed configuration model is unavailable; reconcile explicitly")
+    return load_installer(path)
+
+
+def configuration_adapter_plan(module, root, expected_revision, reference):
+    """Explicit, enumerated compatibility update; no workflow/runtime upgrade."""
+    validated = {}
+    state, pin = configuration_integrity(module, root, preimages=validated)
+    current = configuration_model(module, root).snapshot(root)
+    if current["revision"] != expected_revision:
+        raise ValueError("Stale configuration revision; preview adapter update again")
+    module.project_model().text(reference, "explicit adapter-update owner reference")
+    source = Path(module.__file__).resolve().parent.parent
+    manifest = module.load_manifest()
+    identity = module.source_identity(source, manifest)
+    selected = {row[0]: row for row in module.selected(manifest, state["agent"])}
+    old_manifest = json.loads(validated[".flightcheck/manifest.json"][0])
+    merged = {row[1]: row for row in old_manifest["files"]}
+    revised = json.loads(encoded(state))
+    operations, components = [], {}
+    def add(name, data):
+        before, mode = tx.file_state(module, root, name)
+        if name in validated and (before, mode) != validated[name]:
+            raise ValueError("Adapter preimage changed during preview: " + name)
+        operations.append({"path": name, "before": before, "after": data,
+                           "action": "unchanged" if before == data else "update" if before is not None else "create"})
+    for name in ADAPTER_COMPONENTS:
+        row = selected[name]; destination = row[1]
+        raw = module.safe_path(source, name).read_bytes()
+        # These components contain no per-project template substitutions.
+        merged[destination] = row
+        add(destination, raw)
+        components[destination] = sha(raw)
+        revised["files"][destination] = {"kind": "file", "sha256": sha(raw), "source": name, "source_sha256": sha(raw)}
+    updated_manifest = encoded({**old_manifest, "files": list(merged.values())})
+    add(".flightcheck/manifest.json", updated_manifest)
+    revised["files"][".flightcheck/manifest.json"]["sha256"] = sha(updated_manifest)
+    revised["configuration_adapter"] = {"schema": 1, "reference": reference, "source": identity,
+                                         "workflow_source": state["source"], "manifest_sha256": sha(updated_manifest), "components": components}
+    add(module.STATE, encoded(revised))
+    document = {"schema": 1, "kind": "configuration-adapter-v1", "target": str(root), "expected_revision": expected_revision,
+                "reference": reference, "adapter_source": identity, "workflow_source": state["source"], "distribution": pin,
+                "operations": tx.operation_state(module, root, operations)}
+    return document, operations
+
+
+def configuration_adapter_apply(module, root, reviewed):
+    if reviewed.get("kind") != "configuration-adapter-v1" or reviewed.get("target") != str(root):
+        raise ValueError("Adapter preview belongs to another operation/project")
+    with tx.locked(root) as private:
+        actual, operations = configuration_adapter_plan(module, root, reviewed["expected_revision"], reviewed["reference"])
+        if actual != reviewed:
+            raise ValueError("Adapter preview is stale; preserve concurrent changes and preview again")
+        def verify():
+            configuration_integrity(module, root)
+            if configuration_model(module, root).SETTINGS_SCHEMA != 1:
+                raise ValueError("Updated configuration adapter is unavailable")
+            return {"status": "configuration_adapter_updated", "revision": reviewed["expected_revision"],
+                    "workflow_source": reviewed["workflow_source"], "distribution": reviewed["distribution"]}
+        return tx.apply(module, root, operations, verify, state=private)
+
+
+def configuration_plan(module, root, changes, expected_revision, reference, runtime=None):
     if tx.pending(root):
         raise ValueError("Interrupted update; run flightcheck recover before continuing")
     validated = {}
     state, pin = configuration_integrity(module, root, preimages=validated)
-    model = module.project_model()
+    model = configuration_model(module, root)
+    if getattr(model, "SETTINGS_SCHEMA", None) != 1:
+        raise ValueError("Explicit configuration-adapter update required before current configuration writes")
     current = model.snapshot(root)
     if current["revision"] != sha(validated[module.CONFIG][0]):
         raise ValueError("Configuration revision changed after validation; preview again")
-    config = model.propose(root, current, changes, expected_revision, reference)
+    config = model.propose(root, current, changes, expected_revision, reference,
+                           **({"runtime_observation": runtime["observed_python"]} if runtime else {}))
     for name in model.PRIVATE_FILES:
         tracked = module.git(root, "ls-files", "--", name)
         if tracked:
@@ -275,9 +374,41 @@ def configuration_plan(module, root, changes, expected_revision, reference):
         action = "unchanged" if before == data and (mode is None or previous_mode == mode) else "update" if before is not None else "create"
         operations.append({"path": name, "before": before, "after": data, "action": action,
                            **({"after_mode": mode} if mode is not None else {})})
+    def managed(name, raw, kind="file", mode=None):
+        add(name, raw, mode)
+        revised_state["files"][name]["sha256"] = sha(module.block_from(raw) if kind == "block" else raw)
     add(module.CONFIG, after, 0o600)
     status = ".flightcheck/docs/status.md"
-    add(status, validated[status][0], 0o600)
+    status_raw = validated[status][0]
+    if "evidence_dir" in changes:
+        old = "FLIGHTCHECK_STATE_DIR=" + shlex.quote(str(Path(current["values"]["evidence_dir"]) / "status-card"))
+        new = "FLIGHTCHECK_STATE_DIR=" + shlex.quote(str(Path(config["evidence_dir"]) / "status-card"))
+        if status_raw.count(old.encode()) != 1:
+            raise ValueError("Private status instructions need explicit reconciliation before changing evidence location")
+        status_raw = status_raw.replace(old.encode(), new.encode(), 1)
+    if runtime:
+        old, new = shlex.quote(current["values"]["python"]).encode(), shlex.quote(config["python"]).encode()
+        if status_raw.count(old) != 1:
+            raise ValueError("Private status runtime instruction needs explicit reconciliation")
+        status_raw = status_raw.replace(old, new, 1)
+        revised_pin = json.loads(encoded(pin)) if pin else None
+        if revised_pin is None:
+            raise ValueError("Runtime reconciliation requires an existing distribution pin")
+        revised_pin["runtime"] = runtime["identity"]
+        add(PIN, encoded(revised_pin))
+    managed(status, status_raw, mode=0o600)
+    if config["activation"] != current["values"]["activation"]:
+        lines = {"opt-in": b"Use FlightCheck when the owner explicitly selects or resumes a bounded flight.",
+                 "default-for-coding": b"Use FlightCheck for coding tasks unless the owner explicitly opts out."}
+        for name in ("AGENTS.md", "CLAUDE.md"):
+            if name not in state["files"]:
+                continue
+            raw = validated[name][0]
+            block = module.block_from(raw)
+            old, new = lines[current["values"]["activation"]], lines[config["activation"]]
+            if block.count(old) != 1:
+                raise ValueError("Managed activation instruction needs explicit reconciliation: " + name)
+            managed(name, raw.replace(block, block.replace(old, new, 1), 1), kind="block")
     ignore_path = ".flightcheck/.gitignore"
     before_ignore, ignore_mode = tx.file_state(module, root, ignore_path)
     validated.setdefault(ignore_path, (before_ignore, ignore_mode))
@@ -297,27 +428,48 @@ def configuration_plan(module, root, changes, expected_revision, reference):
             "expected_revision": expected_revision, "changes": changes, "reference": reference,
             "configuration": config, "source": state["source"], "distribution": pin,
             "operations": tx.operation_state(module, root, operations)}
+    if runtime:
+        plan["runtime_reconciliation"] = runtime
     for name, expected in validated.items():
         if tx.file_state(module, root, name) != expected:
             raise ValueError("Validated configuration input changed during planning: " + name)
     return plan, operations
 
 
-def configuration_apply(module, root, reviewed):
+def configuration_runtime_plan(module, root, python, expected_revision, reference):
+    """Only an explicitly approved terminal operation executes a new runtime."""
+    configuration_integrity(module, root)
+    model = configuration_model(module, root)
+    if getattr(model, "SETTINGS_SCHEMA", None) != 1:
+        raise ValueError("Explicit configuration-adapter update required before runtime reconciliation")
+    values = model.snapshot(root)["values"]
+    values["python"] = str(Path(python).expanduser().absolute())
+    observed = model.normalize(root, values, trusted_metadata=True, probe_runtime=True)
+    runtime = {"observed_python": observed["observed_python"], "identity": runtime_identity(observed), "reference": reference}
+    return configuration_plan(module, root, {"python": observed["python"]}, expected_revision, reference, runtime=runtime)
+
+
+def configuration_apply(module, root, reviewed, allow_runtime_execution=False):
     if reviewed.get("kind") != "configuration-only-v1" or reviewed.get("target") != str(root):
         raise ValueError("Reviewed configuration plan targets another project or operation")
     with tx.locked(root) as private:
-        actual, operations = configuration_plan(module, root, reviewed["changes"], reviewed["expected_revision"], reviewed["reference"])
+        if reviewed.get("runtime_reconciliation"):
+            if not allow_runtime_execution:
+                raise ValueError("Runtime reconciliation requires explicit terminal --execute-approved-runtime; unavailable through Settings Save")
+            actual, operations = configuration_runtime_plan(module, root, reviewed["changes"]["python"], reviewed["expected_revision"], reviewed["reference"])
+        else:
+            actual, operations = configuration_plan(module, root, reviewed["changes"], reviewed["expected_revision"], reviewed["reference"])
         if actual != reviewed:
             raise ValueError("Reviewed configuration plan is stale; preview again")
         def verify_configuration():
             configuration_integrity(module, root)
-            for name in module.project_model().PRIVATE_FILES:
+            model = configuration_model(module, root)
+            for name in model.PRIVATE_FILES:
                 if stat.S_IMODE(module.safe_path(root, name).stat().st_mode) != 0o600:
                     raise ValueError("Private file mode was not applied: " + name)
                 if module.git(root, "check-ignore", "--no-index", "--", name) != name:
                     raise ValueError("Private file is not ignored: " + name)
-            result = module.project_model().snapshot(root)
+            result = model.snapshot(root)
             if result["values"] != reviewed["configuration"]:
                 raise ValueError("Configuration publication did not match reviewed values")
             return {"status": "configuration_updated", **result}
@@ -326,7 +478,7 @@ def configuration_apply(module, root, reviewed):
 
 def configuration_main(argv, engine=None):
     parser = argparse.ArgumentParser(description="Read or explicitly update project configuration; workflow/runtime remain pinned")
-    parser.add_argument("action", choices=("read", "preview", "apply", "recover"))
+    parser.add_argument("action", choices=("read", "preview", "adapter-preview", "runtime-preview", "apply", "recover"))
     parser.add_argument("target", nargs="?", default=".")
     parser.add_argument("--shared", action="store_true", help="Allowlisted policy projection; omits host values and free-form references")
     parser.add_argument("--changes", help="JSON object of supported configuration changes")
@@ -335,12 +487,36 @@ def configuration_main(argv, engine=None):
     parser.add_argument("--plan", help="Save private review plan outside project")
     parser.add_argument("--apply", metavar="PLAN")
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--python", help="Explicitly approved existing interpreter for runtime-preview only")
+    parser.add_argument("--execute-approved-runtime", action="store_true", help="Explicit terminal authority to execute the selected runtime probes")
     args = parser.parse_args(argv)
     try:
         if engine is None:
             with installer() as (module, source, manifest, identity):
                 return configuration_main(argv, engine=module)
         root = target(engine, args.target)
+        if args.action == "adapter-preview":
+            if not all((args.expected_revision, args.reference)) or any((args.shared, args.changes, args.apply, args.python, args.execute_approved_runtime)):
+                raise ValueError("adapter-preview requires expected revision and explicit owner reference only")
+            document, _ = configuration_adapter_plan(engine, root, args.expected_revision, args.reference)
+            path = tx.no_links(Path(args.plan).expanduser().absolute()) if args.plan else tx.directory(root) / ("adapter-" + sha(encoded(document)) + ".json")
+            if root == path or root in path.parents:
+                raise ValueError("Keep adapter review plans outside the project")
+            tx.private_dir(path.parent); tx.atomic(path, encoded(with_digest(document)))
+            output({"status": "configuration_adapter_preview", "plan": str(path), **with_digest(document)}, True)
+            return 0
+        if (args.python or args.execute_approved_runtime) and args.action not in ("runtime-preview", "apply"):
+            raise ValueError("Runtime execution is unavailable for configuration read/preview/recover")
+        if args.action == "runtime-preview":
+            if not all((args.python, args.execute_approved_runtime, args.expected_revision, args.reference)) or any((args.shared, args.changes, args.apply)):
+                raise ValueError("runtime-preview requires --python, --execute-approved-runtime, expected revision and explicit owner reference")
+            document, _ = configuration_runtime_plan(engine, root, args.python, args.expected_revision, args.reference)
+            path = tx.no_links(Path(args.plan).expanduser().absolute()) if args.plan else tx.directory(root) / ("configuration-" + sha(encoded(document)) + ".json")
+            if root == path or root in path.parents:
+                raise ValueError("Keep runtime review plans outside the project")
+            tx.private_dir(path.parent); tx.atomic(path, encoded(with_digest(document)))
+            output({"status": "runtime_preview", "plan": str(path), **with_digest(document)}, True)
+            return 0
         if args.action == "recover":
             if any((args.shared, args.changes, args.expected_revision, args.reference, args.plan, args.apply)):
                 raise ValueError("Recover accepts only target and --json")
@@ -357,9 +533,12 @@ def configuration_main(argv, engine=None):
             if tx.pending(root):
                 raise ValueError("Interrupted update; run flightcheck recover before reading configuration")
             configuration_integrity(engine, root)
-            model = engine.project_model()
+            model = configuration_model(engine, root)
             result = model.snapshot(root)
-            result["values"] = model.normalize(root, result["values"], trusted_metadata=True)
+            result["values"] = model.normalize(root, result["values"], trusted_metadata=True, probe_runtime=False)
+            if not args.shared:
+                _, pin = configuration_integrity(engine, root)
+                result["runtime"] = runtime_structure(result["values"], pin["runtime"]) if pin else {"status": "unconfigured"}
             if args.shared:
                 result["values"] = model.shared(result["values"])
             output({"status": "configuration", **result}, True)
@@ -369,7 +548,15 @@ def configuration_main(argv, engine=None):
         if args.action == "apply":
             if not args.apply or any((args.changes, args.expected_revision, args.reference, args.plan)):
                 raise ValueError("Apply requires only --apply PLAN")
-            result = configuration_apply(engine, root, read_plan(args.apply))
+            if args.python:
+                raise ValueError("Apply reads its runtime only from the reviewed plan")
+            reviewed = read_plan(args.apply)
+            if reviewed.get("kind") == "configuration-adapter-v1":
+                if args.execute_approved_runtime:
+                    raise ValueError("Adapter update cannot grant runtime execution")
+                result = configuration_adapter_apply(engine, root, reviewed)
+            else:
+                result = configuration_apply(engine, root, reviewed, allow_runtime_execution=args.execute_approved_runtime)
             output(result, True)
             return 0
         if args.apply or not all((args.changes, args.expected_revision, args.reference)):
@@ -393,6 +580,10 @@ def main(argv=None):
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "config":
         return configuration_main(argv[1:])
+    if argv and argv[0] == "settings":
+        from .settings import main as settings_main
+        with installer() as (module, source, manifest, identity):
+            return settings_main(argv[1:], engine=module)
     if argv and argv[0] in ("checkout", "lifecycle", "audit", "status-sync"):
         try:
             with installer() as (module, source, manifest, identity):

@@ -1,0 +1,20 @@
+{
+  "issue": 80,
+  "consumer_after_settings": 83,
+  "convention": "Display expands details; separate arrow opens a new tab with noopener noreferrer; editable URL values remain editing controls",
+  "destinations": [
+    {
+      "surface": "Settings Project resources",
+      "fields": "resources.*, plus project_board.url bound to canonical status_sync identity",
+      "allowed": "credential-free HTTPS values",
+      "private_values": "Only within the explicit local Settings session"
+    },
+    {
+      "surface": "Settings read-only audit",
+      "fields": "Credential-free HTTPS strings in the returned audit report, including remote endpoints and provider delivery references",
+      "allowed": "credential-free HTTPS values",
+      "private_values": "Only within the explicit local Settings session"
+    }
+  ],
+  "notes": "Canonical synchronization identity is status_sync; no competing board identity. Relative resource pointers and optional-unavailable reasons are data, not external links. No actual private destinations are published in this inventory."
+}

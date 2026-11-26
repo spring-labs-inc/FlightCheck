@@ -118,18 +118,30 @@ def inspect_project(root):
         interpreter = Path(sys.executable)
     candidates = ("AGENTS.md", "CLAUDE.md", ".claude/settings.json", ".codex/config.toml",
                   "pyproject.toml", "pytest.ini", ".pre-commit-config.yaml", "package.json", "Makefile")
-    return {"target": str(root), "python": str(interpreter), "default_branch": branch,
+    result = {"target": str(root), "python": str(interpreter), "default_branch": branch,
             "existing_configuration": [name for name in candidates if (root / name).exists()],
             "defaults": {"activation": "opt-in", "delivery": "No provider writes without owner approval"},
             "required_configuration": ["evidence_dir", "nit_tracker", "checks", "policy_reference"],
             "note": "Read existing project policy; detected files are hints, not permission to replace policy or run checks."}
+    saved = safe_path(root, CONFIG)
+    if saved.exists():
+        result["configuration"] = {"status": "configuration", **project_model(root).snapshot(root)}
+    else:
+        result["configuration"] = {"status": "unconfigured"}
+    return result
 
 
-def project_model():
+def project_model(root=None):
     """Load the same model from source or a verified project-local install."""
     base = Path(__file__).resolve().parent
     installed = base / "scripts/project_config.py"
     path = installed if installed.is_file() else base.parent / "workflow/scripts/project_config.py"
+    if root is not None and safe_path(root, ".flightcheck/scripts/project_config.py").is_file():
+        path = safe_path(root, ".flightcheck/scripts/project_config.py")
+        state = read_state(root)
+        expected = state["files"][".flightcheck/scripts/project_config.py"]["sha256"]
+        if sha(path.read_bytes()) != expected:
+            raise SetupError("Modified installed configuration model; refusing execution")
     if installed.is_file():
         state = json.loads((base / "installation.json").read_text())
         expected = state["files"][".flightcheck/scripts/project_config.py"]["sha256"]
@@ -145,7 +157,7 @@ def configuration(root, supplied):
     try:
         saved = safe_path(root, CONFIG)
         trusted = saved.exists() and json.loads(saved.read_bytes()) == supplied
-        return project_model().normalize(root, supplied, inspect_project(root), origin="setup", trusted_metadata=trusted)
+        return project_model(root).normalize(root, supplied, inspect_project(root), origin="setup", trusted_metadata=trusted)
     except ValueError as error:
         raise SetupError(str(error)) from error
 
@@ -472,7 +484,8 @@ def verify(root, manifest):
     required |= ({"CLAUDE.md"} if agent in ("claude", "both") else set())
     if set(state["files"]) != required:
         raise SetupError("Installed manifest omits or adds unexpected required components")
-    if state["source"]["manifest_sha256"] != sha(MANIFEST.read_bytes()):
+    expected_manifest = state.get("configuration_adapter", {}).get("manifest_sha256", state["source"]["manifest_sha256"])
+    if expected_manifest != sha(MANIFEST.read_bytes()):
         raise SetupError("Installer manifest differs from the installed source revision")
     for name, record in state["files"].items():
         data = safe_path(root, name).read_bytes()
@@ -548,13 +561,24 @@ def main():
         return {"lifecycle": lifecycle_main, "audit": audit_main, "status-sync": status_sync_main}[sys.argv[1]](sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == "checkout":
         return checkout_main(sys.argv[2:])
-    if len(sys.argv) > 1 and sys.argv[1] == "config":
+    if len(sys.argv) > 1 and sys.argv[1] in ("config", "settings"):
         source = Path(__file__).resolve().parents[1] / "src"
         if not (source / "flightcheck_cli/cli.py").is_file():
-            print(json.dumps({"status": "incomplete", "error": "Use the source checkout setup/install.py config command or an updated CLI; installed workflow remains pinned"}))
-            return 1
+            source = Path(__file__).resolve().parent / "cli"
+            try:
+                state = read_state(Path(__file__).resolve().parent.parent)
+                for name in ("__init__.py", "cli.py", "transaction.py", "source.py", "settings.py"):
+                    relative = ".flightcheck/cli/flightcheck_cli/" + name
+                    if sha(safe_path(Path(__file__).resolve().parent.parent, relative).read_bytes()) != state["files"][relative]["sha256"]:
+                        raise SetupError("Modified installed common updater: " + name)
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                print(json.dumps({"status": "incomplete", "error": str(error)}))
+                return 1
         sys.path.insert(0, str(source))
         from flightcheck_cli.cli import configuration_main
+        if sys.argv[1] == "settings":
+            from flightcheck_cli.settings import main as settings_main
+            return settings_main(sys.argv[2:], engine=sys.modules[__name__])
         return configuration_main(sys.argv[2:], engine=sys.modules[__name__])
     if sys.argv[1:] == ["--runtime-worker"]:
         signal.signal(signal.SIGTERM, interrupt_probe)

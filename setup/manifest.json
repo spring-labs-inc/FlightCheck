@@ -66,6 +66,16 @@
     ["docs/checkout-verification.md", ".flightcheck/docs/checkout-verification.md", "shared"],
     ["workflow/scripts/flight_lifecycle.py", ".flightcheck/scripts/flight_lifecycle.py", "shared"],
     ["workflow/scripts/repository_audit.py", ".flightcheck/scripts/repository_audit.py", "shared"],
-    ["docs/flight-lifecycle.md", ".flightcheck/docs/flight-lifecycle.md", "shared"]
+    ["docs/flight-lifecycle.md", ".flightcheck/docs/flight-lifecycle.md", "shared"],
+    ["src/flightcheck_cli/__init__.py", ".flightcheck/cli/flightcheck_cli/__init__.py", "shared"],
+    ["src/flightcheck_cli/cli.py", ".flightcheck/cli/flightcheck_cli/cli.py", "shared"],
+    ["src/flightcheck_cli/transaction.py", ".flightcheck/cli/flightcheck_cli/transaction.py", "shared"],
+    ["src/flightcheck_cli/source.py", ".flightcheck/cli/flightcheck_cli/source.py", "shared"],
+    ["src/flightcheck_cli/settings.py", ".flightcheck/cli/flightcheck_cli/settings.py", "shared"],
+    ["status-card/settings.html", ".flightcheck/status-card/settings.html", "shared"],
+    ["status-card/settings.js", ".flightcheck/status-card/settings.js", "shared"],
+    ["docs/settings.md", ".flightcheck/docs/settings.md", "shared"],
+    ["docs/settings-external-links.json", ".flightcheck/docs/settings-external-links.json", "shared"],
+    ["status-card/settings.css", ".flightcheck/status-card/settings.css", "shared"]
   ]
 }

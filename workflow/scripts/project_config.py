@@ -10,11 +10,15 @@ import os
 from pathlib import Path
 import stat
 import subprocess
+from urllib.parse import urlsplit
 
 CONFIG = ".flightcheck/project.json"
+SETTINGS_SCHEMA = 1
 PRIVATE_FILES = (CONFIG, ".flightcheck/docs/status.md")
 META = "_flightcheck"
-MUTABLE = {"checkout_policy", "protected_branches", "default_branch", "checks", "resources", "status_sync"}
+MUTABLE = {"checkout_policy", "protected_branches", "default_branch", "checks", "resources", "status_sync",
+           "activation", "activation_reference", "required_runtimes", "preview", "cleanup_policy",
+           "evidence_dir", "reviewer_access", "review_client", "delivery", "nit_tracker", "policy_reference"}
 PUBLIC = {"checkout_policy", "protected_branches", "default_branch", "activation"}
 HOST = {"python", "observed_python", "evidence_dir", "checks", "reviewer_access", "delivery",
         "policy_reference", "activation_reference", "nit_tracker"}
@@ -52,6 +56,48 @@ def text(value, name):
     if not isinstance(value, str) or not value.strip() or "\x00" in value:
         raise ValueError("Invalid configuration field: " + name)
     return value
+
+
+def cleanup_policy(value):
+    """Future launch preferences only; concrete Registry grants stay separate."""
+    value = copy.deepcopy({} if value is None else value)
+    allowed = {"local_branches", "remote_branches", "temporary_worktrees", "retained_artifacts"}
+    if not isinstance(value, dict) or value.keys() - allowed:
+        raise ValueError("Unsupported cleanup policy; mandatory preservation cannot be disabled")
+    for name in allowed - {"retained_artifacts"}:
+        value.setdefault(name, False)
+        if type(value[name]) is not bool:
+            raise ValueError("Cleanup scopes require separate boolean preferences")
+    value.setdefault("retained_artifacts", [])
+    if not isinstance(value["retained_artifacts"], list):
+        raise ValueError("Retained artifacts require explicit identity/reason entries")
+    for row in value["retained_artifacts"]:
+        if not isinstance(row, dict) or set(row) != {"identity", "reason"}:
+            raise ValueError("Retention preference needs identity and reason")
+        text(row["identity"], "retained identity"); text(row["reason"], "retained reason")
+    return value
+
+
+def resource(pointer, name):
+    if isinstance(pointer, str):
+        text(pointer, name)
+        if "://" in pointer:
+            parsed = urlsplit(pointer)
+            if parsed.password is not None or parsed.scheme in ("http", "https") and parsed.username is not None:
+                raise ValueError("Keep resource credentials in the existing credential store")
+        return pointer
+    if name == "resources.project_board" and isinstance(pointer, dict) and set(pointer) == {"url", "provider", "project_id"}:
+        for key in pointer:
+            text(pointer[key], name + "." + key)
+        parsed = urlsplit(pointer["url"])
+        if (parsed.scheme != "https" or not parsed.hostname or parsed.username is not None or parsed.password is not None
+                or any(char.isspace() or ord(char) < 32 for char in pointer["url"]) or parsed.port == 0):
+            raise ValueError("Board destination must be credential-free HTTPS")
+        return pointer
+    if not isinstance(pointer, dict) or set(pointer) != {"unavailable"}:
+        raise ValueError("Resource needs a pointer or an explicit unavailable reason: " + name)
+    text(pointer["unavailable"], name + ".unavailable")
+    return pointer
 
 
 def sync_schema():
@@ -142,20 +188,40 @@ def normalize(root, supplied, detected=None, origin="legacy", trusted_metadata=F
         raise ValueError("protected_branches must be an array")
     value["protected_branches"] = sorted({branch(root, b) for b in protected} | {value["default_branch"]})
     value["status_sync"] = sync_schema().normalize(value.get("status_sync"))
-    resources = value.get("resources", {})
+    value["cleanup_policy"] = cleanup_policy(value.get("cleanup_policy"))
+    for key in ("review_client", "reviewer_access", "activation_reference", "preview"):
+        if key in value:
+            text(value[key], key)
+    runtimes = value.get("required_runtimes", [])
+    if not isinstance(runtimes, list):
+        raise ValueError("required_runtimes must list recorded runtime requirements")
+    for item in runtimes:
+        text(item, "required runtime")
+    resources = value.setdefault("resources", copy.deepcopy(detected.get("resources", {})))
     if not isinstance(resources, dict):
         raise ValueError("resources must be an object")
     for key, pointer in resources.items():
         text(key, "resource name")
-        text(pointer, "resources." + key)
+        resource(pointer, "resources." + key)
+    board = resources.get("project_board")
+    if isinstance(board, dict) and "url" in board:
+        # A destination is dependent metadata, never another project choice.
+        # Legacy string pointers remain readable suggestions until bound.
+        if (board["provider"] != value["status_sync"]["provider"] or board["project_id"] != value["status_sync"]["project_id"]
+                or not value["status_sync"]["project_id"]):
+            raise ValueError("Board destination must bind the canonical status_sync provider/project identity")
     old_meta = value.get(META, {}) if trusted_metadata else {}
     if trusted_metadata and META in value and (not isinstance(old_meta, dict) or old_meta.get("schema") != 1 or not isinstance(old_meta.get("fields"), dict)):
         raise ValueError("Unsupported configuration metadata")
     fields = {}
-    for key in set(value) - {META}:
+    effective = {k: value[k] for k in set(value) - {META}}
+    effective.update({"resources." + k: v for k, v in resources.items()})
+    for key, field_value in effective.items():
         previous = old_meta.get("fields", {}).get(key)
-        scope = "project" if key in PUBLIC or key in ("resources", "status_sync") else "host"
-        value_sha = revision(encoded(value[key]))
+        scope = "project" if key in PUBLIC or key in ("resources", "status_sync", "cleanup_policy") or key.startswith("resources.") else "host"
+        if key.startswith("resources.") and isinstance(field_value, str) and (Path(field_value).is_absolute() or field_value.startswith(("~/", "file:", "ssh:"))):
+            scope = "host"
+        value_sha = revision(encoded(field_value))
         if previous is not None:
             if (not isinstance(previous, dict) or set(previous) != {"source", "scope", "confirmed", "confirmation_reference", "last_validation", "value_sha256"}
                     or previous["source"] not in ("legacy", "supplied", "discovered", "default", "explicit-update")
@@ -167,7 +233,9 @@ def normalize(root, supplied, detected=None, origin="legacy", trusted_metadata=F
                 raise ValueError("Invalid field metadata: " + key)
             if previous["value_sha256"] != value_sha:
                 previous = None
-        source = ("supplied" if key in supplied else "discovered" if key in detected else "default") if origin == "setup" else "legacy"
+        present = key in supplied or key.startswith("resources.") and key.split(".", 1)[1] in supplied.get("resources", {})
+        discovered_field = key in detected or key.startswith("resources.") and key.split(".", 1)[1] in detected.get("resources", {})
+        source = ("supplied" if present else "discovered" if discovered_field else "default") if origin == "setup" else "legacy"
         fields[key] = previous or {"source": source, "scope": scope,
                                   "confirmed": source == "supplied", "confirmation_reference": value["policy_reference"] if source == "supplied" else None,
                                   "last_validation": {"status": "valid", "validator": "project-config-v1"}, "value_sha256": value_sha}
@@ -201,24 +269,37 @@ def snapshot(root):
     return {"revision": revision(raw), "values": normalize(Path(root), json.loads(raw), trusted_metadata=True, probe_runtime=False)}
 
 
-def propose(root, current, changes, expected_revision, reference):
+def propose(root, current, changes, expected_revision, reference, runtime_observation=None):
     if current["revision"] != expected_revision:
         raise ValueError("Stale configuration revision; read current configuration and preview again")
     text(reference, "update confirmation reference")
     if not isinstance(changes, dict) or not changes:
         raise ValueError("Configuration update requires a nonempty changes object")
-    unsupported = set(changes) - MUTABLE
+    supported = MUTABLE | ({"python"} if runtime_observation is not None else set())
+    unsupported = set(changes) - supported
     if unsupported:
-        raise ValueError("Unsupported configuration reconciliation for: " + ", ".join(sorted(unsupported)) + "; runtime, evidence, activation and authority remain pinned")
+        raise ValueError("Unsupported configuration reconciliation for: " + ", ".join(sorted(unsupported)) + "; runtime execution and actual authority need separate explicit operations")
     if "default_branch" in changes and changes["default_branch"] != current["values"].get("default_branch"):
         observed = command(root, ["git", "--no-optional-locks", "symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
         if observed.removeprefix("origin/") != changes["default_branch"]:
             raise ValueError("Changed default_branch does not match discovered repository default; reconcile actual default before updating")
     value = copy.deepcopy(current["values"])
+    if runtime_observation is not None:
+        value["observed_python"] = copy.deepcopy(runtime_observation)
     for key, change in changes.items():
-        value[key] = copy.deepcopy(change)
+        if key in ("resources", "cleanup_policy", "checkout_policy") and isinstance(change, dict):
+            value[key] = {**copy.deepcopy(value.get(key, {})), **copy.deepcopy(change)}
+        else:
+            value[key] = copy.deepcopy(change)
         value.setdefault(META, {"schema": 1, "fields": {}})["fields"].pop(key, None)
-    result = normalize(root, value, trusted_metadata=True)
+        if key == "resources" and isinstance(change, dict):
+            for name in change:
+                value[META]["fields"].pop("resources." + name, None)
+    result = normalize(root, value, trusted_metadata=True, probe_runtime=False)
     for key in changes:
         result[META]["fields"][key].update(source="explicit-update", confirmed=True, confirmation_reference=reference)
+    if runtime_observation is not None:
+        result[META]["fields"]["observed_python"].update(source="explicit-update", confirmed=True, confirmation_reference=reference)
+    for key in changes.get("resources", {}):
+        result[META]["fields"]["resources." + key].update(source="explicit-update", confirmed=True, confirmation_reference=reference)
     return result
