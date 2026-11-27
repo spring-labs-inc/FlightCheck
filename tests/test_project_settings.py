@@ -81,7 +81,7 @@ class ProjectSettingsTests(CheckoutCases, unittest.TestCase):
                 self.assertEqual((events / 'first.runs').read_text().splitlines(), ['run'])
                 capture = self.module("capture_check")
                 old_context = json.loads(next(evidence.glob('check-*/run.json')).read_text())["checkout_context"]
-                current_context = capture.guard_context(self.root, task={'checkout_binding': {'registry': str(self.registry.directory), 'flight': 'fixture'}})
+                current_context = json.loads(next(evidence.glob('reuse-*/reuse.json')).read_text())['checkout_context']
                 self.assertTrue(capture.same_pass_checkout(old_context, current_context, ['checks', 'python', 'required_runtimes']))
                 self.assertFalse(capture.same_pass_checkout(old_context, current_context, ["checkz"]))
                 implicit = copy.deepcopy(current_context)
