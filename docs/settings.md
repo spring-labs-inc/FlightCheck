@@ -1,88 +1,230 @@
-# Shared configuration and local Settings
+# Project Settings reference
 
-Setup, `flightcheck config`, source `setup/install.py config`, and Settings use the
-same private `.flightcheck/project.json`. Its revision is the SHA-256 of the stored
-bytes. `_flightcheck.fields` records source, project/host scope, confirmation,
-confirmation reference and last validation. Resource entries retain individual
-provenance. Discovered values are suggestions until explicitly confirmed.
+Settings configures persistent FlightCheck behavior for this project, for current
+and future flights. It uses the same private `.flightcheck/project.json` as setup
+and `flightcheck config`; there is no separate Settings defaults store.
 
-Settings configures persistent FlightCheck behavior for this project, including
-current and future flights. Open it between flights with explicit project editing
-authorization; no flight or task identifier is needed:
+Edit the form and select **Save Changes** once. FlightCheck validates the draft,
+prepares the revision-checked common update and applies it behind that button.
+Success returns to Status. Validation, conflict or recovery errors stay inline and
+keep the draft. **Cancel changes** returns to Status without saving. **[ STATUS ]**
+also returns without saving. The matching **[ SETTINGS ]** link sits below and
+outside the whole Last progress section, including when Details is closed.
+
+Running checks finish under their captured settings. Eligible active work adopts
+saved changes at its next safe execution boundary. Incompatible checkout policy,
+frozen work or work on another host waits for reconciliation. Settings never moves
+a running worker, rewrites historical results or expands its permissions. Only
+affected checks and assumptions need revalidation; unaffected accepted evidence
+remains available under the existing incremental review rules.
+
+## Open and authorize
+
+Settings is available between flights with project editing authorization; users
+need no task or flight identifier:
 
 ```sh
 python3 -B setup/install.py settings /path/to/project \
   --authorize-local-settings /private/owner-settings-decision.json
 ```
 
-`flightcheck settings` and current copied `.flightcheck/install.py settings` use
-the same arguments. This reuses the existing Settings HTTP surface in the
-project's private transaction state. The returned host URL can be opened through
-the supported native preview or connection transport. A host listener address is
-not the client's forwarded browser address. There is no new forwarding service.
+`flightcheck settings` and a current copied `.flightcheck/install.py settings`
+accept the same arguments. The launcher supplies internal session identifiers and
+reuses the existing HTTP surface and supported preview/connection transport. The
+checkout-host listener address is distinct from the client's forwarded browser
+address, including over SSH. No additional forwarding service is introduced.
 
-An existing task listener is an optional transport: supply its private
-`--card-status`, matching `--task` and `--session`, and `--project-scope` to
-explicitly authorize project editing there. Legacy task-scoped capabilities
-remain compatible with their old API; the new editing UI requires fresh project
-authorization and never promotes an old token.
+An existing task card is an optional transport. Its launcher can supply matching
+`--task`, `--session`, private `--card-status`, and explicit `--project-scope`.
+An old task-scoped token is never silently promoted to project editing authority.
+Keep capability URLs private: the page removes the fragment and retains authorized
+navigation only in same-origin, exact-context session storage for that tab, for up
+to 30 minutes. Requests still require server authorization; public links, a fresh
+tab, loopback Host validation and merely opening Settings grant no edit access.
 
-Keep the capability URL private. The page removes its fragment before making
-requests. Private API requests require its exact project/session binding; internal
-transport identifiers are supplied by the launcher. The capability is absent from
-public task snapshots and request logs. Removing its private session record revokes
-it. Loopback Host validation alone does not authorize a write.
+## Defaults, saved values and scope
 
-## Fields and authority
+The form starts with the project's saved values, including preserved custom
+values. A default below describes an unset/new configuration, not a replacement
+for an existing owner decision. Setup may have confirmed project-specific values
+or proposed detected resources; Settings does not invent discovered identities.
 
-Settings uses ordinary location fields, an activation checkbox, classified check
-rows, checkout choices and separate cleanup checkboxes. Empty optional resources
-are **Not configured**. Known unavailable resources retain their explicit reason
-under Details; clearing that record is deliberate. An optional resource update
-of `null` removes its pointer through the common updater, including CLI updates.
-It does not fabricate an unavailable reason or probe access automatically.
+Project resource paths should normally be repository-relative. Absolute local,
+`file:` and `ssh:` resource pointers are host-specific. Browsing always uses the
+configured project's folder on the checkout host. Evidence, check commands,
+reviewer-access instructions, delivery instructions, workflow references and
+explicit minor-follow-up overrides are private host-scoped values in the common
+model. Project identity and the host are not machine-wide configuration stores.
 
-The Project board section owns the board location, synchronization switch and
-status mapping. **Read board details** authorizes a bounded read of that exact
-existing GitHub project through the existing provider transport and credentials.
-It shows observed board/status names without saving, granting access or changing
-membership. Ambiguous or incomplete fields are reported inline. Saved IDs are
-reused; manual connection IDs appear once under Advanced when names cannot be
-read. The single **Use this connection** fallback action confirms the current
-board and supplied IDs without requiring a fake edit; changing them invalidates
-that confirmation. It does not claim discovery or verified access.
-A changed, unbound board URL cannot enable synchronization with another
-board's old IDs, including after saving while synchronization is off. Mappings
-hide when off, preserving the configured connection and option values. The
-advisory/required failure policy is a separate meaningful Advanced choice.
+Every save requires the existing project capability and revision/conflict checks.
+Changing a preference does not grant tracker, provider, reviewer, delivery or
+cleanup authority. Mandatory ownership, protected-branch, checkout verification,
+accepted-completion and preservation rules cannot be switched off.
 
-Choose Review changes, then Save changes or Back to editing. Cancel changes
-reloads saved values. Settings records deliberate decisions internally under the
-existing launch authorization. Technical provenance and validation remain under
-Advanced → Details; recovery appears only for an interrupted transaction.
+## Project
 
-The bottom [ STATUS ] link returns to the card in this tab. Its bottom
-[ SETTINGS ] link returns to the same project/task. After a successful authorized read, the exact
-capability/context is retained only in same-origin, exact-task `sessionStorage`
-for this tab for up to 30 minutes. It is never in a public link, cookie or
-persistent `localStorage`. The server verifies every request; wrong task/project/
-session or revoked authorization remains blocked. Authorization failures clear
-this navigation record. Closing the tab ends its browser context, and Details
-provides an explicit Clear Settings navigation session action. An ordinary card
-in a fresh tab does not acquire editing permission; use the authorized launcher.
+Optional blank resources show **Not configured**. A known unavailable resource is
+a different state: its saved reason appears inline. Blank input during an unrelated
+save preserves that reason. **Clear saved problem** deliberately removes the note
+on Save, leaving the resource unconfigured; choosing a replacement path replaces
+it. No access failure is inferred merely because a field is empty.
 
-| Group | Common fields | Boundaries |
+| Control | Purpose and default | Choices, scope and effect |
 | --- | --- | --- |
-| Project | `resources`, `default_branch`, `protected_branches` | Repository identity comes from the actual checkout. Resource pointers may name an explicit unavailable reason. Shared pointers should be repository-relative; private log paths and references stay local. Synchronization's confirmed project identity is `status_sync`, not a second independent board configuration. |
-| Workflow | `activation`, `activation_reference`, `checks`, `required_runtimes`, `preview` | Commands and runtime requirements are recorded data, never executed by read, preview or Save. Default-for-coding needs explicit owner authorization. Only managed activation text changes; surrounding project instructions survive. |
-| Checkout | `checkout_policy` mode, branch prefix, Git fallback and reference | Native choice remains the default. Worktree-required never silently weakens. Default/protected branches, verified ownership, same-checkout resume and detached delivery safeguards are mandatory. Native capability may honestly be unavailable; client worktree count/retention/archive settings remain in the client. |
-| Cleanup | `cleanup_policy` local branches, actual remote branches, temporary worktrees and retained preferences | These are persistent project preferences. Launch captures the configuration revision and separately records exact artifact grants/inventory. Save neither deletes anything nor changes an existing grant or reservation. Required safe disposition and all preservation rules remain mandatory. |
-| Evidence/delivery | `evidence_dir`, `review_client`, `reviewer_access`, `delivery`, `nit_tracker`, `policy_reference` | Private host values remain outside published projections. These are requirements/defaults and references, not provider/reviewer permission, credential, hook, delivery or cleanup grants. |
+| Tracker | Main issue/follow-up destination; optional, otherwise Not configured. | One `resources.issue_tracker` pointer. Its adjacent arrow opens a credential-free HTTP(S) URL in a new tab. Saving changes where future tracker work looks; actual writes still need scoped authority. Inherited minor follow-ups follow this value automatically. |
+| Style guide | Coding-convention file; optional or confirmed/detected existing pointer. | `resources.style_guide`. Browse selects a project file; a saved URL remains editable and Browse still selects host-project files. Distinct from Workflow instructions, which govern the flight process. |
+| Documentation | Documentation folder; optional. | `resources.documentation`. Browse selects a directory on the project host. A pointer locates reference material; Save does not read its contents or run a documentation check. |
+| Runbooks | Runbook file; optional. | `resources.runbook`, one file pointer despite the plural label. Browse selects a project file. Save never executes its commands. |
+| Logs | Log destination; optional. | `resources.logs`. Browse can select a file or folder. Outside-project/private host destinations remain direct-entry pointers; browsing does not expose private evidence. |
+| Other configured resource fields | Preserve additional project-specific `resources` keys; there is no second alias for a standard field. | Existing names become familiar labels. File/folder Browse is available where supported; URL arrows open supported destinations. The same missing/unavailable and path-scope rules apply. |
+| URL arrow | Open the single URL textbox value without a redundant destination flyout. | Enabled for credential-free HTTP(S); opens separately with `noopener noreferrer`. It does not validate provider access or save edits. |
+| Browse | Choose a host-project resource path without uploading a browser-local file. | See the chooser controls below. Selection edits the draft; Save is the only persistence action. |
+| Clear saved problem | Remove a known unavailable-resource note deliberately. | Appears only for an actual saved problem. It changes the draft, and Cancel leaves the original record intact. |
 
-`python` and its observed/pinned identity are displayed read-only. Structural
-reads/previews/saves do not execute an interpreter, including an unavailable pin.
-A changed executable's bytes block ordinary updates. An explicit terminal runtime
-reconciliation is separate:
+## Project board and synchronization
+
+The board is configured once. Its destination is dependent metadata for the one
+canonical `status_sync` connection, never a second independently editable board.
+Friendly names come from confirmed configuration or an authorized bounded read.
+Settings never claims manual IDs were discovered or access-verified.
+
+| Control | Purpose and default | Choices, scope and effect |
+| --- | --- | --- |
+| Board | Project-board destination; optional until synchronization is enabled. | `resources.project_board`. One URL field and adjacent arrow. A confirmed structured destination must match the canonical provider/project ID. An older string pointer is retained; enabling a new/unbound destination requires reading or explicitly confirming that board's connection. |
+| Read board details | Resolve the entered board's friendly name, status field and options. | Explicit read-only use of the existing GitHub Projects v2 transport and credentials. It neither saves nor adds membership/grants; unavailable, ambiguous or incomplete results are reported honestly. |
+| Synchronize status | Enable lifecycle status synchronization; default off (`disabled`). | Enabling uses advisory mode unless Required is chosen. Requires the selected board, field and five distinct existing option IDs. Turning it off hides mappings and preserves connection/option values. Exact issue-scoped, revision-bound write authority remains separate. |
+| To do mapping | Existing board status for `todo`. | No invented default option. Select an observed status name; the common model stores its exact option ID. |
+| Ready mapping | Existing board status for `ready`. | Same project/field and exact-option rules. Must differ from the other four mappings. |
+| In progress mapping | Existing board status for `in_progress`. | Same rules; only synchronization behavior changes at a safe boundary. Sequence/Priority and manual/concurrent board decisions remain protected. |
+| In review mapping | Existing board status for `review`. | Same rules. A mapping preference does not authorize broader board writes. |
+| Done mapping | Existing board status for `done`. | Same rules. Done still requires accepted completion; saving this mapping cannot mark a flight complete. |
+
+Advanced contains the following connection/policy controls once, rather than a
+second editable copy of the board URL or ordinary mapping dropdowns:
+
+| Control | Purpose and default | Choices, scope and effect |
+| --- | --- | --- |
+| When synchronization fails | Behavior when an enabled synchronization transition cannot be verified. | **Report and continue** (`advisory`, the enable default) or **Block the transition** (`required`). Disabled stores `disabled`; connection/options remain saved. Required blocks only the scoped lifecycle transition, not unrelated projects. |
+| Manual board connection · fallback | Supply a known existing connection when the bounded read is unavailable. | Collapsed by default. Supported provider is GitHub Projects v2, explained as text; membership is always existing-only. There is no provider or membership selector offering unsupported choices. |
+| Project ID | Exact existing project identity for the same Board field. | No fabricated default; reuse confirmed configuration. Private Advanced fallback, not a second project decision. |
+| Status field ID | Exact existing status-field identity within that project. | No default or inferred field; reuse confirmed configuration or supply the known ID. |
+| To do / Ready / In progress / In review / Done status IDs | Manual equivalents of the five mapping dropdowns when names cannot be read. | Each maps its corresponding logical state to one exact, distinct existing option. They feed the same canonical `status_sync.options`, not another mapping model. |
+| Use this connection | Explicitly confirm this board and the supplied IDs. | Requires the URL, project, field and all five distinct IDs. Editing them invalidates the unsaved confirmation. This records an owner decision on Save and makes no discovery, membership or write-permission claim. |
+
+Any adopted configuration revision change with synchronization enabled requires
+reconciliation of the accepted exact-revision status authority, even if only a
+resource changed. Save preserves the old grant, retry state and history; it cannot
+silently bind authority to the new revision or reset retries.
+
+## Workflow
+
+| Control | Purpose and default | Choices, scope and effect |
+| --- | --- | --- |
+| Use FlightCheck by default for coding work | Activation policy; default unchecked (`opt-in`). | Checked means `default-for-coding`; the authorized Save records the activation decision internally. Only managed activation instructions change; surrounding project instructions survive. |
+| Check name | Human label for one required check. | Setup requires actual project checks; a newly added row starts blank and must be completed. Host-specific check declaration, not a command execution. |
+| Command | Existing non-mutating check's argument list. | Quote arguments containing spaces; shell expansion is not evaluated. Preserve existing command arguments unless changed. Save does not run the command. A changed check requires affected validation at adoption. |
+| Classification | When that check is authoritative. | **Cheap check** (`cheap`, new-row default) or **Authoritative check** (`authoritative`). This labels evidence expectations; a cheap check cannot substitute for a required authoritative gate. |
+| Add check | Add one draft check row. | New row has empty name/command and Cheap classification. Complete it before Save; it is not silently a runnable default. |
+| Remove | Remove that check from the draft list. | No persistence until Save; the common model still requires a nonempty valid check list. Mandatory workflow gates/guards are not optional switches. |
+| UI preview instructions | Project-specific instructions for the existing preview capability. | May initially be unset; if configured, use nonempty instructions. This records data, never starts a preview or forwarding framework. A change invalidates only affected preview assumptions. |
+
+## Checkout & Cleanup
+
+| Control | Purpose and default | Choices, scope and effect |
+| --- | --- | --- |
+| Checkout choice | Required checkout isolation policy. | **Native choice (default)** (`native-choice`) or **Require a separate worktree** (`worktree-required`). Native capability may honestly be unavailable; the requirement never silently weakens. An incompatible existing worker stays in place and adoption waits for a compatible verified boundary. |
+| Allow Git fallback when native checkout creation is unavailable | Permit the ordinary Git fallback within the flight's authorized scope. | Default unchecked. An authorized Save records its confirmation reference internally; it does not create a worktree or grant deletion authority. |
+| Branch prefix | Prefix for owned implementation branches; default unset unless configured. | Use a prefix such as `codex/`; the combined prefix and branch suffix must form a valid Git branch. A changed prefix is enforced against actual worker branches at adoption; no branch is silently renamed or worker moved. |
+| Additional protected branches | Add protections beyond the actual default branch. | Comma-separated literal branch names; default none beyond the default branch. The default branch is always protected and shown as explanatory text, not an optional checkbox. Authoritative repository protection still applies. |
+| Automatic cleanup · Verified merged local branches | Preference to clean eligible owned local refs after verified integration. | Default unchecked. Requires current exact inventory/grants and ownership/preservation safeguards; Save deletes nothing and does not expand an existing flight's grants. |
+| Automatic cleanup · Verified merged actual remote branches | Independent preference for actual remote refs. | Default unchecked. Distinct from local refs and remote-tracking observations; same exact authorization and verification restrictions. |
+| Automatic cleanup · Verified merged temporary worktrees | Independent preference for disposable owned checkouts. | Default unchecked. Existing retained artifacts, protected checkouts, unknown native operations and reservations remain preserved. Per-flight retained items appear only in the read-only audit. |
+
+Client worktree count, native retention and archive preferences remain in the
+native client. Mandatory safe closeout and preservation are not Settings toggles.
+
+## Evidence & Delivery and remaining Advanced controls
+
+| Control | Purpose and default | Choices, scope and effect |
+| --- | --- | --- |
+| Private evidence location | Private host directory for check/review receipts. | Required absolute, nonsymlink path outside the checkout; an existing directory must be owner-only (0700). Setup confirms it. Direct entry, not project Browse. Existing flight evidence is preserved; active adoption revalidates affected assumptions instead of relocating old results. |
+| Review client | Intended independent review client. | **Codex** or **Claude**; an unset value prompts a choice, and an existing custom value remains selectable. A preference grants no access and does not establish a read-only reviewer boundary. |
+| Delivery policy | Instructions for authorized delivery. | Schema default forbids provider writes without owner approval. Selector offers **Pull request and approved merge** or **Prepare review only**, retaining any saved custom policy. Host-scoped instructions never grant provider/merge rights; changed delivery assumptions need validation. |
+| Use a separate minor-follow-up location | Enable a deliberate exception to the main tracker. | Default unchecked: `nit_tracker: null` inherits the current Tracker dynamically. Enabling reveals one nonempty Advanced override; disabling resumes inheritance without copying a tracker URL. |
+| Minor-follow-up override | Explicit alternate notes/tracker destination. | Required only while its override checkbox is checked. Existing explicit strings are retained. Host-scoped; adjacent URL/Browse actions follow the same supported location rules and never grant writes. |
+| Reviewer access | Required access/boundary instructions or reference. | Setup may record a pending probe rather than pretend access exists. Nonempty when configured. Host-scoped data; actual independent read-only access/write-rejection probes remain required. |
+| Workflow instructions | Reference to project development/delivery rules (`policy_reference`). | Required nonempty setup/owner reference; use an existing path or instructions. Host-scoped private reference, with project-file Browse where applicable. Distinct from coding conventions in Style guide; Save never executes the referenced material. |
+| Required runtimes | Recorded tools/versions the project needs. | Default empty list. One nonempty requirement per line; removing all rows clears the list. Host-recorded requirements for this project, not an environment manager: Save installs or executes no runtime. Changes require affected validation. |
+| Details: validation and provenance | Inspect configuration source, scope, confirmation and structural validation. | Collapsed by default; metadata is read-only and not duplicated as ordinary input. Structural validity is not a claim of runtime/resource/provider access. |
+| Confirm displayed suggestions | Deliberately confirm currently unconfirmed values. | Initially unchecked; appears only when applicable. Save records these exact displayed values through the common updater. Unchanged, unconfirmed suggestions are not silently elevated by an unrelated Save. |
+| Runtime validation | Read-only status of the pinned executable and observation. | Uses the existing runtime identity; it is not a runtime selector or execution button. An unavailable/changed pin must be reconciled through the explicitly authorized terminal operation below. |
+| Clear Settings navigation session | Revoke this tab's retained navigation context. | Clears session storage and locks the editing surface. It neither resets configuration nor grants access elsewhere; reopening editing requires the authorized launcher. |
+| Recover interrupted update | Restore the previous complete configuration after an interrupted transaction. | Shown only when recovery is actually needed. Uses the existing common recovery journal/backups; it does not discard unknown concurrent bytes or rewrite evidence. |
+| Include permitted read-only remote observations | Add current remote observations to an explicit repository audit. | Unchecked by default; action-specific, not another persistent configuration setting. Uses existing permissions; no fetch/prune/provider mutation. |
+| Run read-only audit | Inspect branches/worktrees, exact ownership, retained items and limitations. | Separate explicit action. No delete/archive/stash/commit/switch/native mutation, and no cleanup authority is granted. Individual retention records remain here rather than editable Settings inputs. |
+
+## Resource chooser and page actions
+
+The chooser is one compact scrollable folder tree with indented children, folder
+and file icons, disclosure buttons and a single selection. It tries the current
+draft location first, then the saved value. For example, `docs/style.md` opens
+`docs/` with `style.md` selected. An actual missing/unbrowsable path or an outside
+project/URL pointer produces an explanation before using the saved location or
+project folder. No nonexistent selection is invented.
+
+| Control | Effect |
+| --- | --- |
+| Folder disclosure | Expand/collapse one folder in the same pane using bounded host-project name/type reads. Hidden/private paths, symlinks and private evidence remain excluded. |
+| File/folder row | Select exactly one item. File-only fields cannot confirm a folder; Documentation selects folders; Logs accepts either. No contents are uploaded or read. |
+| Path/breadcrumb | Show the current directory and navigate to a project ancestor. Relative and absolute-inside-project current values are supported; outside-project host paths stay direct-entry. |
+| Up | Navigate to the parent directory; disabled at the project root. It is in the navigation row, not the confirmation footer. |
+| Clear selection | Remove the current picker selection, disabling confirmation; shown only when useful. It does not clear the configuration textbox. |
+| Select file / Select folder | Confirm a compatible selected item into the draft textbox and close the dialog. This does not save project settings. |
+| Chooser Cancel | Close the dialog and leave the textbox draft unchanged. Distinct from page-level Cancel changes. |
+| Save Changes | One action validates, internally prepares and applies the existing authorized transaction. Success returns to Status; failure keeps the draft with an inline error. There is no second review screen. |
+| Cancel changes | Discard unsaved page edits by returning to Status in the same tab/context. No configuration API write occurs. |
+| [ STATUS ] / [ SETTINGS ] | Matching bottom-right navigation preserves the exact authorized tab context. A public/fresh context remains read-only. |
+
+## Transaction, adoption and evidence details
+
+The common document revision is the SHA-256 of its stored bytes. Save recomputes
+the internally prepared plan under the existing project transaction lock. Stale
+revisions, changed preimages or component drift fail closed; concurrent owner
+choices survive. Recovery retains the journal and original backups.
+
+Within that lock, Save records eligible adoption intents before publishing the
+canonical configuration. Intents contain only project/transaction locators, target
+revision and decision reference, not another values store. A failed or interrupted
+Save cannot adopt unpublished values; superseded intents remain recoverable.
+
+The existing recorder holds a shared execution lease from initial context capture
+through final receipt publication, inherited by its foreground child. Overlapping
+checks finish with their old bindings; the last exclusive safe boundary consumes a
+published intent. Worker captures participate automatically; a controller execution
+capture explicitly opts in with `--adopt-project-settings`. Read-only verify,
+audit, status and review admission never adopt; external commands are not universally
+intercepted. Existing grants, captured snapshots, synchronization retry/history and
+physical workers remain intact. Frozen delivery/disposition leases, unknown native
+reservations and other-host work are honestly deferred.
+
+Pass reuse stays strict about source, request, full input fingerprint, grants,
+physical checkout/session, runtime and policy. A frozen
+`--configuration-dependencies` JSON list may declare known common roots/nested
+resource paths. Omitted/unknown declarations are conservative. Only valid same-
+execution adoption history with unaffected dependencies permits reuse; mid-check
+identity remains strict. Accepted evidence is reused through normal incremental
+review without retagging old receipts or historical results.
+
+The terminal common interface still exposes explicit `config read`, `config
+preview --changes FILE --expected-revision SHA --reference OWNER_REFERENCE` and
+`config apply --apply PLAN`; these are the same functions the one-button UI uses.
+
+### Runtime reconciliation
+
+Structural Settings operations never execute a configured interpreter, including
+an unavailable pin. An executable whose bytes changed blocks ordinary updates.
+Only this separate explicitly authorized terminal operation probes and reconciles
+the existing runtime; it installs nothing:
 
 ```sh
 python3 -B setup/install.py config runtime-preview /path/to/project \
@@ -93,63 +235,10 @@ python3 -B setup/install.py config apply /path/to/project \
   --apply /private/runtime-plan.json --execute-approved-runtime
 ```
 
-Only that explicit operation executes fixed runtime identity probes. Its reviewed
-transaction updates the runtime pin and private status instructions together.
-Settings Save cannot invoke it. No runtime is installed.
+### Existing pinned installations
 
-For a board destination, `resources.project_board` may hold `{ "url": "https://…", "provider": "github-projects-v2", "project_id": "CONFIRMED_ID" }`. Its provider/project identity must equal the canonical `status_sync` identity; it cannot choose a second board. The URL is an owner-confirmed resource pointer, not a claim of provider inspection or write permission. Legacy string pointers remain readable, with opening withheld until bound; an explicit unavailable reason remains supported.
-
-## Preview, save and recover
-
-Read with `config read`, preview with `config preview --changes FILE
---expected-revision SHA --reference OWNER_REFERENCE`, and apply the resulting
-private plan with `config apply --apply PLAN`. Settings calls these same common
-model/transaction functions. Its preview describes changed values, with affected
-file details available on expansion. Apply recomputes the exact plan under the existing transaction lock.
-Stale revisions, changed preimages or component drift require a new preview;
-concurrent owner changes survive. `config recover` or Settings Recover restores
-the previous complete working configuration after an interrupted update.
-
-Save records an adoption intent in the existing project Registry inside the same
-project transaction lock, before publishing the canonical configuration. Intents
-contain only a project locator, target revision and decision reference; configuration
-values remain in the one common model. An interrupted Save cannot adopt unpublished
-values. Superseded intents remain recoverable, including when a later Save fails.
-
-Eligible active work on this host adopts at the next supported execution boundary.
-The existing recorder holds a shared execution lease from initial context capture
-through final receipt publication, inherited by its foreground child. Overlapping
-checks finish under their original binding; the last safe boundary consumes a
-published intent exclusively. Read-only verification, audit, status polling and
-review admission never adopt settings. Worker captures participate automatically;
-a controller execution capture opts in with `--adopt-project-settings`. Commands
-outside this supported recorder are not intercepted.
-
-The existing reconfiguration record retains snapshots, grants and history. Checkout
-policies that require another physical checkout remain deferred, with workers left
-in place. Frozen delivery/disposition leases, other-host work and unknown native
-reservations remain protected. Required validation covers affected assumptions;
-existing results and permissions are preserved. Synchronization's accepted exact
-revision authority still needs reconciliation after any adopted revision change.
-
-Pass reuse remains strict about source, request, full input fingerprint, grants,
-physical checkout, session, runtime and policy. An explicitly frozen
-`--configuration-dependencies` JSON list can identify common configuration roots or
-nested resource paths for a check. Omitted or unknown declarations are conservative.
-Only verified adoption history with unaffected dependencies permits binding reuse;
-mid-check identity verification stays strict. Existing incremental review handles
-accepted dependencies without rewriting old receipts.
-
-Minor follow-ups inherit the current main tracker through the common model. An
-explicit Advanced override remains supported and survives updates. Repository
-resource pointers remain project-specific; machine paths and private state remain
-host-specific, without a machine-wide configuration system.
-
-## Existing pinned installations
-
-Reads select the integrity-checked installed model. Current writes require the supported configuration adapter.
-A prior adapter is clearly read-only in Settings until explicitly reconciled.
-From a clean current FlightCheck source, or its reviewed terminal distribution:
+Reads use the integrity-checked installed common model. A prior incompatible
+adapter is read-only until an explicit bounded update from current reviewed source:
 
 ```sh
 python3 -B setup/install.py config adapter-preview /path/to/project \
@@ -158,54 +247,11 @@ python3 -B setup/install.py config adapter-preview /path/to/project \
 python3 -B setup/install.py config apply /path/to/project --apply /private/adapter-plan.json
 ```
 
-This is an explicit bounded compatibility transaction, never a side effect of
-read, preview of ordinary values, Save, or opening a card. Its plan enumerates
-common model/updater/dispatch and Settings assets and the merged manifest. It
-records exact adapter source and owner reference while retaining the original
-workflow source and distribution/runtime pins. Workflow instructions and helpers outside the enumerated common adapter
-components retain their bytes. The configuration reconfiguration helper is part
-of the explicitly recorded adapter update. The previous configuration bytes stay
-unchanged until a separately reviewed configuration update. The common transaction
-provides stale-plan rejection and rollback. There is one effective installed model
-afterward. A source checkout without canonical project configuration honestly
-reports Unconfigured; it does not acquire a separate Settings defaults store.
+The plan enumerates common model/updater/dispatch, required adoption helpers,
+Settings assets and manifest components. It preserves the original workflow source,
+distribution/runtime pins and untouched helpers, and records exact adapter source
+and owner reference. Adapter reconciliation is never a side effect of opening,
+reading or saving Settings. Unconfigured projects remain honestly Unconfigured.
 
-## Audit and external destinations
-
-Review branches and worktrees invokes the existing read-only repository audit.
-It reports ownership, unfinished/retained/ambiguous work, recommendations and
-coverage limitations. Remote observations are an explicit audit-action choice,
-using the existing read-only operation and current permissions. It performs no fetch, prune, delete, archive, commit, stash,
-checkout switch or native-client mutation. Reports grant no cleanup authority;
-any later execution is a separate authorized operation with current revalidation.
-
-Settings URL inputs use an adjacent arrow to open the destination in a new tab;
-audit destinations use a compact labeled arrow. Resource and audit destinations
-belong in #83's card-wide external-link inventory; this work does not implement
-the richer resource-discovery interview or native client settings management.
-
-The [destination inventory](settings-external-links.json) identifies Settings and
-audit field families for #83 without publishing actual private destinations.
-
-### Location controls and navigation
-
-A location uses one textbox with an adjacent URL arrow or Browse button. Tracker
-and board arrows open credential-free HTTP(S) destinations in a separate tab.
-Browse selects files or folders in the configured project on the checkout host;
-it does not upload files or mistake browser-machine selections for remote paths.
-Style guides and runbooks select files, documentation selects a folder, and logs
-can select either. The chooser starts near the current value, provides a path and clickable breadcrumbs,
-shows the selected item and allows clearing the selection. It lists names and types only, omits hidden/private
-entries and symlinks, and refuses traversal outside the project. Select changes
-only the draft; Cancel leaves it unchanged. External host paths, including private
-evidence storage, remain direct-entry fields; project browsing never relocates
-private evidence into a checkout.
-
-Saved unavailability is shown beside the field. **Clear saved problem** removes
-that note only when the change is saved; choosing a replacement location also
-replaces it. Merely leaving the input blank preserves an existing problem record.
-
-The right-aligned **[ SETTINGS ]** below the entire Last progress section and
-bottom-right **[ STATUS ]** link preserve the authorized
-current-tab context. Successful **Save changes** returns to Task Status; stale or
-failed saves remain in Settings with the draft and error available.
+The [destination inventory](settings-external-links.json) records existing Settings
+and audit link families for later #83 work without publishing private destinations.

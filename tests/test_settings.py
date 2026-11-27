@@ -322,9 +322,9 @@ class SettingsTests(unittest.TestCase):
             def handle_starttag(self, tag, attrs): self.tags.append((tag, dict(attrs)))
         surface = Surface(); surface.feed((PRODUCT / "status-card/settings.html").read_text())
         byid = {attrs["id"]: (tag, attrs) for tag, attrs in surface.tags if "id" in attrs}
-        for name in ("preview", "save", "reload", "recover", "audit"):
+        for name in ("save", "reload", "recover", "audit"):
             self.assertEqual(byid[name][0], "button"); self.assertNotEqual(byid[name][1].get("tabindex"), "-1")
-        self.assertNotIn("reference", byid); self.assertEqual(byid["effects"][1]["tabindex"], "0")
+        self.assertNotIn("reference", byid); self.assertNotIn("review", byid); self.assertNotIn("preview", byid)
         self.assertIn("hidden", byid["recovery"][1])
         self.assertNotIn("open", byid["advanced"][1])
         task_link = next(attrs for tag, attrs in surface.tags if tag == "a" and attrs.get("href") == "../")

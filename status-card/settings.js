@@ -20,7 +20,7 @@ const clone = value => JSON.parse(JSON.stringify(value));
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 const equal = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 let friendlyStatuses = {};
-let current, plan, readers = [], labels = {};
+let current, readers = [], labels = {};
 const states = {todo: "To do", ready: "Ready", in_progress: "In progress", review: "In review", done: "Done"};
 function node(tag, text) {const value = document.createElement(tag); if (text !== undefined) value.textContent = text; return value;}
 function message(text, error = false) {const value = byId("message"); value.textContent = text; value.className = error ? "settings-message problem" : "settings-message"; value.setAttribute("role", error ? "alert" : "status");}
@@ -30,7 +30,7 @@ async function api(action, body) {
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const response = await fetch("api/" + action, {method: body === undefined ? "GET" : "POST", headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: "omit", cache: "no-store"});
   const data = await response.json();
-  if (!response.ok) {if (response.status === 403) forgetContext(); throw new Error(data.error || data.reason || "Settings request failed; reload and preview again");}
+  if (!response.ok) {if (response.status === 403) forgetContext(); throw new Error(data.error || data.reason || "Settings request failed; reload current values and try again");}
   return data;
 }
 function destination(parent, label, value) {
@@ -91,35 +91,81 @@ function validDestination(value) {
 }
 let picker;
 function closePicker() {byId("resource-browser").close(); const target = picker?.input; picker = undefined; target?.focus();}
-function pickerSelection(path) {
-  picker.selection = path;
+function pickerSelection(path, kind) {
+  picker.selection = path; picker.selectionKind = kind;
   byId("browse-selection").textContent = path ? "Selected: " + (path === "." ? "Project folder" : path) : "No selection";
-  byId("browse-select").disabled = !path; byId("browse-clear").disabled = !path;
-  for (const row of byId("browse-list").children) row.setAttribute("aria-pressed", row.dataset.path === path ? "true" : "false");
+  const allowed = path && (picker.kind === "any" || picker.kind === kind);
+  byId("browse-select").disabled = !allowed;
+  byId("browse-select").textContent = "Select " + (picker.kind === "any" ? kind || "file or folder" : picker.kind === "directory" ? "folder" : "file");
+  byId("browse-clear").hidden = !path;
+  for (const row of picker.rows || []) {const selected = row.dataset.path === path; row.setAttribute("aria-selected", String(selected));}
+}
+function projectPath(value) {
+  if (validDestination(value)) throw new Error("This location is a URL, not a project file or folder");
+  const root = current.repository.checkout.replace(/\/$/, "");
+  if (value.startsWith("/")) {
+    if (value === root) return ".";
+    if (!value.startsWith(root + "/")) throw new Error("This location is outside this project's folder");
+    value = value.slice(root.length + 1);
+  }
+  return value.replace(/^\.\//, "").replace(/\/$/, "") || ".";
+}
+async function initialFolder(active) {
+  const saved = active.field.split(".").reduce((value, key) => value?.[key], current.values);
+  const savedText = typeof saved === "string" ? saved : saved?.url || "";
+  const draft = active.input.value.trim(); const failures = [];
+  for (const [label, value] of [["Current location", draft], ["Saved location", savedText]]) {
+    if (!value || label === "Saved location" && value === draft) continue;
+    try {
+      const selected = await api("browse", {field: active.field, path: projectPath(value), select: true});
+      const folder = selected.kind === "directory" ? selected.selected === "." ? "" : selected.selected : selected.selected.split("/").slice(0, -1).join("/");
+      const data = await api("browse", {field: active.field, path: folder});
+      data.selection = selected.selected; data.selectionKind = selected.kind;
+      active.notice = failures.length ? failures.join(". ") + ". Showing the saved location." : "";
+      return data;
+    } catch (error) {failures.push(label + " could not be browsed: " + error.message);}
+  }
+  active.notice = failures.length ? failures.join(". ") + ". Showing the project folder." : "Not configured. Showing the project folder.";
+  return api("browse", {field: active.field, path: ""});
 }
 async function showFolder(path, initial = false) {
-  const activePicker = picker;
-  const data = await api("browse", initial ? {field: activePicker.field, start: true, current: activePicker.input.value} : {field: activePicker.field, path});
-  if (picker !== activePicker) return;
-  picker.directory = data.directory; picker.parent = data.parent;
+  const active = picker;
+  const data = initial ? await initialFolder(active) : await api("browse", {field: active.field, path});
+  if (picker !== active) return;
+  picker.directory = data.directory; picker.parent = data.parent; picker.kind = data.kind; picker.rows = [];
   const breadcrumb = byId("browse-directory"); breadcrumb.replaceChildren();
   const parts = data.directory ? data.directory.split("/") : [];
   for (let index = -1; index < parts.length; index++) {
     if (index >= 0) breadcrumb.append(node("span", "/"));
     const target = parts.slice(0, index + 1).join("/");
     const item = node("button", index === -1 ? "Project" : parts[index]); item.type = "button";
-    item.addEventListener("click", async () => {try {await showFolder(target);} catch (error) {byId("browse-message").textContent = error.message;}}); breadcrumb.append(item);
+    item.addEventListener("click", async () => {try {active.notice = ""; await showFolder(target);} catch (error) {byId("browse-message").textContent = error.message;}}); breadcrumb.append(item);
   }
-  byId("browse-message").textContent = data.truncated ? "Showing a limited list. Enter the path directly if needed." : "";
+  byId("browse-message").textContent = active.notice || (data.truncated ? "Showing a limited list. Enter the path directly if needed." : "");
   byId("browse-up").disabled = data.parent === null;
   const list = byId("browse-list"); list.replaceChildren();
-  for (const entry of data.entries) {
-    if (entry.kind === "file" && data.kind === "directory") continue;
-    const button = node("button", entry.name + (entry.kind === "directory" ? "/" : "")); button.type = "button"; button.dataset.path = entry.path;
-    button.addEventListener("click", async () => {try {if (entry.kind === "directory") await showFolder(entry.path); else pickerSelection(entry.path);} catch (error) {byId("browse-message").textContent = error.message;}}); list.append(button);
+  function treeRow(entry, parent, children) {
+    if (entry.kind === "file" && data.kind === "directory") return;
+    const item = node("div"); item.className = "browse-item"; item.dataset.path = entry.path; item.setAttribute("role", "treeitem"); picker.rows.push(item);
+    const line = node("div"); line.className = "browse-row";
+    const disclosure = node("button", entry.kind === "directory" ? children ? "▾" : "▸" : ""); disclosure.type = "button"; disclosure.className = "browse-disclosure";
+    disclosure.disabled = entry.kind !== "directory"; disclosure.setAttribute("aria-label", "Expand or collapse " + entry.name);
+    const choose = node("button", (entry.kind === "directory" ? "📁 " : "📄 ") + entry.name); choose.type = "button"; choose.className = "browse-name";
+    choose.addEventListener("click", () => pickerSelection(entry.path, entry.kind)); line.append(disclosure, choose); item.append(line); parent.append(item);
+    if (entry.kind !== "directory") return;
+    const group = node("div"); group.className = "browse-children"; group.setAttribute("role", "group"); group.hidden = !children; item.append(group); item.setAttribute("aria-expanded", String(Boolean(children)));
+    let loaded = Boolean(children);
+    function fill(entries) {for (const child of entries) treeRow(child, group);}
+    if (children) fill(children);
+    disclosure.addEventListener("click", async () => {
+      try {
+        if (!loaded) {const result = await api("browse", {field: active.field, path: entry.path}); if (picker !== active) return; fill(result.entries); loaded = true;}
+        group.hidden = !group.hidden; disclosure.textContent = group.hidden ? "▸" : "▾"; item.setAttribute("aria-expanded", String(!group.hidden));
+      } catch (error) {byId("browse-message").textContent = error.message;}
+    });
   }
-  if (!list.children.length) list.append(node("p", "No matching files or folders."));
-  pickerSelection(data.selection || (data.kind === "file" ? null : data.directory || "."));
+  treeRow({name: parts.at(-1) || "Project", path: data.directory || ".", kind: "directory"}, list, data.entries);
+  pickerSelection(data.selection || (data.kind === "file" ? null : data.directory || "."), data.selectionKind || "directory");
 }
 async function choosePath(path) {
   const activePicker = picker;
@@ -283,8 +329,8 @@ function renderSync(parent, advanced) {
   });
 }
 function render(data) {
-  current = data; readers = []; labels = {}; friendlyStatuses = {}; plan = undefined;
-  byId("save").disabled = true; byId("review").hidden = true; byId("preview").hidden = false;
+  current = data; readers = []; labels = {}; friendlyStatuses = {};
+  byId("save").disabled = false;
   byId("recovery").hidden = data.status !== "recovery_required";
   if (data.status !== "configuration") {message(data.reason, data.status === "recovery_required"); byId("locked").hidden = data.status === "recovery_required"; byId("settings").hidden = true; return;}
   if (data.authorization_scope !== "project") {byId("settings").hidden = true; byId("locked").hidden = false; message("Authorize project Settings to apply changes to current and future work."); return;}
@@ -327,52 +373,28 @@ function render(data) {
     const confirm = checkbox(byId("provenance"), "confirm-suggestions", "Confirm displayed suggestions", false);
     readers.push(result => {if (confirm.checked) for (const key of suggestions) {if (key.startsWith("resources.")) {const name = key.slice(10); result.resources = {[name]: data.values.resources[name], ...result.resources};} else if (!(key in result)) result[key] = data.values[key];}});
   }
-  rememberContext(); message("Review changes before saving.");
+  rememberContext(); message("Changes apply to this project. Active work adopts them at its next safe boundary.");
 }
 async function reload() {render(await api("read"));}
-function changes() {const result = {}; for (const reader of readers) reader(result); if (!Object.keys(result).length) throw new Error("Change a value before reviewing"); return result;}
-function invalidate() {plan = undefined; byId("save").disabled = true;}
-function human(value, key) {
-  if (value === undefined || value === null || value === "") return "Not set";
-  if (typeof value === "boolean") return value ? "Enabled" : "Off";
-  if (Array.isArray(value)) return value.map(item => typeof item === "object" && item.command ? item.name + ": " + commandText(item.command) + " (" + item.phase + ")" : human(item, key)).join("; ") || "None";
-  if (typeof value === "object") return Object.entries(value).filter(([name]) => !name.endsWith("reference")).map(([name, item]) => (labels[name] || states[name] || name.replace(/_/g, " ")) + ": " + human(item, name)).join("; ") || "None";
-  return friendlyStatuses[value] || states[value] || ({"default-for-coding": "On for coding work", "opt-in": "Opt in per task", "native-choice": "Native choice", "worktree-required": "Require a separate worktree", "disabled": "Off", "advisory": "Report and continue", "required": "Block if unavailable"})[value] || String(value);
-}
-function showPreview(result) {
-  const effects = byId("effects"); effects.replaceChildren(); const list = node("ul"); list.id = "change-summary";
-  function difference(before, after, path) {
-    if (equal(before, after) || path.at(-1).endsWith("reference")) return;
-    const key = path.at(-1);
-    if (path[0] === "resources" && key === "project_board") {
-      const location = value => typeof value === "string" ? value : value?.url || (value?.unavailable ? "Unavailable" : "Not configured");
-      const item = node("li"); item.append(node("b", "Board: "), node("span", location(before) === location(after) ? "Connection confirmed or updated" : location(before) + " → " + location(after))); list.append(item); return;
-    }
-    if (["schema", "provider", "project_id", "field_id", "membership"].includes(key) && path[0] === "status_sync") return;
-    if (before && after && typeof before === "object" && typeof after === "object" && !Array.isArray(before) && !Array.isArray(after)) {
-      for (const name of new Set([...Object.keys(before), ...Object.keys(after)])) difference(before[name], after[name], [...path, name]); return;
-    }
-    const item = node("li"), caption = labels["resource-" + key] || labels[key] || states[key] || key.replace(/_/g, " ");
-    const display = value => path.includes("options") && value ? friendlyStatuses[value] || "Saved status mapping" : human(value, key);
-    item.append(node("b", caption + ": "), node("span", display(before) + " → " + display(after))); list.append(item);
-  }
-  for (const [key, change] of Object.entries(result.changes)) difference(change.before, change.after, [key]);
-  effects.append(list);
-  for (const text of result.effects.deferred || []) effects.append(node("p", text));
-  byId("groups").hidden = true; byId("review").hidden = false; byId("preview").hidden = true; byId("save").disabled = false; effects.focus();
-}
-function action(id, fn) {byId(id).addEventListener("click", async () => {try {await fn();} catch (error) {invalidate(); message(error.message + ". Reload current values and preview again.", true); byId("message").focus();}});}
-byId("settings").addEventListener("submit", async event => {event.preventDefault(); try {const result = await api("preview", {changes: changes(), expected_revision: current.revision}); plan = result.plan_id; showPreview(result); message("Changes ready to save.");} catch (error) {invalidate(); message(error.message, true); byId("message").focus();}});
-byId("settings").addEventListener("input", invalidate);
-byId("settings").addEventListener("change", invalidate);
-action("save", async () => {await api("apply", {plan_id: plan}); location.assign("../");});
-action("cancel", async () => {byId("review").hidden = true; byId("groups").hidden = false; byId("preview").hidden = false; invalidate(); byId("preview").focus();});
+function changes() {const result = {}; for (const reader of readers) reader(result); if (!Object.keys(result).length) throw new Error("Change a value before saving"); return result;}
+function invalidate() {}
+function action(id, fn) {byId(id).addEventListener("click", async () => {try {await fn();} catch (error) {invalidate(); message(error.message + ". Reload current values and try again.", true); byId("message").focus();}});}
+let saving = false;
+byId("settings").addEventListener("submit", async event => {
+  event.preventDefault(); if (saving) return;
+  try {
+    const update = changes(); saving = true; byId("save").disabled = true; byId("settings").inert = true; message("Saving changes…");
+    const result = await api("preview", {changes: update, expected_revision: current.revision});
+    await api("apply", {plan_id: result.plan_id}); location.assign("../");
+  } catch (error) {message(error.message, true); byId("message").focus();}
+  finally {saving = false; byId("save").disabled = false; byId("settings").inert = false;}
+});
 action("browse-up", async () => {try {await showFolder(picker.parent);} catch (error) {byId("browse-message").textContent = error.message;}});
 action("browse-select", async () => {try {await choosePath(picker.selection);} catch (error) {byId("browse-message").textContent = error.message;}});
-action("browse-clear", async () => {pickerSelection(null);});
+action("browse-clear", async () => {pickerSelection(null, null);});
 action("browse-cancel", closePicker);
 byId("resource-browser").addEventListener("cancel", event => {event.preventDefault(); closePicker();});
-action("reload", reload); action("recover", async () => {await api("recover", {}); await reload();});
+action("reload", async () => {location.assign("../");}); action("recover", async () => {await api("recover", {}); await reload();});
 action("audit", async () => {
   const report = await api("audit", {remote: byId("audit-remote").checked}); byId("audit-report").textContent = JSON.stringify(report, null, 2); byId("audit-destinations").replaceChildren();
   const seen = new Set(); function links(value, path) {if (typeof value === "string" && !seen.has(value)) {seen.add(value); destination(byId("audit-destinations"), path, value);} else if (value && typeof value === "object") for (const [key, item] of Object.entries(value)) links(item, path + "." + key);}

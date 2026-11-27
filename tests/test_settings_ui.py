@@ -44,121 +44,51 @@ const fs = require("fs"), vm = require("vm"), readline = require("readline"), as
   vm.runInNewContext(fs.readFileSync(setup.script, "utf8"), sandbox, {filename: setup.script});
   for (let n = 0; n < 200 && !ids.has("field-review_client"); n++) await new Promise(resolve => setTimeout(resolve, 10));
   assert(ids.has("field-review_client"), doc.getElementById("message").textContent);
-  assert.equal(doc.getElementById("groups").children.length, 5);
-  for (const name of ["preview", "save", "reload", "recover", "audit"]) assert.equal(doc.getElementById(name).tagName, "BUTTON");
-  assert.equal(doc.getElementById("reference"), null);
-  assert.equal(doc.getElementById("recovery").hidden, true);
-  assert.equal(doc.getElementById("field-activation").type, "checkbox");
-  for (const key of ["check-phase-0", "checkout-mode", "review_client", "delivery"]) assert.equal(doc.getElementById("field-" + key).tagName, "SELECT");
-  for (const key of ["issue_tracker", "project_board", "style_guide", "documentation", "runbook", "logs"]) assert.equal(doc.getElementById("field-resource-" + key).tagName, "INPUT");
-  assert.equal(doc.getElementById("field-resource-issue_tracker")._settingsValue.children[1].children[0].tagName, "A");
-  for (const key of ["style_guide", "documentation", "runbook", "logs"]) assert.equal(doc.getElementById("browse-resource-" + key).textContent, "Browse");
-  doc.getElementById("field-resource-style_guide").value = "https://example.invalid/old-style";
-  await doc.getElementById("field-resource-style_guide").emit("input");
-  assert.equal(doc.getElementById("browse-resource-style_guide").textContent, "Browse");
-  await doc.getElementById("browse-resource-style_guide").emit("click"); await doc.getElementById("browse-cancel").emit("click");
-  assert.equal(doc.getElementById("field-resource-style_guide").value, "https://example.invalid/old-style");
-  const styleBefore = doc.getElementById("field-resource-style_guide").value;
-  await doc.getElementById("browse-resource-style_guide").emit("click");
-  assert.equal(doc.getElementById("resource-browser").open, true);
-  const docsButton = doc.getElementById("browse-list").children.find(e => e.textContent === "docs/"); assert(docsButton); await docsButton.emit("click");
-  const styleButton = doc.getElementById("browse-list").children.find(e => e.textContent === "style.md"); assert(styleButton); await styleButton.emit("click");
-  assert.equal(doc.getElementById("field-resource-style_guide").value, styleBefore);
-  assert.match(doc.getElementById("browse-selection").textContent, /docs\/style.md/);
-  await doc.getElementById("browse-clear").emit("click"); assert.equal(doc.getElementById("browse-select").disabled, true);
-  await styleButton.emit("click"); await doc.getElementById("browse-select").emit("click");
-  assert.equal(doc.getElementById("field-resource-style_guide").value, "docs/style.md"); assert.equal(doc.getElementById("resource-browser").open, false);
-  await doc.getElementById("browse-resource-documentation").emit("click");
-  await doc.getElementById("browse-list").children.find(e => e.textContent === "docs/").emit("click");
-  await doc.getElementById("browse-select").emit("click"); assert.equal(doc.getElementById("field-resource-documentation").value, "docs");
-  const runbookBefore = doc.getElementById("field-resource-runbook").value;
-  await doc.getElementById("browse-resource-runbook").emit("click"); await doc.getElementById("browse-cancel").emit("click"); assert.equal(doc.getElementById("field-resource-runbook").value, runbookBefore);
-  doc.getElementById("field-review_client").value = "Claude";
-  await doc.getElementById("settings").emit("submit");
-  assert.equal(doc.getElementById("save").disabled, false, doc.getElementById("message").textContent);
-  assert.match(doc.getElementById("effects").textContent, /Claude/);
-  assert.equal(active.id, "effects");
-  console.log("ready-for-concurrent-edit");
-  await lines.next();
-  await doc.getElementById("save").emit("click");
-  assert.equal(navigations.length, 0);
-  assert.equal(doc.getElementById("field-review_client").value, "Claude");
-  assert.equal(doc.getElementById("message").attrs.role, "alert");
-  assert.match(doc.getElementById("message").textContent, /stale/i);
-  assert.equal(active.id, "message");
-  assert.equal(doc.getElementById("save").disabled, true);
-  await doc.getElementById("reload").emit("click");
-  assert.equal(doc.getElementById("field-review_client").value, "Concurrent owner choice");
-  doc.getElementById("field-review_client").value = "Codex";
-  await doc.getElementById("settings").emit("submit");
-  {const before = navigations.length; await doc.getElementById("save").emit("click"); assert.equal(navigations.length, before + 1); assert.equal(navigations.at(-1), new URL("../", setup.base).href); await doc.getElementById("reload").emit("click");}
 
-  assert.equal(doc.getElementById("field-review_client").value, "Codex");
-  // Exercise the native typed controls through the actual HTTP update path.
-  doc.getElementById("field-resource-style_guide").value = "docs/style.md";
-  doc.getElementById("field-activation").checked = true;
-  doc.getElementById("field-check-command-0").value = "python3 -B -m unittest 'tests with spaces'";
-  doc.getElementById("field-check-phase-0").value = "authoritative";
-  doc.getElementById("field-checkout-mode").value = "worktree-required";
-  doc.getElementById("field-checkout-fallback").checked = true;
-  doc.getElementById("field-cleanup-local_branches").checked = true;
-  doc.getElementById("field-resource-project_board").value = "https://github.com/orgs/example/projects/7";
-  await doc.getElementById("field-resource-project_board").emit("input");
-  await doc.getElementById("discover-board").emit("click");
-  assert.match(doc.getElementById("board-name").textContent, /Team delivery/);
-  assert.equal(doc.getElementById("board-manual").hidden, true);
-  doc.getElementById("field-sync-enabled").checked = true;
-  await doc.getElementById("field-sync-enabled").emit("change");
-  assert.equal(doc.getElementById("sync-mappings").hidden, false);
-  assert.equal(doc.getElementById("field-sync-todo").tagName, "SELECT");
-  assert.equal(doc.getElementById("field-sync-todo").children[1].textContent, "Queued");
-  for (const state of ["todo", "ready", "in_progress", "review", "done"]) doc.getElementById("field-sync-" + state).value = "OPTION_" + state;
-  doc.getElementById("field-sync-todo").value = "OPTION_ready";
-  doc.getElementById("field-sync-ready").value = "OPTION_todo";
-  await doc.getElementById("settings").emit("submit");
-  assert.equal(doc.getElementById("save").disabled, false, doc.getElementById("message").textContent);
-  assert.equal(doc.getElementById("groups").hidden, true);
-  assert.match(doc.getElementById("effects").textContent, /docs\/style.md/);
-  assert(!doc.getElementById("change-summary").textContent.includes("SYNTHETIC_PROJECT"));
-  assert(!doc.getElementById("change-summary").textContent.includes("OPTION_"));
-  await doc.getElementById("cancel").emit("click");
-  assert.equal(doc.getElementById("groups").hidden, false);
-  assert.equal(doc.getElementById("save").disabled, true);
-  await doc.getElementById("settings").emit("submit");
-  {const before = navigations.length; await doc.getElementById("save").emit("click"); assert.equal(navigations.length, before + 1); assert.equal(navigations.at(-1), new URL("../", setup.base).href); await doc.getElementById("reload").emit("click");}
-
-  assert.equal(doc.getElementById("field-activation").checked, true);
-  assert.equal(doc.getElementById("field-sync-todo").value, "OPTION_ready");
-    // Hide mappings without dropping the configured values or required policy.
-  doc.getElementById("field-sync-mode").value = "required";
-  doc.getElementById("field-sync-enabled").checked = false;
-  await doc.getElementById("field-sync-enabled").emit("change");
-  assert.equal(doc.getElementById("sync-mappings").hidden, true);
-  await doc.getElementById("settings").emit("submit");
-  {const before = navigations.length; await doc.getElementById("save").emit("click"); assert.equal(navigations.length, before + 1); assert.equal(navigations.at(-1), new URL("../", setup.base).href); await doc.getElementById("reload").emit("click");}
-  // Changing the board while off must not let a later reload bind the old IDs.
-  doc.getElementById("field-resource-project_board").value = "https://github.com/orgs/example/projects/8";
-  await doc.getElementById("field-resource-project_board").emit("input");
-  await doc.getElementById("settings").emit("submit");
-  {const before = navigations.length; await doc.getElementById("save").emit("click"); assert.equal(navigations.length, before + 1); assert.equal(navigations.at(-1), new URL("../", setup.base).href); await doc.getElementById("reload").emit("click");}
-  // An unrelated later save must not silently bind the new URL to the old IDs.
-  doc.getElementById("field-resource-documentation").value = "docs/new-guide.md";
-  await doc.getElementById("settings").emit("submit");
-  {const before = navigations.length; await doc.getElementById("save").emit("click"); assert.equal(navigations.length, before + 1); assert.equal(navigations.at(-1), new URL("../", setup.base).href); await doc.getElementById("reload").emit("click");}
-  doc.getElementById("field-sync-enabled").checked = true;
-  await doc.getElementById("field-sync-enabled").emit("change");
-  await doc.getElementById("settings").emit("submit");
-  assert.equal(doc.getElementById("save").disabled, true);
-  assert.match(doc.getElementById("message").textContent, /connection for this board/);
-  // Confirm an existing manual connection without inventing a changed ID.
-  await doc.getElementById("confirm-board").emit("click");
-  await doc.getElementById("settings").emit("submit");
-  assert.equal(doc.getElementById("save").disabled, false, doc.getElementById("message").textContent);
-  await doc.getElementById("reload").emit("click");
-
-  console.log(JSON.stringify({groups: 5, typedFormSave: true, cancelPreview: true, conflictFocused: true, staleSaveRefused: true, concurrentChoicePreserved: true, explicitFreshSave: true}));
-  process.exit(0);
-})().catch(error => {console.error(error.stack); process.exit(1);});
+  assert.equal(doc.getElementById("groups").children.length,5);
+  for(const name of ["save","reload","recover","audit"]) assert.equal(doc.getElementById(name).tagName,"BUTTON");
+  for(const name of ["preview","review","effects","reference","cancel"]) assert.equal(doc.getElementById(name),null);
+  assert.equal(doc.getElementById("recovery").hidden,true);
+  const descendants=value=>[value,...value.children.flatMap(descendants)];
+  const item=path=>descendants(doc.getElementById("browse-list")).find(e=>e.dataset.path===path);
+  async function browse(key){await doc.getElementById("browse-resource-"+key).emit("click");assert.equal(doc.getElementById("resource-browser").open,true);}
+  assert.equal(doc.getElementById("field-resource-style_guide").value,"docs/style.md");
+  await browse("style_guide");assert.match(doc.getElementById("browse-directory").textContent,/docs/);assert.match(doc.getElementById("browse-selection").textContent,/docs\/style.md/);
+  assert.equal(doc.getElementById("browse-select").textContent,"Select file");
+  await doc.getElementById("browse-clear").emit("click");assert.equal(doc.getElementById("browse-select").disabled,true);
+  await item("docs/style.md").children[0].children[1].emit("click");assert.equal(doc.getElementById("browse-select").disabled,false);
+  await doc.getElementById("browse-cancel").emit("click");
+  doc.getElementById("field-resource-style_guide").value="docs/runbook.md";await browse("style_guide");assert.match(doc.getElementById("browse-selection").textContent,/docs\/runbook.md/);await doc.getElementById("browse-cancel").emit("click");
+  doc.getElementById("field-resource-style_guide").value="docs/missing.md";await browse("style_guide");assert.match(doc.getElementById("browse-message").textContent,/Current location could not be browsed/);assert.match(doc.getElementById("browse-selection").textContent,/docs\/style.md/);await doc.getElementById("browse-cancel").emit("click");
+  doc.getElementById("field-resource-style_guide").value="https://example.invalid/old-style";await browse("style_guide");assert.match(doc.getElementById("browse-message").textContent,/URL/);await doc.getElementById("browse-cancel").emit("click");assert.equal(doc.getElementById("field-resource-style_guide").value,"https://example.invalid/old-style");
+  doc.getElementById("field-resource-style_guide").value="docs/style.md";
+  doc.getElementById("field-resource-documentation").value="docs";await browse("documentation");assert.equal(doc.getElementById("browse-select").textContent,"Select folder");await doc.getElementById("browse-select").emit("click");
+  await browse("runbook");await doc.getElementById("browse-up").emit("click");assert.equal(doc.getElementById("browse-up").disabled,true);const folder=item("docs");await folder.children[0].children[0].emit("click");assert(item("docs/runbook.md"));await doc.getElementById("browse-cancel").emit("click");
+  await browse("logs");assert.match(doc.getElementById("browse-message").textContent,/Not configured/);await doc.getElementById("browse-cancel").emit("click");
+  const check=doc.getElementById("field-check-command-0"), original=check.value;check.value="'";await doc.getElementById("settings").emit("submit");assert.equal(navigations.length,0);assert.equal(check.value,"'");assert.equal(active.id,"message");check.value=original;
+  doc.getElementById("field-review_client").value="Claude";
+  console.log("ready-for-concurrent-edit");await lines.next();
+  await doc.getElementById("settings").emit("submit");assert.equal(navigations.length,0);assert.equal(doc.getElementById("field-review_client").value,"Claude");assert.equal(doc.getElementById("message").attrs.role,"alert");assert.match(doc.getElementById("message").textContent,/stale/i);assert.equal(active.id,"message");assert.equal(doc.getElementById("save").disabled,false);assert.equal(doc.getElementById("settings").inert,false);
+  await doc.getElementById("reload").emit("click");assert.equal(navigations.at(-1),new URL("../",setup.base).href);
+  await sandbox.reload();assert.equal(doc.getElementById("field-review_client").value,"Concurrent owner choice");
+  doc.getElementById("field-review_client").value="Codex";
+  let before=navigations.length;await doc.getElementById("settings").emit("submit");assert.equal(navigations.length,before+1);assert.equal(navigations.at(-1),new URL("../",setup.base).href);await sandbox.reload();
+  doc.getElementById("field-activation").checked=true;
+  doc.getElementById("field-check-command-0").value="python3 -B -m unittest 'tests with spaces'";doc.getElementById("field-check-phase-0").value="authoritative";
+  doc.getElementById("field-checkout-mode").value="worktree-required";doc.getElementById("field-checkout-fallback").checked=true;doc.getElementById("field-cleanup-local_branches").checked=true;
+  doc.getElementById("field-resource-project_board").value="https://github.com/orgs/example/projects/7";await doc.getElementById("field-resource-project_board").emit("input");await doc.getElementById("discover-board").emit("click");assert.match(doc.getElementById("board-name").textContent,/Team delivery/);assert.equal(doc.getElementById("board-manual").hidden,true);
+  doc.getElementById("field-sync-enabled").checked=true;await doc.getElementById("field-sync-enabled").emit("change");assert.equal(doc.getElementById("sync-mappings").hidden,false);assert.equal(doc.getElementById("field-sync-todo").children[1].textContent,"Queued");
+  for(const state of ["todo","ready","in_progress","review","done"])doc.getElementById("field-sync-"+state).value="OPTION_"+state;
+  doc.getElementById("field-sync-todo").value="OPTION_ready";doc.getElementById("field-sync-ready").value="OPTION_todo";
+  before=navigations.length;await doc.getElementById("settings").emit("submit");assert.equal(navigations.length,before+1);await sandbox.reload();assert.equal(doc.getElementById("field-sync-todo").value,"OPTION_ready");
+  doc.getElementById("field-sync-enabled").checked=false;await doc.getElementById("field-sync-enabled").emit("change");assert.equal(doc.getElementById("sync-mappings").hidden,true);await doc.getElementById("settings").emit("submit");await sandbox.reload();
+  doc.getElementById("field-resource-project_board").value="https://github.com/orgs/example/projects/8";await doc.getElementById("field-resource-project_board").emit("input");await doc.getElementById("settings").emit("submit");await sandbox.reload();
+  doc.getElementById("field-resource-documentation").value="docs/new-guide.md";await doc.getElementById("settings").emit("submit");await sandbox.reload();
+  doc.getElementById("field-sync-enabled").checked=true;await doc.getElementById("field-sync-enabled").emit("change");before=navigations.length;await doc.getElementById("settings").emit("submit");assert.equal(navigations.length,before);assert.match(doc.getElementById("message").textContent,/connection for this board/);
+  await doc.getElementById("confirm-board").emit("click");await doc.getElementById("settings").emit("submit");assert.equal(navigations.length,before+1);await sandbox.reload();
+  doc.getElementById("field-sync-enabled").checked=false;await doc.getElementById("field-sync-enabled").emit("change");await doc.getElementById("settings").emit("submit");
+  console.log(JSON.stringify({groups:5,typedFormSave:true,singleClickSave:true,cancelReturnsStatus:true,treePicker:true,conflictFocused:true,staleSaveRefused:true,concurrentChoicePreserved:true,explicitFreshSave:true}));process.exit(0);
+})().catch(error=>{console.error(error.stack);process.exit(1);});
 '''
 
 
@@ -189,6 +119,13 @@ const fs = require("fs"), vm = require("vm"), assert = require("assert/strict");
  const fragment = "#" + new URLSearchParams({cap: setup.token, ...setup.context});
  let ids = await load(fragment); assert(ids.has("field-review_client"));
  assert.equal(storage.size, 1);
+ const original = ids.get("field-review_client").value;
+ ids.get("field-review_client").value = "Unsaved canceled choice";
+ await ids.get("reload").emit("click");
+ assert.deepEqual(ids.navigations, [new URL("../", setup.base).href]);
+ ids = await load("");
+ for (let n=0;n<100 && !ids.has("field-review_client");n++) await new Promise(r=>setTimeout(r,10));
+ assert.equal(ids.get("field-review_client").value, original);
  const returnURL = new URL(ids.get("task-status-link").attrs.href, setup.base);
  const task = await fetch(returnURL); assert.equal(task.status, 200);
  const html = await task.text(); assert.match(html, /<\/footer>\s*<nav[^>]*class="surface-navigation"[\s\S]*id="settings-link"[\s\S]*\[ SETTINGS \]/);
@@ -200,7 +137,7 @@ const fs = require("fs"), vm = require("vm"), assert = require("assert/strict");
  ids = await load("");
  for (let n=0;n<100 && !ids.has("field-review_client");n++) await new Promise(r=>setTimeout(r,10));
  assert(ids.has("field-review_client"), ids.get("message").textContent);
- ids.get("field-review_client").value = "Claude"; await ids.get("settings").emit("submit"); assert.equal(ids.get("save").disabled, false, ids.get("message").textContent); await ids.get("save").emit("click");
+ ids.get("field-review_client").value = "Claude"; await ids.get("settings").emit("submit");
  assert.deepEqual(ids.navigations, [returnURL.href]);
  const publicTab = await load("", new Map()); assert.equal(publicTab.has("field-review_client"), false); assert.match(publicTab.get("message").textContent, /Read-only/);
  const wrongTask = await load("", storage, "/task/another-flight/settings/"); assert.equal(wrongTask.has("field-review_client"), false);
@@ -208,7 +145,7 @@ const fs = require("fs"), vm = require("vm"), assert = require("assert/strict");
  const wrongProject = await load("");
  for(let n=0;n<100 && storage.has(key);n++) await new Promise(r=>setTimeout(r,10));
  assert.equal(storage.has(key), false); assert.equal(wrongProject.has("field-review_client"), false);
- console.log(JSON.stringify({taskHeaderToAuthorizedSettings: true, settingsToTaskStatus: true, roundTripSave: true, publicCardLocked: true, crossTaskLocked: true, crossProject403Cleared: true, capabilityNotInPublicPage: true}));
+ console.log(JSON.stringify({taskHeaderToAuthorizedSettings: true, settingsToTaskStatus: true, roundTripSave: true, cancelDiscardsAndReturnsStatus: true, publicCardLocked: true, crossTaskLocked: true, crossProject403Cleared: true, capabilityNotInPublicPage: true}));
 })().catch(e=>{console.error(e.stack);process.exit(1)});
 '''
 
@@ -231,7 +168,8 @@ class SettingsUIEventsTests(unittest.TestCase):
             from flightcheck_cli.settings import Handler
             surface = Surface(); surface.feed((fixtures.PRODUCT / 'status-card/settings.html').read_text())
             service = self.service(engine, root)
-            docs = root / "docs"; docs.mkdir(); (docs / "style.md").write_text("Synthetic style guide")
+            docs = root / "docs"; docs.mkdir(); (docs / "style.md").write_text("Synthetic style guide"); (docs / "runbook.md").write_text("Synthetic runbook")
+            self.save(service, {"resources": {"style_guide":"docs/style.md", "runbook":"docs/runbook.md"}})
             class Provider:
                 def query(self, query, variables):
                     return {'project': {'id': 'SYNTHETIC_PROJECT', 'title': 'Team delivery', 'url': 'https://github.com/orgs/example/projects/7', 'closed': False,
