@@ -93,6 +93,8 @@ const fs = require("fs"), vm = require("vm"), readline = require("readline"), as
   assert.equal(doc.getElementById("save").disabled, false, doc.getElementById("message").textContent);
   assert.equal(doc.getElementById("groups").hidden, true);
   assert.match(doc.getElementById("effects").textContent, /docs\/style.md/);
+  assert(!doc.getElementById("change-summary").textContent.includes("SYNTHETIC_PROJECT"));
+  assert(!doc.getElementById("change-summary").textContent.includes("OPTION_"));
   await doc.getElementById("cancel").emit("click");
   assert.equal(doc.getElementById("groups").hidden, false);
   assert.equal(doc.getElementById("save").disabled, true);

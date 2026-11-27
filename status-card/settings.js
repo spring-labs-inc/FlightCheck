@@ -286,10 +286,14 @@ function human(value, key) {
   return friendlyStatuses[value] || states[value] || ({"default-for-coding": "On for coding work", "opt-in": "Opt in per task", "native-choice": "Native choice", "worktree-required": "Require a separate worktree", "disabled": "Off", "advisory": "Report and continue", "required": "Block if unavailable"})[value] || String(value);
 }
 function showPreview(result) {
-  const effects = byId("effects"); effects.replaceChildren(); const list = node("ul");
+  const effects = byId("effects"); effects.replaceChildren(); const list = node("ul"); list.id = "change-summary";
   function difference(before, after, path) {
     if (equal(before, after) || path.at(-1).endsWith("reference")) return;
     const key = path.at(-1);
+    if (path[0] === "resources" && key === "project_board") {
+      const location = value => typeof value === "string" ? value : value?.url || (value?.unavailable ? "Unavailable" : "Not configured");
+      const item = node("li"); item.append(node("b", "Board: "), node("span", location(before) === location(after) ? "Connection confirmed or updated" : location(before) + " → " + location(after))); list.append(item); return;
+    }
     if (["schema", "provider", "project_id", "field_id", "membership"].includes(key) && path[0] === "status_sync") return;
     if (before && after && typeof before === "object" && typeof after === "object" && !Array.isArray(before) && !Array.isArray(after)) {
       for (const name of new Set([...Object.keys(before), ...Object.keys(after)])) difference(before[name], after[name], [...path, name]); return;
