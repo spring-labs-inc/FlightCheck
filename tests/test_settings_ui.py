@@ -122,6 +122,12 @@ const fs = require("fs"), vm = require("vm"), readline = require("readline"), as
   await doc.getElementById("settings").emit("submit");
   assert.equal(doc.getElementById("save").disabled, true);
   assert.match(doc.getElementById("message").textContent, /connection for this board/);
+  // Confirm an existing manual connection without inventing a changed ID.
+  await doc.getElementById("confirm-board").emit("click");
+  await doc.getElementById("settings").emit("submit");
+  assert.equal(doc.getElementById("save").disabled, false, doc.getElementById("message").textContent);
+  await doc.getElementById("reload").emit("click");
+
   console.log(JSON.stringify({groups: 5, typedFormSave: true, cancelPreview: true, conflictFocused: true, staleSaveRefused: true, concurrentChoicePreserved: true, explicitFreshSave: true}));
   process.exit(0);
 })().catch(error => {console.error(error.stack); process.exit(1);});

@@ -46,7 +46,10 @@ existing GitHub project through the existing provider transport and credentials.
 It shows observed board/status names without saving, granting access or changing
 membership. Ambiguous or incomplete fields are reported inline. Saved IDs are
 reused; manual connection IDs appear once under Advanced when names cannot be
-read. A changed, unbound board URL cannot enable synchronization with another
+read. The single **Use this connection** fallback action confirms the current
+board and supplied IDs without requiring a fake edit; changing them invalidates
+that confirmation. It does not claim discovery or verified access.
+A changed, unbound board URL cannot enable synchronization with another
 board's old IDs, including after saving while synchronization is off. Mappings
 hide when off, preserving the configured connection and option values. The
 advisory/required failure policy is a separate meaningful Advanced choice.

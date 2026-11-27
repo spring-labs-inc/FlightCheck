@@ -156,7 +156,14 @@ function renderSync(parent, advanced) {
   const statusField = field(manual, "sync-field-id", "Status field ID", policy.field_id || "");
   const optionFields = {};
   for (const [state, label] of Object.entries(states)) optionFields[state] = field(manual, "sync-option-" + state, label + " status ID", policy.options[state] || "");
-  const controls = {}; let metadata = current.board_details, selected = clone(policy), lastMode = policy.mode === "required" ? "required" : "advisory";
+  const controls = {}; let manualDecision; let metadata = current.board_details, selected = clone(policy), lastMode = policy.mode === "required" ? "required" : "advisory";
+  function manualValues() {return {project_id: project.value.trim() || null, field_id: statusField.value.trim() || null, options: Object.fromEntries(Object.entries(optionFields).map(([key, control]) => [key, control.value.trim()]))};}
+  const confirm = node("button", "Use this connection"); confirm.type = "button"; confirm.id = "confirm-board";
+  confirm.addEventListener("click", () => {
+    const values = manualValues(), url = resource.input.value.trim();
+    if (!url || !values.project_id || !values.field_id || Object.values(values.options).some(value => !value) || new Set(Object.values(values.options)).size !== 5) {message("Provide this board’s exact project, field and five distinct status IDs", true); return;}
+    manualDecision = {url, ...values}; invalidate(); message("Manual connection ready for review. These supplied IDs have not been discovered or access-verified.");
+  }); manual.append(confirm);
   function renderMappings() {
     mappings.replaceChildren();
     if (metadata) {
@@ -199,19 +206,20 @@ function renderSync(parent, advanced) {
   readers.push(result => {
     const pointer = resource.value(), url = typeof pointer === "string" ? pointer : pointer?.url;
     let value = clone(policy);
-    const manualValues = {project_id: project.value.trim() || null, field_id: statusField.value.trim() || null, options: Object.fromEntries(Object.entries(optionFields).map(([key, control]) => [key, control.value.trim()]))};
-    const manualChanged = manualValues.project_id !== policy.project_id || manualValues.field_id !== policy.field_id || Object.keys(states).some(key => manualValues.options[key] !== (policy.options[key] || ""));
+    const supplied = manualValues(), manualAccepted = equal(manualDecision, {url, ...supplied});
+    const manualChanged = supplied.project_id !== policy.project_id || supplied.field_id !== policy.field_id || Object.keys(states).some(key => supplied.options[key] !== (policy.options[key] || ""));
     if (metadata && enabled.checked && Object.values(controls).some(control => !metadata.field.options.some(option => option.id === control.value))) throw new Error("Choose existing statuses from the observed board field");
     if (metadata) value = {...selected, options: enabled.checked ? Object.fromEntries(Object.entries(controls).map(([key, control]) => [key, control.value])) : {...selected.options}};
-    else if (manualChanged) value = {...policy, provider: "github-projects-v2", ...manualValues};
+    else if (manualAccepted) value = {...policy, provider: "github-projects-v2", ...supplied};
+    else if (manualChanged) throw new Error("Use this connection to confirm edited manual IDs before reviewing");
     if (enabled.checked && (!url || !value.project_id || !value.field_id || Object.keys(states).some(key => !value.options[key]))) throw new Error("Read board details or complete Advanced connection setup before enabling synchronization");
     const previousURL = typeof resource.existing === "string" ? resource.existing : resource.existing?.url;
     const bound = Boolean(resource.existing?.url && resource.existing.url === url && resource.existing.provider === policy.provider && resource.existing.project_id === policy.project_id);
-    if (enabled.checked && !bound && !metadata && !manualChanged) throw new Error("Read details or explicitly confirm the connection for this board before enabling synchronization");
+    if (enabled.checked && !bound && !metadata && !manualAccepted) throw new Error("Read details or explicitly confirm the connection for this board before enabling synchronization");
     if (enabled.checked) {lastMode = mode.value; value.mode = lastMode;} else value.mode = "disabled";
     if (!equal(value, policy)) result.status_sync = value;
     let destination = pointer;
-    if (url && value.project_id && (metadata || bound || manualChanged)) destination = {url, provider: value.provider, project_id: value.project_id};
+    if (url && value.project_id && (metadata || bound || manualAccepted)) destination = {url, provider: value.provider, project_id: value.project_id};
     if (JSON.stringify(destination) !== JSON.stringify(resource.existing)) result.resources = {...result.resources, project_board: destination ?? null};
   });
 }
