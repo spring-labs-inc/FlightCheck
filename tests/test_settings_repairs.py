@@ -25,7 +25,7 @@ class SettingsRepairTests(CheckoutCases, unittest.TestCase):
     config_cli = fixtures.SettingsTests.config_cli
 
     @contextlib.contextmanager
-    def installed_flight(self):
+    def installed_flight(self, checks=None):
         with self.fixture(), self.config_fixture() as (_, root, engine, installed, cli, supplied):
             from flightcheck_cli.settings import Settings
             self.root = root
@@ -34,7 +34,9 @@ class SettingsRepairTests(CheckoutCases, unittest.TestCase):
             self.base = self.git(root, 'rev-parse', 'HEAD')
             self.registry = self.associations.Registry(cli.configuration_registry(engine, root))
             owner = Settings(engine, root, 'fixture', 'session-1', self.registry.directory, reference='Owner authorizes synthetic project Settings', project_scope=True)
-            plan = owner.preview({'changes': {'default_branch': 'trunk'}, 'expected_revision': owner.read()['revision']})
+            changes = {'default_branch': 'trunk'}
+            if checks is not None: changes['checks'] = checks(self.area)
+            plan = owner.preview({'changes': changes, 'expected_revision': owner.read()['revision']})
             owner.apply({'plan_id': plan['plan_id']})
             self.adopt(root, decision={'adopt_existing': True, 'reference': 'Owner adopts only synthetic installer bytes'})
             yield owner, engine
@@ -88,25 +90,54 @@ class SettingsRepairTests(CheckoutCases, unittest.TestCase):
                     server.shutdown(); thread.join(timeout=5)
 
     def test_changed_checks_block_old_requests_but_independent_proof_reuses(self):
-        with self.installed_flight() as (owner, engine):
+        def configured(area):
+            command = [sys.executable, '-B', '-c', "from pathlib import Path;import time,sys;area=Path(sys.argv[1]);\nwith (area/'started').open('a') as f:f.write('started\\n')\nwhile not (area/'finish').exists():time.sleep(.02)\nwith (area/'old-command-runs').open('a') as f:f.write('run\\n')", str(area)]
+            return [{'name': 'original configured check', 'command': command, 'phase': 'cheap'}]
+        with self.installed_flight(configured) as (owner, engine):
             marker = self.area / 'old-command-runs'
-            command = [sys.executable, '-B', '-c', "from pathlib import Path;p=Path(__import__('sys').argv[1]);p.write_text(p.read_text()+'run\\n' if p.exists() else 'run\\n')", str(marker)]
+            command = owner.read()['values']['checks'][0]['command']
             env = dict(self.env, CODEX_THREAD_ID='session-1')
+            independent_marker = self.area / 'independent-unit-runs'
+            independent_command = [sys.executable, '-B', '-c', "from pathlib import Path;p=Path(__import__('sys').argv[1]);p.write_text(p.read_text()+'run\\n' if p.exists() else 'run\\n')", str(independent_marker)]
             affected = self.capture(command, 'affected', ['checks'])
-            independent = self.capture(command, 'independent', [])
-            for args in (affected, independent):
-                run = subprocess.run(args, cwd=self.root, env=env, capture_output=True, text=True, timeout=20)
-                self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            independent = self.capture(independent_command, 'independent', [])
+            unit = subprocess.run(independent, cwd=self.root, env=env, capture_output=True, text=True, timeout=20)
+            self.assertEqual(unit.returncode, 0, unit.stdout + unit.stderr)
             old = self.registry.get('fixture')
-            checks = [{'name': 'replacement check', 'command': [sys.executable, '-B', '-c', "raise SystemExit('replacement selected')"], 'phase': 'authoritative'}]
-            self.save(owner, {'checks': checks})
+            processes = []
+            try:
+                for gate in ('affected', 'overlap'):
+                    processes.append(subprocess.Popen(self.capture(command, gate, ['checks']), cwd=self.root, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True))
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline:
+                    started = self.area / 'started'
+                    if started.exists() and len(started.read_text().splitlines()) == 2: break
+                    time.sleep(.02)
+                self.assertTrue(started.exists()); self.assertEqual(len(started.read_text().splitlines()), 2)
+                checks = [{'name': 'replacement check', 'command': [sys.executable, '-B', '-c', "raise SystemExit('replacement selected')"], 'phase': 'authoritative'}]
+                self.save(owner, {'checks': checks})
+                self.assertEqual(self.registry.get('fixture')['configuration'], old['configuration'], 'Save during overlapping captures waits for a safe boundary')
+                (self.area / 'finish').touch()
+                for process in processes:
+                    output = process.communicate(timeout=25)[0]; self.assertEqual(process.returncode, 0, output)
+                for pointer in ('affected', 'overlap'):
+                    run_id = json.loads((self.area / ('receipts/gate-' + pointer + '.json')).read_bytes())
+                    receipt = json.loads((self.area / 'receipts' / run_id / 'run.json').read_bytes())
+                    self.assertEqual(receipt['request']['command'], command)
+                    self.assertEqual(receipt['checkout_context']['configuration_revision'], old['configuration']['revision'])
+                    self.assertEqual(receipt['checkout_context_after']['configuration_revision'], old['configuration']['revision'])
+            finally:
+                (self.area / 'finish').touch()
+                for process in processes:
+                    if process.poll() is None: process.communicate(timeout=25)
             run = subprocess.run(affected, cwd=self.root, env=env, capture_output=True, text=True, timeout=20)
-            self.assertNotEqual(run.returncode, 0, 'Old command must not be certified under adopted check definitions')
+            self.assertNotEqual(run.returncode, 0, 'Old configured command must not be certified under adopted check definitions')
             self.assertIn('reconcil', run.stdout + run.stderr)
             self.assertEqual(marker.read_text().splitlines(), ['run', 'run'])
             reuse = subprocess.run(independent, cwd=self.root, env=env, capture_output=True, text=True, timeout=20)
             self.assertEqual(reuse.returncode, 0, reuse.stdout + reuse.stderr)
             self.assertIn('Check reused:', reuse.stdout)
+            self.assertEqual(independent_marker.read_text().splitlines(), ['run'])
             capture = self.module('capture_check'); handoff = self.module('handoff')
             with patch.dict(os.environ, CODEX_THREAD_ID='session-1'):
                 current = capture.guard_context(self.root, {'checkout_binding': {'registry': str(self.registry.directory), 'flight': 'fixture'}})
