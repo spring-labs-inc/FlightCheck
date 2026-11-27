@@ -93,9 +93,9 @@ class ProjectSettingsTests(CheckoutCases, unittest.TestCase):
                 self.queue(self.config.revision(self.config.encoded(values)), 'Owner changes check assumptions')
                 (self.root / self.config.CONFIG).write_bytes(self.config.encoded(values))
                 rerun = subprocess.run(args('first'), cwd=self.root, env=env, capture_output=True, text=True, timeout=20)
-                self.assertEqual(rerun.returncode, 0, rerun.stdout + rerun.stderr)
-                self.assertNotIn('Check reused:', rerun.stdout)
-                self.assertEqual((events / 'first.runs').read_text().splitlines(), ['run', 'run'])
+                self.assertNotEqual(rerun.returncode, 0, 'Changed check definitions require trusted request reconciliation')
+                self.assertIn('reconcil', rerun.stdout + rerun.stderr)
+                self.assertEqual((events / 'first.runs').read_text().splitlines(), ['run'])
             finally:
                 for process in processes:
                     if process.poll() is None: process.kill(); process.communicate()

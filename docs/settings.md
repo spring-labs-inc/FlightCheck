@@ -143,6 +143,13 @@ silently bind authority to the new revision or reset retries.
 Client worktree count, native retention and archive preferences remain in the
 native client. Mandatory safe closeout and preservation are not Settings toggles.
 
+At the normal lifecycle planning boundary, the confirmed effective preferences
+select concrete `next_actions` for review from the existing verified, eligible,
+explicitly granted inventory. Turning a preference off removes only its automatic
+proposal. The artifact still requires the independent disposition and closeout
+accounting. Save and proposal generation delete nothing, create no cleanup grants
+and change no frozen decisions, retention obligations or reservations.
+
 ## Evidence & Delivery and remaining Advanced controls
 
 | Control | Purpose and default | Choices, scope and effect |
@@ -209,10 +216,16 @@ reservations and other-host work are honestly deferred.
 
 Pass reuse stays strict about source, request, full input fingerprint, grants,
 physical checkout/session, runtime and policy. A frozen
-`--configuration-dependencies` JSON list may declare known common roots/nested
-resource paths. Omitted/unknown declarations are conservative. Only valid same-
+`--configuration-dependencies` JSON list may declare supported common setting
+paths, including configured custom resources. Complete paths are validated: an
+unknown child or child of a scalar cannot declare independence. Omitted/unknown declarations are conservative. Only valid same-
 execution adoption history with unaffected dependencies permits reuse; mid-check
-identity remains strict. Accepted evidence is reused through normal incremental
+identity remains strict. After check commands or classifications change, affected
+frozen requests are blocked until the controller reconciles the exact command
+and phase against the common model. The recorder's `--configuration-check NAME`
+binds that selected check; handoff also verifies its current classification.
+Settings never rewrites a frozen gate. Explicitly independent unaffected requests
+may retain their original receipt and complete fingerprint. Accepted evidence is reused through normal incremental
 review without retagging old receipts or historical results.
 
 The terminal common interface still exposes explicit `config read`, `config

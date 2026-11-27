@@ -24,6 +24,25 @@ HOST = {"python", "observed_python", "evidence_dir", "checks", "reviewer_access"
         "policy_reference", "activation_reference", "nit_tracker"}
 
 
+def dependency_paths(values):
+    """Canonical setting paths only; arrays and scalar values are leaves.
+
+    Custom resource names come from this project's actual common model. No
+    guessed child of a scalar or unknown option can declare independence.
+    """
+    paths = set(MUTABLE) | {"python", "observed_python"}
+    def visit(value, prefix):
+        paths.add(prefix)
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if isinstance(key, str) and "." not in key:
+                    visit(child, prefix + "." + key)
+    for key, value in values.items():
+        if key in MUTABLE or key in ("python", "observed_python"):
+            visit(value, key)
+    return sorted(paths)
+
+
 def encoded(value):
     return (json.dumps(value, sort_keys=True, indent=2, allow_nan=False) + "\n").encode()
 
@@ -59,7 +78,7 @@ def text(value, name):
 
 
 def cleanup_policy(value):
-    """Future launch preferences only; concrete Registry grants stay separate."""
+    """Automatic proposal preferences; concrete grants/disposition stay separate."""
     value = copy.deepcopy({} if value is None else value)
     allowed = {"local_branches", "remote_branches", "temporary_worktrees", "retained_artifacts"}
     if not isinstance(value, dict) or value.keys() - allowed:

@@ -329,37 +329,6 @@ class Settings:
             raise ValueError("Read-only audit needs an explicit supported repository identity")
         return audit.audit(self.root, self.registry, repository, remote=remote)
 
-    def reconfigure_preview(self, data):
-        self.verify_context()
-        if not self.registry:
-            raise ValueError("Explicit active-flight reconfiguration needs the private Registry")
-        associations, _ = self.helpers()
-        registry = associations.Registry(self.registry)
-        state = registry.read()
-        old = next((r for r in state["records"] if r["flight"] == data["flight"]), None)
-        if not old or old["flight"] != self.task or old["lifecycle"]["state"] not in ("active", "review"):
-            raise ValueError("This Settings capability can reconfigure only its own active flight")
-        if old["repository"]["git_common_dir"] != self.engine.git(self.root, "rev-parse", "--path-format=absolute", "--git-common-dir"):
-            raise ValueError("Active flight belongs to another repository")
-        current = cli.configuration_model(self.engine, self.root).snapshot(self.root)
-        reference = data.get("reference") or self.reference + "#active-settings-" + secrets.token_hex(12)
-        updated = associations.reconfigure(old, current, reference)
-        plan = {"kind": "active-reconfiguration", "registry_revision": state["revision"], "configuration_revision": current["revision"], "record": updated}
-        identifier = sha(encoded(plan)); self.plans[identifier] = plan
-        return {"status": "reconfiguration_preview", "plan_id": identifier, "effects": updated["reconfiguration"], "grants_unchanged": True,
-                "next": "Affected checkout/check/evidence/status-sync validation remains required before execution"}
-
-    def reconfigure_apply(self, data):
-        self.verify_context()
-        plan = self.plans.get(data["plan_id"])
-        if not plan or plan.get("kind") != "active-reconfiguration":
-            raise ValueError("Preview the exact active-flight reconfiguration first")
-        associations, _ = self.helpers()
-        if cli.configuration_model(self.engine, self.root).snapshot(self.root)["revision"] != plan["configuration_revision"]:
-            raise ValueError("Configuration changed; preview active reconfiguration again")
-        result = associations.Registry(self.registry).save(plan["record"], expected_revision=plan["registry_revision"])
-        self.plans.clear()
-        return {"status": "reconfigured_pending_revalidation", "reconfiguration": result["record"]["reconfiguration"]}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -434,7 +403,7 @@ class Handler(BaseHTTPRequestHandler):
             actions = {"preview": lambda: s.preview(data), "apply": lambda: s.apply(data), "recover": s.recover,
                        "browse": lambda: s.browse(data),
                        "board-discover": lambda: s.board_discover(data),
-                       "audit": lambda: s.audit(remote=data.get("remote", False)), "reconfigure-preview": lambda: s.reconfigure_preview(data), "reconfigure-apply": lambda: s.reconfigure_apply(data)}
+                       "audit": lambda: s.audit(remote=data.get("remote", False))}
             if action not in actions:
                 raise ValueError("Unsupported Settings action")
             self.send(200, actions[action]())
@@ -529,6 +498,24 @@ class CardRequest(Handler):
     def end_headers(self): return self.request.end_headers()
 
 
+def verify_card_project(engine, root, status, task):
+    """Bind a task transport to its canonical Git project, including workers.
+
+    A linked checkout and its stable base share git-common-dir. Another clone
+    with the same remote or friendly task name is still a different project.
+    Read this private route on every request, including cached capabilities.
+    """
+    route_path = tx.no_links(status.parent / "reply-route.json")
+    route = json.loads(route_path.read_bytes())
+    snapshot = json.loads(tx.no_links(status).read_bytes())
+    if route.get("task") != task or snapshot.get("task") != task or not route.get("checkout"):
+        raise ValueError("Settings task lacks its matching project route")
+    checkout = tx.no_links(Path(route["checkout"]).expanduser().absolute())
+    common = lambda path: Path(engine.git(path, "rev-parse", "--path-format=absolute", "--git-common-dir")).resolve(strict=True)
+    if common(checkout) != common(root):
+        raise ValueError("Settings task transport belongs to another project repository")
+
+
 def card_request(request, assets):
     """A private owner-only binding enables this exact task, never a snapshot."""
     path = request.server.task_file.parent / "settings-session.json"
@@ -543,6 +530,8 @@ def card_request(request, assets):
     task = request.server.task_route.removeprefix("/task/").rstrip("/")
     if binding["task"] != task:
         raise ValueError("Settings capability belongs to another task")
+    engine = cli.load_installer(binding["engine"])
+    verify_card_project(engine, Path(binding["root"]), request.server.task_file, task)
     cached = getattr(request.server, "settings_binding", None)
     if cached is None or cached[0] != sha(raw):
         engine = cli.load_installer(binding["engine"])
@@ -652,6 +641,7 @@ def main(argv, engine):
     snapshot = json.loads(status.read_bytes())
     if snapshot.get("task") != args.task:
         raise ValueError("Settings must use the exact task card")
+    verify_card_project(engine, root, status, args.task)
     binding = {"schema": 1, "scope": "project" if args.project_scope else "task", "task": args.task, "root": str(root), "session": args.session,
                "registry": args.registry, "reference": args.authorize_local_settings,
                "engine": str(Path(engine.__file__).resolve()), "token": settings.token}

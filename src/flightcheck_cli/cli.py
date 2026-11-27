@@ -16,7 +16,7 @@ from .source import encoded, installer, load_installer, sha
 
 PIN = ".flightcheck/distribution.json"
 ADAPTER_COMPONENTS = (
-    "workflow/scripts/project_config.py", "workflow/scripts/status_sync_config.py", "workflow/scripts/flight_associations.py", "workflow/scripts/checkout_guard.py", "workflow/scripts/capture_check.py", "workflow/scripts/handoff.py", "setup/install.py",
+    "workflow/scripts/project_config.py", "workflow/scripts/status_sync_config.py", "workflow/scripts/flight_associations.py", "workflow/scripts/checkout_guard.py", "workflow/scripts/capture_check.py", "workflow/scripts/handoff.py", "workflow/scripts/flight_lifecycle.py", "setup/install.py",
     "src/flightcheck_cli/__init__.py", "src/flightcheck_cli/cli.py", "src/flightcheck_cli/transaction.py",
     "src/flightcheck_cli/source.py", "src/flightcheck_cli/settings.py",
     "status-card/serve.py", "status-card/settings.html", "status-card/settings.js", "status-card/settings.css", "status-card/card.css", "status-card/shared.css", "status-card/task.html",

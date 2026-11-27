@@ -14,6 +14,7 @@ from pathlib import Path, PurePosixPath
 import re
 import stat
 import subprocess
+import sys
 import time
 
 import launch_detection
@@ -945,8 +946,29 @@ def _build_plan(checkout, registry, flight, *, delivery=None, policy=None, clien
 
 
 def plan(control_checkout, registry, flight, *, delivery=None, policy=None, client_state=None, preservation=None):
-    return _build_plan(control_checkout, registry, flight, delivery=delivery, policy=policy,
-                       client_state=client_state, preservation=preservation)
+    report = _build_plan(control_checkout, registry, flight, delivery=delivery, policy=policy,
+                         client_state=client_state, preservation=preservation)
+    # The normal lifecycle plan command is the review queue. Preferences choose
+    # concrete proposals only; they never remove mandatory disposition rows,
+    # create a grant, freeze an operation, or perform cleanup from Settings.
+    report["next_actions"] = []
+    registry, _, record = _read(registry, flight)
+    preferences = record["configuration"]["values"].get("cleanup_policy", {})
+    switches = {"local_branch": "local_branches", "remote_branch": "remote_branches", "worktree": "temporary_worktrees"}
+    rows = report.get("artifacts", [])
+    if not report.get("global_blockers", report.get("blockers", [])):
+        for row in rows:
+            if (row.get("state") != "eligible" or preferences.get(switches.get(row["kind"])) is not True
+                    or any(not any(item["kind"] == "worktree" and item["identity"] == path and item["state"] == "eligible"
+                                   and preferences.get("temporary_worktrees") is True for item in rows)
+                           for path in row.get("requires", []))):
+                continue
+            report["next_actions"].append({"artifact": row["id"], "kind": row["kind"], "identity": row["identity"],
+                "expected_oid": row.get("expected_oid"), "requires": row.get("requires", []),
+                "review": "Review this exact verified proposal before the existing scoped apply; all mandatory disposition remains required",
+                "command": [sys.executable, "-B", str(Path(__file__).resolve()), "apply", "--checkout", str(Path(control_checkout).resolve()),
+                            "--registry", str(registry.directory if isinstance(registry, Registry) else Path(registry)), "--flight", flight, "--plan", "REVIEWED_PLAN.json", "--artifact", row["id"]]})
+    return report
 
 
 def _persist(registry, flight, binding, event=None, delivery=None):

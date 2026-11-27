@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 from capture_check import (digest, evidence_directory, fingerprint, latest_run, matches_pass, same_pass_checkout,
-                           write_json, verify_checkout, checkout_identity, same_checkout)
+                           write_json, verify_checkout, checkout_identity, same_checkout, configuration_request, request_dependencies)
 from proof import acceptance_status, contract_status, freeze, obligations_status, record_review, verdict_status
 from recovery import plan as recovery_plan
 from behavior import challenge_brief, proposal_packet, record_plan, status as behavior_status
@@ -107,6 +107,10 @@ def gate_status(root, gate, candidate, final, checkout_context=None):
     request = gate["request"]
     result = {"id": gate_id, "scope": request["scope"]}
     try:
+        try:
+            configuration_request(checkout_context, request, gate.get("phase"))
+        except ValueError as error:
+            return dict(result, status="unverified", reason=str(error))
         if request["artifacts"] and request.get("isolated_reports") is not True:
             return dict(result, status="unverified", reason="reports require invocation-specific isolation")
         run, receipt = latest_run(root, latest)
@@ -117,8 +121,8 @@ def gate_status(root, gate, candidate, final, checkout_context=None):
             return dict(result, status="unverified", reason="receipt owner does not match the gate assignment")
         if receipt["status"] != "finished":
             return dict(result, status="pending", reason=receipt["status"])
-        if (not same_pass_checkout(receipt.get("checkout_context"), checkout_context, request.get("configuration_dependencies"))
-                or not same_pass_checkout(receipt.get("checkout_context_after"), checkout_context, request.get("configuration_dependencies"))):
+        if (not same_pass_checkout(receipt.get("checkout_context"), checkout_context, request_dependencies(request))
+                or not same_pass_checkout(receipt.get("checkout_context_after"), checkout_context, request_dependencies(request))):
             return dict(result, status="stale", reason="receipt checkout execution identity changed")
         if receipt["exit_code"] != 0:
             output = receipt["output"]

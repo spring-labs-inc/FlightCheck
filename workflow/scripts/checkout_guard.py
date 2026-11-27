@@ -22,7 +22,7 @@ from urllib.parse import urlparse
 
 import launch_detection
 from flight_associations import AssociationError, Registry, encoded, repository_identity, validate_record, reservation_conflicts
-from project_config import META, normalize, protected
+from project_config import META, normalize, protected, dependency_paths
 
 
 class CheckoutError(ValueError):
@@ -498,6 +498,8 @@ def _report(registry, revision, record, state, phase, policy):
             "head_binding": _digest({"binding_digest": binding_digest, "commit": state["commit"]}),
             "execution_digest": _digest(execution),
             "settings_adoptions": copy.deepcopy(record.get("settings_adoptions", [])),
+            "configuration_dependency_paths": dependency_paths(record["configuration"]["values"]),
+            "configuration_checks": copy.deepcopy(record["configuration"]["values"].get("checks", [])),
             "unfinished_identity": state["unfinished_identity"], "generation": guard["generation"],
             "limits": ["Point-in-time verification; native selection/recovery is observed, never performed",
                        "No universal interception of external Git, native-client or provider commands",

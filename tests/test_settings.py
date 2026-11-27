@@ -254,13 +254,10 @@ class SettingsTests(unittest.TestCase):
             registry, record = self.registry(area, root, engine); service = self.service(engine, root, registry.directory)
             self.save(service, {"checkout_policy": {"mode": "worktree-required"}, "checks": [{"name": "new", "command": ["record-only"], "phase": "cheap"}]})
             during = registry.get(record["flight"]); self.assertEqual(during, record)
-            plan = service.reconfigure_preview({"flight": record["flight"], "reference": "Owner explicit active adoption"})
-            self.assertEqual(registry.get(record["flight"]), record, "A preview cannot rebind active work")
-            service.reconfigure_apply({"plan_id": plan["plan_id"]})
-            current = registry.get(record["flight"]); self.assertEqual(current["grants"], record["grants"]); self.assertEqual(current["status_sync"], record["status_sync"])
-            self.assertEqual(current["configuration_history"], [record["configuration"]]); self.assertEqual(current["configuration"]["revision"], service.read()["revision"])
-            self.assertEqual(current["reconfiguration"]["required_revalidation"], ["checkout", "checks", "evidence"])
-            with self.assertRaises(ValueError): service.reconfigure_preview({"flight": "another-flight", "reference": "Owner"})
+            self.assertFalse(hasattr(service, "reconfigure_preview"))
+            self.assertFalse(hasattr(service, "reconfigure_apply"))
+            self.assertEqual(registry.get(record["flight"]), record, "Unverified legacy records cannot bypass the safe execution boundary")
+            self.assertEqual(service.read()["flights"][0]["configuration"], record["configuration"])
 
     def test_checkout_modes_and_capabilities(self):
         with self.config_fixture() as (area, root, engine, installed, cli, supplied):

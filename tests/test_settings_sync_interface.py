@@ -33,8 +33,9 @@ class SettingsSyncInterfaceTests(unittest.TestCase):
             registry, original = self.registry(area, root, engine)
             service = self.service(engine, root, registry.directory)
             self.save(service, {"status_sync": self.policy()})
-            preview = service.reconfigure_preview({"flight": original["flight"], "reference": "Owner captures initial policy"})
-            service.reconfigure_apply({"plan_id": preview["plan_id"]})
+            associations, _ = service.helpers()
+            current = cli.configuration_model(engine, root).snapshot(root)
+            registry.save(associations.reconfigure(registry.get(original["flight"]), current, "Synthetic model-only setup"), expected_revision=registry.read()["revision"])
             active = registry.get(original["flight"])
             grant = {"schema": 1, "authority": "owner", "reference": "Fixture exact status authority", "repository": original["repository"]["id"],
                      "provider": self.policy()["provider"], "project_id": self.policy()["project_id"], "field_id": self.policy()["field_id"],
@@ -47,9 +48,10 @@ class SettingsSyncInterfaceTests(unittest.TestCase):
                 with self.subTest(change=change):
                     self.save(service, change)
                     before = registry.get(original["flight"])
-                    plan = service.reconfigure_preview({"flight": original["flight"], "reference": "Owner adopts unrelated defaults"})
-                    self.assertIn("status_sync", plan["effects"]["required_revalidation"], "Exact status grant binds the entire revision, including unrelated-field updates")
-                    service.reconfigure_apply({"plan_id": plan["plan_id"]})
+                    current = cli.configuration_model(engine, root).snapshot(root)
+                    revised = associations.reconfigure(before, current, "Synthetic common-model revalidation witness")
+                    self.assertIn("status_sync", revised["reconfiguration"]["required_revalidation"], "Exact status grant binds the entire revision, including unrelated changes")
+                    registry.save(revised, expected_revision=registry.read()["revision"])
                     after = registry.get(original["flight"])
                     self.assertEqual(after["grants"], before["grants"])
                     self.assertEqual(after["status_sync"], original["status_sync"])
