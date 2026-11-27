@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parent
 ASSETS = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/card.css": ("card.css", "text/css; charset=utf-8"),
+    "/shared.css": ("shared.css", "text/css; charset=utf-8"),
     "/card.js": ("card.js", "text/javascript; charset=utf-8"),
 }
 CSP = (
@@ -69,9 +70,11 @@ class StatusHandler(BaseHTTPRequestHandler):
                 route: ("task.html", "text/html; charset=utf-8"),
                 "/task.js": ("task.js", "text/javascript; charset=utf-8"),
                 "/card.css": ASSETS["/card.css"],
+                "/shared.css": ASSETS["/shared.css"],
                 route + "settings/": ("settings.html", "text/html; charset=utf-8"),
                 route + "settings/settings.js": ("settings.js", "text/javascript; charset=utf-8"),
                 route + "settings/card.css": ASSETS["/card.css"],
+                route + "settings/shared.css": ASSETS["/shared.css"],
                 route + "settings/settings.css": ("settings.css", "text/css; charset=utf-8"),
             }
         else:

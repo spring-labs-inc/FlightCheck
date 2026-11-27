@@ -1,0 +1,16 @@
+:root {
+  --task-copy-size: .82rem;
+  --task-label-size: .75rem;
+  --task-help-size: .75rem;
+  --task-heading-size: .88rem;
+  --task-title-size: clamp(1.25rem, 4vw, 1.65rem);
+  --task-navigation-size: .76rem;
+}
+.task-card h1 { font-size: var(--task-title-size); }
+.task-card h2, .task-card summary { font-size: var(--task-heading-size); }
+.task-details .gate-name { font-size: var(--task-copy-size); }
+.task-details .gate-detail { font-size: var(--task-help-size); }
+.surface-navigation { display: flex; justify-content: flex-end; margin-top: 14px; }
+.surface-navigation-link { color: var(--cyan); font: 620 var(--task-navigation-size)/1.5 var(--mono); text-decoration: none; }
+.surface-navigation-link:hover { text-decoration: underline; }
+.task-card .surface-navigation .surface-navigation-link:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }

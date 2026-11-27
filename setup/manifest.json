@@ -17,6 +17,7 @@
     ["setup/README.md", ".flightcheck/docs/setup.md", "shared"],
     ["LICENSE", ".flightcheck/LICENSE", "shared"],
     ["status-card/card.css", ".flightcheck/status-card/card.css", "shared"],
+    ["status-card/shared.css", ".flightcheck/status-card/shared.css", "shared"],
     ["status-card/card.js", ".flightcheck/status-card/card.js", "shared"],
     ["status-card/index.html", ".flightcheck/status-card/index.html", "shared"],
     ["status-card/pilot.json", ".flightcheck/status-card/pilot.json", "shared"],

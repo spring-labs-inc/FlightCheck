@@ -6,30 +6,32 @@ bytes. `_flightcheck.fields` records source, project/host scope, confirmation,
 confirmation reference and last validation. Resource entries retain individual
 provenance. Discovered values are suggestions until explicitly confirmed.
 
-The ordinary task card is read-only. Select Settings to view the access explanation.
-To enable private editing, explicitly launch a capability for the exact project,
-task and session, using the existing private task `status.json`:
+Settings configures persistent FlightCheck behavior for this project, including
+current and future flights. Open it between flights with explicit project editing
+authorization; no flight or task identifier is needed:
 
 ```sh
 python3 -B setup/install.py settings /path/to/project \
-  --task selected-task --session actual-session \
-  --card-status /private/task/status.json \
-  --registry /private/flight-associations \
   --authorize-local-settings /private/owner-settings-decision.json
 ```
 
-The terminal `flightcheck settings` and current copied `.flightcheck/install.py
-settings` accept the same arguments. This enables only the explicit local Settings
-session on the existing task listener. It reuses the task's discovered browser
-route, including SSH forwarding. A host listener address is not the forwarded
-browser address. If discovery is unavailable, establish the existing connector's
-once-per-connection profile and retry. There is no additional forwarding service.
+`flightcheck settings` and current copied `.flightcheck/install.py settings` use
+the same arguments. This reuses the existing Settings HTTP surface in the
+project's private transaction state. The returned host URL can be opened through
+the supported native preview or connection transport. A host listener address is
+not the client's forwarded browser address. There is no new forwarding service.
 
-Keep the returned capability URL private. The page removes its fragment before
-making requests. The capability is absent from task snapshots and request logs;
-private API requests require its exact project/task/session binding. Launching a
-new session rotates the capability; removing its private `settings-session.json`
-revokes it. Loopback Host validation alone does not authorize a write.
+An existing task listener is an optional transport: supply its private
+`--card-status`, matching `--task` and `--session`, and `--project-scope` to
+explicitly authorize project editing there. Legacy task-scoped capabilities
+remain compatible with their old API; the new editing UI requires fresh project
+authorization and never promotes an old token.
+
+Keep the capability URL private. The page removes its fragment before making
+requests. Private API requests require its exact project/session binding; internal
+transport identifiers are supplied by the launcher. The capability is absent from
+public task snapshots and request logs. Removing its private session record revokes
+it. Loopback Host validation alone does not authorize a write.
 
 ## Fields and authority
 
@@ -60,7 +62,7 @@ existing launch authorization. Technical provenance and validation remain under
 Advanced → Details; recovery appears only for an interrupted transaction.
 
 The bottom [ STATUS ] link returns to the card in this tab. Its bottom
-[ Settings ] link returns to the same project/task. After a successful authorized read, the exact
+[ SETTINGS ] link returns to the same project/task. After a successful authorized read, the exact
 capability/context is retained only in same-origin, exact-task `sessionStorage`
 for this tab for up to 30 minutes. It is never in a public link, cookie or
 persistent `localStorage`. The server verifies every request; wrong task/project/
@@ -74,7 +76,7 @@ in a fresh tab does not acquire editing permission; use the authorized launcher.
 | Project | `resources`, `default_branch`, `protected_branches` | Repository identity comes from the actual checkout. Resource pointers may name an explicit unavailable reason. Shared pointers should be repository-relative; private log paths and references stay local. Synchronization's confirmed project identity is `status_sync`, not a second independent board configuration. |
 | Workflow | `activation`, `activation_reference`, `checks`, `required_runtimes`, `preview` | Commands and runtime requirements are recorded data, never executed by read, preview or Save. Default-for-coding needs explicit owner authorization. Only managed activation text changes; surrounding project instructions survive. |
 | Checkout | `checkout_policy` mode, branch prefix, Git fallback and reference | Native choice remains the default. Worktree-required never silently weakens. Default/protected branches, verified ownership, same-checkout resume and detached delivery safeguards are mandatory. Native capability may honestly be unavailable; client worktree count/retention/archive settings remain in the client. |
-| Cleanup | `cleanup_policy` local branches, actual remote branches, temporary worktrees and retained preferences | These are separately confirmed future preferences. Launch captures the configuration revision and separately records exact artifact grants/inventory. Save neither deletes anything nor changes an existing grant or reservation. Required safe disposition and all preservation rules remain mandatory. |
+| Cleanup | `cleanup_policy` local branches, actual remote branches, temporary worktrees and retained preferences | These are persistent project preferences. Launch captures the configuration revision and separately records exact artifact grants/inventory. Save neither deletes anything nor changes an existing grant or reservation. Required safe disposition and all preservation rules remain mandatory. |
 | Evidence/delivery | `evidence_dir`, `review_client`, `reviewer_access`, `delivery`, `nit_tracker`, `policy_reference` | Private host values remain outside published projections. These are requirements/defaults and references, not provider/reviewer permission, credential, hook, delivery or cleanup grants. |
 
 `python` and its observed/pinned identity are displayed read-only. Structural
@@ -108,14 +110,40 @@ Stale revisions, changed preimages or component drift require a new preview;
 concurrent owner changes survive. `config recover` or Settings Recover restores
 the previous complete working configuration after an interrupted update.
 
-Defaults affect future flights. Settings displays captured active-flight revisions
-and grants separately. Explicit active reconfiguration retains the old snapshot,
-grants and synchronization history and declares required checkout/check/evidence/
-status-sync revalidation. Execution remains blocked until its existing checkout
-reconciliation and affected validation are completed. A configuration change does
-not authorize new provider operations or reset a synchronization retry budget.
-With synchronization enabled, any captured configuration revision change requires
-status-authority revalidation even when the status mapping is unchanged.
+Save records an adoption intent in the existing project Registry inside the same
+project transaction lock, before publishing the canonical configuration. Intents
+contain only a project locator, target revision and decision reference; configuration
+values remain in the one common model. An interrupted Save cannot adopt unpublished
+values. Superseded intents remain recoverable, including when a later Save fails.
+
+Eligible active work on this host adopts at the next supported execution boundary.
+The existing recorder holds a shared execution lease from initial context capture
+through final receipt publication, inherited by its foreground child. Overlapping
+checks finish under their original binding; the last safe boundary consumes a
+published intent exclusively. Read-only verification, audit, status polling and
+review admission never adopt settings. Worker captures participate automatically;
+a controller execution capture opts in with `--adopt-project-settings`. Commands
+outside this supported recorder are not intercepted.
+
+The existing reconfiguration record retains snapshots, grants and history. Checkout
+policies that require another physical checkout remain deferred, with workers left
+in place. Frozen delivery/disposition leases, other-host work and unknown native
+reservations remain protected. Required validation covers affected assumptions;
+existing results and permissions are preserved. Synchronization's accepted exact
+revision authority still needs reconciliation after any adopted revision change.
+
+Pass reuse remains strict about source, request, full input fingerprint, grants,
+physical checkout, session, runtime and policy. An explicitly frozen
+`--configuration-dependencies` JSON list can identify common configuration roots or
+nested resource paths for a check. Omitted or unknown declarations are conservative.
+Only verified adoption history with unaffected dependencies permits binding reuse;
+mid-check identity verification stays strict. Existing incremental review handles
+accepted dependencies without rewriting old receipts.
+
+Minor follow-ups inherit the current main tracker through the common model. An
+explicit Advanced override remains supported and survives updates. Repository
+resource pointers remain project-specific; machine paths and private state remain
+host-specific, without a machine-wide configuration system.
 
 ## Existing pinned installations
 
@@ -166,7 +194,8 @@ and board arrows open credential-free HTTP(S) destinations in a separate tab.
 Browse selects files or folders in the configured project on the checkout host;
 it does not upload files or mistake browser-machine selections for remote paths.
 Style guides and runbooks select files, documentation selects a folder, and logs
-can select either. The chooser lists names and types only, omits hidden/private
+can select either. The chooser starts near the current value, provides a path and clickable breadcrumbs,
+shows the selected item and allows clearing the selection. It lists names and types only, omits hidden/private
 entries and symlinks, and refuses traversal outside the project. Select changes
 only the draft; Cancel leaves it unchanged. External host paths, including private
 evidence storage, remain direct-entry fields; project browsing never relocates
@@ -176,6 +205,7 @@ Saved unavailability is shown beside the field. **Clear saved problem** removes
 that note only when the change is saved; choosing a replacement location also
 replaces it. Merely leaving the input blank preserves an existing problem record.
 
-The bottom **[ Settings ]** and **[ STATUS ]** links preserve the authorized
+The right-aligned **[ SETTINGS ]** below the entire Last progress section and
+bottom-right **[ STATUS ]** link preserve the authorized
 current-tab context. Successful **Save changes** returns to Task Status; stale or
 failed saves remain in Settings with the draft and error available.

@@ -131,14 +131,17 @@ def normalize(root, supplied, detected=None, origin="legacy", trusted_metadata=F
     value.setdefault("delivery", "No provider writes without owner approval")
     value.setdefault("python", detected.get("python"))
     value.setdefault("default_branch", detected.get("default_branch"))
-    pending = [k for k in ("evidence_dir", "nit_tracker", "checks", "policy_reference", "default_branch") if not value.get(k)]
+    value.setdefault("nit_tracker", None)  # Inherit the current main tracker, not a copied URL.
+    pending = [k for k in ("evidence_dir", "checks", "policy_reference", "default_branch") if not value.get(k)]
     if pending:
         raise ValueError("Resolve configuration together before applying: " + ", ".join(pending))
     if value["activation"] not in ("opt-in", "default-for-coding"):
         raise ValueError("activation must be opt-in or default-for-coding")
     if value["activation"] == "default-for-coding" and not value.get("activation_reference"):
         raise ValueError("default-for-coding needs an explicit owner activation_reference")
-    for key in ("nit_tracker", "policy_reference", "default_branch", "delivery", "python", "evidence_dir"):
+    if value["nit_tracker"] is not None:
+        text(value["nit_tracker"], "nit_tracker")
+    for key in ("policy_reference", "default_branch", "delivery", "python", "evidence_dir"):
         text(value.get(key), key)
     branch(root, value["default_branch"])
     discovered = detected.get("default_branch")
@@ -248,6 +251,11 @@ def protected(config):
     return sorted(set(config.get("protected_branches", [])) | {config["default_branch"]})
 
 
+def minor_tracker(config):
+    """One authoritative default, with an optional explicit local override."""
+    return config.get("nit_tracker") or config.get("resources", {}).get("issue_tracker")
+
+
 def shared(config):
     # Free-form references/commands can contain host paths or credentials. The
     # foundation shares only typed policy values; resource pointers are local
@@ -310,3 +318,8 @@ def propose(root, current, changes, expected_revision, reference, runtime_observ
         if key in result["resources"]:
             result[META]["fields"]["resources." + key].update(source="explicit-update", confirmed=True, confirmation_reference=reference)
     return result
+
+
+def minor_tracker_instructions(config):
+    value = minor_tracker(config)
+    return "Minor follow-ups use " + (json.dumps(value) if value else "the main tracker when configured") + ". Creating or updating tracker items still requires existing write authority.\n"

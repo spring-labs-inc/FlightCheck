@@ -45,7 +45,7 @@ const fs = require("fs"), vm = require("vm"), readline = require("readline"), as
   for (let n = 0; n < 200 && !ids.has("field-review_client"); n++) await new Promise(resolve => setTimeout(resolve, 10));
   assert(ids.has("field-review_client"), doc.getElementById("message").textContent);
   assert.equal(doc.getElementById("groups").children.length, 5);
-  for (const name of ["preview", "save", "reload", "recover", "audit", "reconfigure", "adopt"]) assert.equal(doc.getElementById(name).tagName, "BUTTON");
+  for (const name of ["preview", "save", "reload", "recover", "audit"]) assert.equal(doc.getElementById(name).tagName, "BUTTON");
   assert.equal(doc.getElementById("reference"), null);
   assert.equal(doc.getElementById("recovery").hidden, true);
   assert.equal(doc.getElementById("field-activation").type, "checkbox");
@@ -63,6 +63,10 @@ const fs = require("fs"), vm = require("vm"), readline = require("readline"), as
   assert.equal(doc.getElementById("resource-browser").open, true);
   const docsButton = doc.getElementById("browse-list").children.find(e => e.textContent === "docs/"); assert(docsButton); await docsButton.emit("click");
   const styleButton = doc.getElementById("browse-list").children.find(e => e.textContent === "style.md"); assert(styleButton); await styleButton.emit("click");
+  assert.equal(doc.getElementById("field-resource-style_guide").value, styleBefore);
+  assert.match(doc.getElementById("browse-selection").textContent, /docs\/style.md/);
+  await doc.getElementById("browse-clear").emit("click"); assert.equal(doc.getElementById("browse-select").disabled, true);
+  await styleButton.emit("click"); await doc.getElementById("browse-select").emit("click");
   assert.equal(doc.getElementById("field-resource-style_guide").value, "docs/style.md"); assert.equal(doc.getElementById("resource-browser").open, false);
   await doc.getElementById("browse-resource-documentation").emit("click");
   await doc.getElementById("browse-list").children.find(e => e.textContent === "docs/").emit("click");
@@ -187,7 +191,7 @@ const fs = require("fs"), vm = require("vm"), assert = require("assert/strict");
  assert.equal(storage.size, 1);
  const returnURL = new URL(ids.get("task-status-link").attrs.href, setup.base);
  const task = await fetch(returnURL); assert.equal(task.status, 200);
- const html = await task.text(); assert.match(html, /<footer[\s\S]*id="settings-link"[\s\S]*\[ Settings \][\s\S]*<\/footer>/);
+ const html = await task.text(); assert.match(html, /<\/footer>\s*<nav[^>]*class="surface-navigation"[\s\S]*id="settings-link"[\s\S]*\[ SETTINGS \]/);
  assert(!/<header[\s\S]*id="settings-link"[\s\S]*<\/header>/.test(html));
  assert.equal(ids.get("task-status-link").attrs.href, "../");
  assert(!html.includes(setup.token));

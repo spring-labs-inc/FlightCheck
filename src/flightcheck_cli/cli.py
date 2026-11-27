@@ -3,6 +3,7 @@ import argparse
 import difflib
 import json
 import os
+import re
 from pathlib import Path
 import shlex
 import stat
@@ -15,10 +16,10 @@ from .source import encoded, installer, load_installer, sha
 
 PIN = ".flightcheck/distribution.json"
 ADAPTER_COMPONENTS = (
-    "workflow/scripts/project_config.py", "workflow/scripts/status_sync_config.py", "workflow/scripts/flight_associations.py", "setup/install.py",
+    "workflow/scripts/project_config.py", "workflow/scripts/status_sync_config.py", "workflow/scripts/flight_associations.py", "workflow/scripts/checkout_guard.py", "workflow/scripts/capture_check.py", "workflow/scripts/handoff.py", "setup/install.py",
     "src/flightcheck_cli/__init__.py", "src/flightcheck_cli/cli.py", "src/flightcheck_cli/transaction.py",
     "src/flightcheck_cli/source.py", "src/flightcheck_cli/settings.py",
-    "status-card/serve.py", "status-card/settings.html", "status-card/settings.js", "status-card/settings.css", "status-card/card.css", "status-card/task.html",
+    "status-card/serve.py", "status-card/settings.html", "status-card/settings.js", "status-card/settings.css", "status-card/card.css", "status-card/shared.css", "status-card/task.html",
     "docs/settings.md", "docs/settings-external-links.json",
 )
 
@@ -133,7 +134,7 @@ def choices(module, root, agent, path):
               "python": ask("Project Python (existing environment)", python),
               "default_branch": ask("Actual default branch", detected["default_branch"]),
               "evidence_dir": ask("Private evidence directory outside project", str(tx.directory(root) / "evidence")),
-              "nit_tracker": ask("Nit tracker", "Private project notes; no provider writes"),
+              "nit_tracker": None,
               "policy_reference": ask("Project policy/setup decision reference", "Existing project instructions and owner-confirmed terminal setup"),
               "reviewer_access": ask("Reviewer access decision/reference (no permissions are installed)", "Pending native read-only probe; no automatic grants")}
     command = shlex.split(ask("Existing non-mutating project check command"))
@@ -396,6 +397,13 @@ def configuration_plan(module, root, changes, expected_revision, reference, runt
             raise ValueError("Runtime reconciliation requires an existing distribution pin")
         revised_pin["runtime"] = runtime["identity"]
         add(PIN, encoded(revised_pin))
+    if "nit_tracker" in changes or "resources" in changes:
+        paragraph = model.minor_tracker_instructions(config).encode()
+        pattern = rb"(?m)^Minor follow-ups use [^\n]*\n?"
+        if re.search(pattern, status_raw):
+            status_raw = re.sub(pattern, lambda match: paragraph, status_raw)
+        else:
+            status_raw += b"\n" + paragraph
     managed(status, status_raw, mode=0o600)
     if config["activation"] != current["values"]["activation"]:
         lines = {"opt-in": b"Use FlightCheck when the owner explicitly selects or resumes a bounded flight.",
@@ -449,7 +457,18 @@ def configuration_runtime_plan(module, root, python, expected_revision, referenc
     return configuration_plan(module, root, {"python": observed["python"]}, expected_revision, reference, runtime=runtime)
 
 
-def configuration_apply(module, root, reviewed, allow_runtime_execution=False):
+def configuration_registry(module, root, registry=None):
+    """The existing clone-scoped Registry locator, never another defaults store."""
+    if registry is not None:
+        return tx.no_links(Path(registry).expanduser().absolute())
+    common = module.git(root, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    base = Path(os.environ.get("FLIGHTCHECK_STATE_DIR") or (Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state") / "flightcheck"))
+    if not base.is_absolute() or root in (base.resolve(), *base.resolve().parents):
+        raise ValueError("Keep the project Registry outside the checkout")
+    return tx.no_links(base / sha(os.fsencode(Path(common).resolve()))[:24] / "flight-associations")
+
+
+def configuration_apply(module, root, reviewed, allow_runtime_execution=False, registry=None, *, adoption=True, flight=None):
     if reviewed.get("kind") != "configuration-only-v1" or reviewed.get("target") != str(root):
         raise ValueError("Reviewed configuration plan targets another project or operation")
     with tx.locked(root) as private:
@@ -461,6 +480,17 @@ def configuration_apply(module, root, reviewed, allow_runtime_execution=False):
             actual, operations = configuration_plan(module, root, reviewed["changes"], reviewed["expected_revision"], reviewed["reference"])
         if actual != reviewed:
             raise ValueError("Reviewed configuration plan is stale; preview again")
+        adoption_result = {"queued": [], "deferred": []}
+        if adoption:
+            # This is inside the existing project transaction lock, after the
+            # exact stale-plan check. A failed Save can leave only an unmatched
+            # intent; it cannot publish another configuration or grant rights.
+            associations = load_installer(root / ".flightcheck/scripts/flight_associations.py")
+            if not hasattr(associations.Registry, "queue_configuration"):
+                raise ValueError("Explicit configuration-adapter update required for project settings adoption")
+            locator = associations.Registry(configuration_registry(module, root, registry))
+            target_revision = sha(module.project_model(root).encoded(reviewed["configuration"]))
+            adoption_result = locator.queue_configuration(root, target_revision, reviewed["reference"], transaction_state=private, flight=flight)
         def verify_configuration():
             configuration_integrity(module, root)
             model = configuration_model(module, root)
@@ -472,7 +502,7 @@ def configuration_apply(module, root, reviewed, allow_runtime_execution=False):
             result = model.snapshot(root)
             if result["values"] != reviewed["configuration"]:
                 raise ValueError("Configuration publication did not match reviewed values")
-            return {"status": "configuration_updated", **result}
+            return {"status": "configuration_updated", **result, "adoption": adoption_result}
         return tx.apply(module, root, operations, verify_configuration, state=private)
 
 

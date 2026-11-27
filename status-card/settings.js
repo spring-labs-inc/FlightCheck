@@ -20,7 +20,7 @@ const clone = value => JSON.parse(JSON.stringify(value));
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 const equal = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 let friendlyStatuses = {};
-let current, plan, activePlan, readers = [], labels = {};
+let current, plan, readers = [], labels = {};
 const states = {todo: "To do", ready: "Ready", in_progress: "In progress", review: "In review", done: "Done"};
 function node(tag, text) {const value = document.createElement(tag); if (text !== undefined) value.textContent = text; return value;}
 function message(text, error = false) {const value = byId("message"); value.textContent = text; value.className = error ? "settings-message problem" : "settings-message"; value.setAttribute("role", error ? "alert" : "status");}
@@ -91,22 +91,35 @@ function validDestination(value) {
 }
 let picker;
 function closePicker() {byId("resource-browser").close(); const target = picker?.input; picker = undefined; target?.focus();}
-async function showFolder(path) {
+function pickerSelection(path) {
+  picker.selection = path;
+  byId("browse-selection").textContent = path ? "Selected: " + (path === "." ? "Project folder" : path) : "No selection";
+  byId("browse-select").disabled = !path; byId("browse-clear").disabled = !path;
+  for (const row of byId("browse-list").children) row.setAttribute("aria-pressed", row.dataset.path === path ? "true" : "false");
+}
+async function showFolder(path, initial = false) {
   const activePicker = picker;
-  const data = await api("browse", {field: activePicker.field, path});
+  const data = await api("browse", initial ? {field: activePicker.field, start: true, current: activePicker.input.value} : {field: activePicker.field, path});
   if (picker !== activePicker) return;
   picker.directory = data.directory; picker.parent = data.parent;
-  byId("browse-directory").textContent = data.directory || "Project folder";
+  const breadcrumb = byId("browse-directory"); breadcrumb.replaceChildren();
+  const parts = data.directory ? data.directory.split("/") : [];
+  for (let index = -1; index < parts.length; index++) {
+    if (index >= 0) breadcrumb.append(node("span", "/"));
+    const target = parts.slice(0, index + 1).join("/");
+    const item = node("button", index === -1 ? "Project" : parts[index]); item.type = "button";
+    item.addEventListener("click", async () => {try {await showFolder(target);} catch (error) {byId("browse-message").textContent = error.message;}}); breadcrumb.append(item);
+  }
   byId("browse-message").textContent = data.truncated ? "Showing a limited list. Enter the path directly if needed." : "";
   byId("browse-up").disabled = data.parent === null;
-  byId("browse-select").hidden = data.kind === "file";
   const list = byId("browse-list"); list.replaceChildren();
   for (const entry of data.entries) {
     if (entry.kind === "file" && data.kind === "directory") continue;
-    const button = node("button", entry.name + (entry.kind === "directory" ? "/" : "")); button.type = "button";
-    button.addEventListener("click", async () => {try {if (entry.kind === "directory") await showFolder(entry.path); else await choosePath(entry.path);} catch (error) {byId("browse-message").textContent = error.message;}}); list.append(button);
+    const button = node("button", entry.name + (entry.kind === "directory" ? "/" : "")); button.type = "button"; button.dataset.path = entry.path;
+    button.addEventListener("click", async () => {try {if (entry.kind === "directory") await showFolder(entry.path); else pickerSelection(entry.path);} catch (error) {byId("browse-message").textContent = error.message;}}); list.append(button);
   }
   if (!list.children.length) list.append(node("p", "No matching files or folders."));
+  pickerSelection(data.selection || (data.kind === "file" ? null : data.directory || "."));
 }
 async function choosePath(path) {
   const activePicker = picker;
@@ -127,7 +140,7 @@ function locationActions(input, field, kind, alwaysBrowse = false) {
       browse.setAttribute("aria-label", "Browse for " + labels[input.dataset.key]);
       browse.addEventListener("click", async () => {
         picker = {input, field}; byId("resource-browser-title").textContent = "Choose " + labels[input.dataset.key]; byId("resource-browser").showModal(); byId("browse-list").replaceChildren(); byId("browse-message").textContent = "Opening project folder…";
-        try {await showFolder(""); byId("browse-cancel").focus();} catch (error) {byId("browse-message").textContent = error.message;}
+        try {const active = picker; await showFolder("", true); if (picker === active) byId("browse-cancel").focus();} catch (error) {byId("browse-message").textContent = error.message;}
       }); actions.append(browse);
     }
   }
@@ -270,10 +283,11 @@ function renderSync(parent, advanced) {
   });
 }
 function render(data) {
-  current = data; readers = []; labels = {}; friendlyStatuses = {}; plan = undefined; activePlan = undefined;
-  byId("save").disabled = true; byId("adopt").disabled = true; byId("review").hidden = true; byId("preview").hidden = false;
+  current = data; readers = []; labels = {}; friendlyStatuses = {}; plan = undefined;
+  byId("save").disabled = true; byId("review").hidden = true; byId("preview").hidden = false;
   byId("recovery").hidden = data.status !== "recovery_required";
   if (data.status !== "configuration") {message(data.reason, data.status === "recovery_required"); byId("locked").hidden = data.status === "recovery_required"; byId("settings").hidden = true; return;}
+  if (data.authorization_scope !== "project") {byId("settings").hidden = true; byId("locked").hidden = false; message("Authorize project Settings to apply changes to current and future work."); return;}
   byId("locked").hidden = true; byId("settings").hidden = false; byId("groups").hidden = false; byId("groups").replaceChildren(); byId("advanced-fields").replaceChildren();
   const advanced = byId("advanced-fields");
   const project = section("Project"); renderResources(project);
@@ -287,43 +301,37 @@ function render(data) {
   const prefix = field(checkout, "checkout-prefix", "Branch prefix", policy.branch_prefix || "");
   const protectedBranches = field(checkout, "protected_branches", "Additional protected branches", data.values.protected_branches.filter(branch => branch !== data.values.default_branch).join(", ")); help(protectedBranches, "Default branch " + data.values.default_branch + " is always protected. Add other shared branches, separated by commas.");
   readers.push(result => {const value = {...policy, mode: mode.value, git_fallback: fallback.checked}; if (prefix.value.trim()) value.branch_prefix = prefix.value.trim(); else if (policy.branch_prefix) value.branch_prefix = null; if (JSON.stringify(value) !== JSON.stringify(policy)) result.checkout_policy = value; const branches = [...new Set(protectedBranches.value.split(",").map(s => s.trim()).filter(Boolean).concat(data.values.default_branch))].sort(); if (JSON.stringify(branches) !== JSON.stringify(data.values.protected_branches)) result.protected_branches = branches;});
-  checkout.append(node("h3", "Future cleanup authority"));
+  checkout.append(node("h3", "Automatic cleanup"));
   const cleanup = {};
   for (const [key, label] of [["local_branches", "Verified merged local branches"], ["remote_branches", "Verified merged actual remote branches"], ["temporary_worktrees", "Verified merged temporary worktrees"]]) cleanup[key] = checkbox(checkout, "cleanup-" + key, label, data.values.cleanup_policy[key]);
   checkout.append(node("p", "Each flight captures exact cleanup grants. Mandatory preservation and checkout protections always apply."));
   readers.push(result => {const value = {...data.values.cleanup_policy}; for (const [key, control] of Object.entries(cleanup)) value[key] = control.checked; if (JSON.stringify(value) !== JSON.stringify(data.values.cleanup_policy)) result.cleanup_policy = value;});
-  const delivery = section("Evidence & Delivery"); simple(delivery, "evidence_dir", "Private evidence location"); help(byId("field-evidence_dir"), "Private host path for check/review proof; enter its existing path directly. Project browsing is for project resources."); simple(delivery, "nit_tracker", "Minor follow-ups"); locationActions(byId("field-nit_tracker"), "nit_tracker", "any"); help(byId("field-nit_tracker"), "Nonblocking review follow-ups; project work belongs in the tracker.");
+  const delivery = section("Evidence & Delivery"); simple(delivery, "evidence_dir", "Private evidence location"); help(byId("field-evidence_dir"), "Private host path for check/review proof; enter its existing path directly. Project browsing is for project resources."); delivery.append(node("p", "Minor follow-ups use the main tracker unless overridden in Advanced."));
   simple(delivery, "review_client", "Review client", "text", [["", "Choose a client"], ["Codex", "Codex"], ["Claude", "Claude"]]);
   simple(delivery, "delivery", "Delivery policy", "text", [["Reviewed pull request; merge after required approval", "Pull request and approved merge"], ["Prepare review only; no provider writes", "Prepare review only"]]);
-  simple(advanced, "reviewer_access", "Reviewer access", "textarea"); simple(advanced, "policy_reference", "Flight policy"); locationActions(byId("field-policy_reference"), "policy_reference", "file");
-  advanced.append(node("p", "Flight policy governs development and delivery; the style guide covers coding conventions. Runtime requirements describe needed tools; the pinned executable is shown under Details."));
+  const customNits = checkbox(advanced, "nit-override", "Use a separate minor-follow-up location", data.values.nit_tracker !== null && data.values.nit_tracker !== undefined);
+  const nitLocation = field(advanced, "nit_tracker", "Minor-follow-up override", data.values.nit_tracker || "");
+  locationActions(nitLocation, "nit_tracker", "any");
+  function nitVisibility() {nitLocation._settingsRow.hidden = !customNits.checked;}
+  customNits.addEventListener("change", nitVisibility); nitVisibility();
+  readers.push(result => {const value = customNits.checked ? nitLocation.value.trim() : null; if (customNits.checked && !value) throw new Error("Choose a minor-follow-up override or use the main tracker"); if (value !== data.values.nit_tracker) result.nit_tracker = value;});
+  simple(advanced, "reviewer_access", "Reviewer access", "textarea"); simple(advanced, "policy_reference", "Workflow instructions"); locationActions(byId("field-policy_reference"), "policy_reference", "file");
+  advanced.append(node("p", "Workflow instructions governs development and delivery; the style guide covers coding conventions. Runtime requirements describe needed tools; the pinned executable is shown under Details."));
   const runtimes = field(advanced, "required_runtimes", "Required runtimes", (data.values.required_runtimes || []).join("\n"), "textarea"); help(runtimes, "One existing runtime requirement per line. Settings does not install or execute runtimes.");
   readers.push(result => {const value = runtimes.value.split("\n").map(row => row.trim()).filter(Boolean); if (JSON.stringify(value) !== JSON.stringify(data.values.required_runtimes || [])) result.required_runtimes = value;});
-  const retained = node("details"); retained.append(node("summary", "Additional artifacts to preserve")); advanced.append(retained);
-  const retentionRows = [];
-  function retain(row = {identity: "", reason: ""}) {
-    const group = node("div"); retained.append(group); const index = retentionRows.length;
-    retentionRows.push({identity: field(group, "retain-identity-" + index, "Artifact location or identity", row.identity), reason: field(group, "retain-reason-" + index, "Reason to preserve", row.reason)});
-  }
-  for (const row of data.values.cleanup_policy.retained_artifacts) retain(row);
-  const addRetention = node("button", "Add preservation preference"); addRetention.type = "button"; addRetention.addEventListener("click", () => {retain(); invalidate();}); retained.append(addRetention);
-  readers.push(result => {const rows = retentionRows.map(({identity, reason}) => ({identity: identity.value.trim(), reason: reason.value.trim()})).filter(row => row.identity || row.reason); if (rows.some(row => !row.identity || !row.reason)) throw new Error("Each preservation preference needs an identity and reason"); if (JSON.stringify(rows) !== JSON.stringify(data.values.cleanup_policy.retained_artifacts)) result.cleanup_policy = {...data.values.cleanup_policy, ...result.cleanup_policy, retained_artifacts: rows};});
-  byId("repository").textContent = "Default branch: " + data.values.default_branch + ". Checkout: " + data.repository.checkout + " · Git identity: " + data.repository.git_common_dir;
-  byId("revision").textContent = data.revision; byId("capabilities").textContent = "Pinned Python: " + data.values.python + ". Runtime: " + data.runtime.status + ". " + data.capabilities.native_checkout + ". " + data.capabilities.mandatory;
+  byId("capabilities").textContent = "Runtime validation: " + data.runtime.status + ". Configuration decisions and validation are retained internally.";
   byId("provenance").replaceChildren();
   for (const [key, meta] of Object.entries(data.values._flightcheck?.fields || {})) {const detail = node("p", key + ": " + meta.source + " · " + meta.scope + " · " + (meta.confirmed ? "confirmed" : "suggestion") + " · validation: " + meta.last_validation.status + " (" + meta.last_validation.validator + ")"); byId("provenance").append(detail);}
   const suggestions = Object.entries(data.values._flightcheck?.fields || {}).filter(([key, meta]) => !meta.confirmed && (key.startsWith("resources.") || ["activation", "checks", "preview", "checkout_policy", "cleanup_policy", "status_sync", "required_runtimes", "evidence_dir", "review_client", "reviewer_access", "delivery", "nit_tracker", "policy_reference"].includes(key))).map(([key]) => key);
   if (suggestions.length) {
-    const confirm = checkbox(byId("provenance"), "confirm-suggestions", "Confirm displayed suggestions for future flights", false);
+    const confirm = checkbox(byId("provenance"), "confirm-suggestions", "Confirm displayed suggestions", false);
     readers.push(result => {if (confirm.checked) for (const key of suggestions) {if (key.startsWith("resources.")) {const name = key.slice(10); result.resources = {[name]: data.values.resources[name], ...result.resources};} else if (!(key in result)) result[key] = data.values[key];}});
   }
-  byId("flights").replaceChildren();
-  for (const flight of data.flights || []) {const detail = node("details"); detail.append(node("summary", flight.flight + (flight.configuration.revision === data.revision ? " · matches saved settings" : " · uses earlier settings"))); detail.append(node("pre", JSON.stringify(flight, null, 2))); byId("flights").append(detail);}
   rememberContext(); message("Review changes before saving.");
 }
 async function reload() {render(await api("read"));}
 function changes() {const result = {}; for (const reader of readers) reader(result); if (!Object.keys(result).length) throw new Error("Change a value before reviewing"); return result;}
-function invalidate() {plan = undefined; activePlan = undefined; byId("save").disabled = true; byId("adopt").disabled = true;}
+function invalidate() {plan = undefined; byId("save").disabled = true;}
 function human(value, key) {
   if (value === undefined || value === null || value === "") return "Not set";
   if (typeof value === "boolean") return value ? "Enabled" : "Off";
@@ -349,8 +357,8 @@ function showPreview(result) {
     item.append(node("b", caption + ": "), node("span", display(before) + " → " + display(after))); list.append(item);
   }
   for (const [key, change] of Object.entries(result.changes)) difference(change.before, change.after, [key]);
-  effects.append(list); effects.append(node("p", "Saving records this configuration decision. Active flight decisions and grants stay captured."));
-  const details = node("details"); details.append(node("summary", "Details: affected files and validation")); details.append(node("pre", JSON.stringify(result.effects, null, 2))); effects.append(details);
+  effects.append(list);
+  for (const text of result.effects.deferred || []) effects.append(node("p", text));
   byId("groups").hidden = true; byId("review").hidden = false; byId("preview").hidden = true; byId("save").disabled = false; effects.focus();
 }
 function action(id, fn) {byId(id).addEventListener("click", async () => {try {await fn();} catch (error) {invalidate(); message(error.message + ". Reload current values and preview again.", true); byId("message").focus();}});}
@@ -360,7 +368,8 @@ byId("settings").addEventListener("change", invalidate);
 action("save", async () => {await api("apply", {plan_id: plan}); location.assign("../");});
 action("cancel", async () => {byId("review").hidden = true; byId("groups").hidden = false; byId("preview").hidden = false; invalidate(); byId("preview").focus();});
 action("browse-up", async () => {try {await showFolder(picker.parent);} catch (error) {byId("browse-message").textContent = error.message;}});
-action("browse-select", async () => {try {await choosePath(picker.directory);} catch (error) {byId("browse-message").textContent = error.message;}});
+action("browse-select", async () => {try {await choosePath(picker.selection);} catch (error) {byId("browse-message").textContent = error.message;}});
+action("browse-clear", async () => {pickerSelection(null);});
 action("browse-cancel", closePicker);
 byId("resource-browser").addEventListener("cancel", event => {event.preventDefault(); closePicker();});
 action("reload", reload); action("recover", async () => {await api("recover", {}); await reload();});
@@ -369,8 +378,6 @@ action("audit", async () => {
   const seen = new Set(); function links(value, path) {if (typeof value === "string" && !seen.has(value)) {seen.add(value); destination(byId("audit-destinations"), path, value);} else if (value && typeof value === "object") for (const [key, item] of Object.entries(value)) links(item, path + "." + key);}
   links(report, "Audit destination"); byId("audit-report").focus();
 });
-action("reconfigure", async () => {const result = await api("reconfigure-preview", {flight: context.task}); activePlan = result.plan_id; byId("active-effects").textContent = result.next + ". Existing grants are retained."; byId("adopt").disabled = false; byId("active-effects").focus();});
-action("adopt", async () => {await api("reconfigure-apply", {plan_id: activePlan}); await reload(); message("Active configuration adopted. Affected revalidation remains required before execution.");});
 action("forget-settings", async () => {forgetContext(); capability = undefined; byId("settings").hidden = true; byId("locked").hidden = false; message("Settings navigation session cleared. Use the authorized launcher to edit again.");});
 if (capability && context.task === taskFromPath && [context.project, context.task, context.session].every(Boolean)) reload().catch(error => message(error.message, true));
-else message("Read-only card view. Start an explicitly authorized local Settings session to edit private configuration.");
+else message("Read-only view. Authorize Settings for this project to edit its configuration.");

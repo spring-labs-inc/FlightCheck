@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import re
+import socket
 import stat
 import subprocess
 import tempfile
@@ -279,7 +280,7 @@ def reconfigure(record, configuration, reference):
     text(reference, "reconfiguration reference")
     new = _snapshot(configuration)
     old = value["configuration"]
-    changed = sorted(key for key in old["values"].keys() | new["values"].keys()
+    changed = sorted(key for key in old["values"].keys() | new["values"].keys() if key != "_flightcheck"
                      if old["values"].get(key) != new["values"].get(key))
     affected = []
     if set(changed) & {"checkout_policy", "default_branch", "protected_branches", "branch_prefix", "git_fallback"}:
@@ -291,7 +292,8 @@ def reconfigure(record, configuration, reference):
     enabled = new["values"].get("status_sync", {}).get("mode", "disabled") != "disabled"
     if "status_sync" in changed or enabled and old["revision"] != new["revision"]:
         affected.append("status_sync")
-    if changed or old["revision"] != new["revision"]:
+    if set(changed) & {"checks", "python", "observed_python", "required_runtimes", "preview",
+                       "evidence_dir", "reviewer_access", "review_client", "delivery", "policy_reference"}:
         affected.append("evidence")
     value.setdefault("configuration_history", []).append(copy.deepcopy(old))
     value["configuration"] = new
@@ -337,6 +339,50 @@ class Registry:
         self._unique(records)
         return {"revision": digest(raw), "records": records}
 
+    def queue_configuration(self, root, revision, reference, *, transaction_state, flight=None):
+        """Pre-arm one Save using locators, never a competing values store.
+
+        An interrupted/failed canonical transaction cannot satisfy the target
+        revision. Retrying the same intent is idempotent; superseded intents are
+        retained. Existing work, leases, history and authority stay unchanged.
+        """
+        root = no_links(Path(root).resolve(strict=True))
+        if not re.fullmatch(r"[0-9a-f]{64}", revision):
+            raise AssociationError("Settings target must be a configuration revision")
+        text(reference, "project settings decision")
+        state = no_links(Path(transaction_state).resolve(strict=True))
+        if state.name != digest(str(root).encode())[:24] or stat.S_IMODE(state.stat().st_mode) & 0o077:
+            raise AssociationError("Settings intent needs this project's existing private transaction locator")
+        queued, deferred = [], []
+        records = self.read()["records"]
+        for original in records:
+            if original["lifecycle"]["state"] not in ("active", "review") or (flight and original["flight"] != flight):
+                continue
+            if repository_identity(root, original["repository"]["id"]) != original["repository"]:
+                continue
+            items = [original["checkout"], *original["children"]]
+            cleanup = original.get("cleanup", {})
+            reason = None
+            if not original.get("checkout_guard") or any(item.get("execution_host") != socket.gethostname() for item in items):
+                reason = "Work needs a verified checkout on this host"
+            elif cleanup.get("frozen_binding") or cleanup.get("frozen_delivery"):
+                reason = "An existing delivery or disposition lease is preserved"
+            elif any(row.get("kind") == "native_operation" for row in retained_artifacts(original)):
+                reason = "An unresolved native operation is preserved"
+            if reason:
+                deferred.append({"flight": original["flight"], "reason": reason}); continue
+            intent = {"root": str(root), "revision": revision, "reference": reference, "host": socket.gethostname(),
+                      "transaction": str(state)}
+            current = self.read(); record = next(row for row in current["records"] if row["flight"] == original["flight"])
+            if record.get("pending_configuration") != intent:
+                prior = record.get("pending_configuration")
+                if prior:
+                    record.setdefault("configuration_intents", []).append({"intent": prior, "outcome": "superseded"})
+                record["pending_configuration"] = intent
+                self.save(record, expected_revision=current["revision"])
+            queued.append(record["flight"])
+        return {"queued": queued, "deferred": deferred}
+
     @staticmethod
     def _unique(records):
         flights, owners = set(), {}
@@ -372,6 +418,15 @@ class Registry:
                 raise AssociationError("A flight cannot silently change repository identity")
             if old and record.get("configuration_history", [])[:len(old.get("configuration_history", []))] != old.get("configuration_history", []):
                 raise AssociationError("Preserve the prior configuration history")
+            if old and record.get("settings_adoptions", []) != old.get("settings_adoptions", []):
+                prior = old.get("settings_adoptions", [])
+                added = record.get("settings_adoptions", [])
+                if (added[:len(prior)] != prior or len(added) != len(prior) + 1
+                        or added[-1] != record.get("reconfiguration")
+                        or record["configuration"] == old["configuration"]
+                        or any(record.get(key) != old.get(key) for key in ("checkout", "children", "client", "grants"))
+                        or record.get("checkout_guard", {}).get("generation") != old.get("checkout_guard", {}).get("generation")):
+                    raise AssociationError("Settings adoption must preserve exact execution and authority with append-only history")
             if old and old["configuration"] != record["configuration"]:
                 decision = record.get("reconfiguration", {})
                 reference = decision.get("reference")

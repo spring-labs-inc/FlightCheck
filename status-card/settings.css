@@ -1,24 +1,24 @@
-.shell.task-card.settings-card { max-width: 1080px; }
+.shell.task-card.settings-card { font-size: var(--task-copy-size); }
 .settings-card .hero { padding-bottom: 1rem; grid-template-columns: minmax(0, 1fr); }
-.settings-section { padding: 1.2rem; margin-bottom: 1rem; }
+.settings-section { margin-bottom: .65rem; }
 .settings-section h2 { margin-top: 0; }
 .settings-field { margin: .65rem 0; }
-.settings-field label { display: block; font-weight: 600; margin-bottom: .25rem; font-size: .9rem; }
-.settings-field input, .settings-field select, .settings-field textarea { width: 100%; max-width: 100%; box-sizing: border-box; padding: .5rem .6rem; border: 1px solid #788591; border-radius: .4rem; font: inherit; color: inherit; background: var(--raised); }
+.settings-field label { display: block; font-weight: 620; margin-bottom: .25rem; font-size: var(--task-label-size); }
+.settings-field input, .settings-field select, .settings-field textarea { width: 100%; max-width: 100%; box-sizing: border-box; padding: .35rem .45rem; border: 1px solid #788591; border-radius: .4rem; font: inherit; color: inherit; background: var(--raised); }
 .settings-field textarea { min-height: 4rem; resize: vertical; }
-.settings-hint { display: block; font-size: .8rem; color: var(--muted); margin-top: .2rem; }
+.settings-hint { display: block; font-size: var(--task-help-size); color: var(--muted); margin-top: .2rem; }
 .settings-toggle { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem; }
 .settings-toggle input[type="checkbox"] { width: auto; }
 .settings-toggle label { display: inline; margin: 0; }
 .settings-toggle .settings-hint { flex-basis: 100%; }
 .settings-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin: 1rem 0; }
-.settings-card button { cursor: pointer; padding: .5rem .85rem; font: inherit; border: 1px solid var(--frame); border-radius: .4rem; background: var(--raised); color: var(--ink); }
+.settings-card button { cursor: pointer; padding: .35rem .6rem; font: inherit; border: 1px solid var(--frame); border-radius: .4rem; background: var(--raised); color: var(--ink); }
 .settings-card #preview, .settings-card #save { background: #164f64; color: #fff; border-color: #164f64; }
 .settings-card button:disabled { cursor: default; opacity: .5; }
 .settings-card :focus-visible { outline: 3px solid #087eaa; outline-offset: 3px; }
-.settings-card pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 24rem; overflow: auto; font-size: .8rem; }
+.settings-card pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 24rem; overflow: auto; font-size: var(--task-help-size); }
 .settings-card details { margin: .8rem 0; }
-.settings-card summary { cursor: pointer; font-weight: 600; }
+.settings-card summary { cursor: pointer; font-weight: 620; }
 .settings-card details[open] > summary { margin-bottom: .8rem; }
 .settings-card #effects li { margin: .7rem 0; overflow-wrap: anywhere; }
 .settings-card [hidden] { display: none !important; }
@@ -36,8 +36,14 @@
 .location-actions a { padding: .4rem .65rem; border: 1px solid var(--frame); border-radius: .4rem; text-decoration: none; }
 .location-actions a[aria-disabled="true"] { opacity: .4; cursor: default; }
 .clear-problem { margin-top: .35rem; }
-.settings-footer { text-align: center; margin-top: 1.5rem; }
+
 #resource-browser { color: var(--ink); background: var(--raised); border: 1px solid var(--frame); border-radius: .5rem; width: min(36rem, 90vw); }
 #resource-browser::backdrop { background: #0007; }
 #browse-list { max-height: 45vh; overflow-y: auto; display: grid; gap: .35rem; }
 #browse-list button { text-align: left; }
+
+.settings-card input, .settings-card select, .settings-card textarea, .settings-card button { font-size: var(--task-copy-size); }
+.settings-card p { line-height: 1.4; }
+.browse-breadcrumb { display: flex; gap: .2rem; flex-wrap: wrap; align-items: center; }
+#browse-list button[aria-pressed="true"] { border-color: var(--cyan); background: var(--panel); }
+#browse-selection { color: var(--muted); font-size: var(--task-help-size); }

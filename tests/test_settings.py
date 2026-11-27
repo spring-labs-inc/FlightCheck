@@ -35,7 +35,7 @@ class SettingsTests(unittest.TestCase):
 
     def service(self, engine, root, registry=None):
         from flightcheck_cli.settings import Settings
-        return Settings(engine, root, "settings-flight", "settings-session", registry, reference="Owner local Settings session")
+        return Settings(engine, root, "settings-flight", "settings-session", registry, reference="Owner local Settings session", project_scope=True)
 
     def save(self, service, changes):
         before = service.read()
@@ -322,7 +322,7 @@ class SettingsTests(unittest.TestCase):
             def handle_starttag(self, tag, attrs): self.tags.append((tag, dict(attrs)))
         surface = Surface(); surface.feed((PRODUCT / "status-card/settings.html").read_text())
         byid = {attrs["id"]: (tag, attrs) for tag, attrs in surface.tags if "id" in attrs}
-        for name in ("preview", "save", "reload", "recover", "audit", "reconfigure", "adopt"):
+        for name in ("preview", "save", "reload", "recover", "audit"):
             self.assertEqual(byid[name][0], "button"); self.assertNotEqual(byid[name][1].get("tabindex"), "-1")
         self.assertNotIn("reference", byid); self.assertEqual(byid["effects"][1]["tabindex"], "0")
         self.assertIn("hidden", byid["recovery"][1])

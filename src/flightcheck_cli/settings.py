@@ -15,6 +15,7 @@ import stat
 import re
 import sys
 import threading
+import subprocess
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
@@ -29,16 +30,21 @@ _HELPER_LOCK = threading.RLock()
 
 
 class Settings:
-    def __init__(self, engine, root, task, session, registry=None, *, reference):
+    def __init__(self, engine, root, task=None, session=None, registry=None, *, reference, project_scope=None):
         self.engine, self.root = engine, Path(root).resolve()
-        if not task or not session or not reference:
-            raise ValueError("Explicit project, task, session and local Settings authorization reference required")
-        self.task, self.session, self.reference = task, session, reference
+        if not reference:
+            raise ValueError("Explicit project editing authorization required")
         self.registry = Path(registry) if registry else None
         self.repository = engine.git(self.root, "rev-parse", "--path-format=absolute", "--git-common-dir")
         self.project = sha(encoded({"root": str(self.root), "repository": self.repository}))
+        self.project_scope = task is None if project_scope is None else project_scope
+        if self.project_scope and self.registry is None:
+            self.registry = cli.configuration_registry(engine, self.root)
+        self.task = task or "project-" + self.project[:16]
+        self.session = session or secrets.token_urlsafe(18)
+        self.reference = reference
         self.token = secrets.token_urlsafe(32)
-        self.context = {"project": self.project, "task": task, "session": session}
+        self.context = {"project": self.project, "task": self.task, "session": self.session}
         self.plans = {}
 
     def verify_context(self):
@@ -95,6 +101,7 @@ class Settings:
         if not (details and isinstance(board, dict) and board.get("url", "").rstrip("/") == details["url"].rstrip("/") and details["project_id"] == current["values"]["status_sync"]["project_id"] and details["field"]["id"] == current["values"]["status_sync"]["field_id"]):
             details = None
         return {"status": "configuration", **current, "context": self.context, "board_details": details,
+                "authorization_scope": "project" if self.project_scope else "task",
                 "repository": {"checkout": str(self.root), "git_common_dir": self.repository},
                 "runtime": cli.runtime_structure(current["values"], pin["runtime"]) if pin else {"status": "unconfigured"},
                 "flights": [{"flight": r["flight"], "configuration": r["configuration"], "reconfiguration": r.get("reconfiguration"),
@@ -122,17 +129,29 @@ class Settings:
         identifier = sha(encoded(plan))
         self.plans[identifier] = plan
         current = cli.configuration_model(self.engine, self.root).snapshot(self.root)
+        changed = set(data["changes"])
+        active = [row for row in self.bindings() if row["lifecycle"]["state"] in ("active", "review")]
+        deferred = []
+        if self.project_scope and active:
+            deferred.append("Running checks finish with their captured settings. Active work adopts saved changes at its next safe execution boundary; unavailable or protected work waits for reconciliation.")
+            if changed & {"checkout_policy", "default_branch", "protected_branches"}:
+                deferred.append("Checkout changes wait for a compatible verified checkout. Running workers stay in place.")
+            if changed & {"checks", "python", "observed_python", "required_runtimes", "preview", "evidence_dir", "reviewer_access", "review_client", "delivery", "policy_reference"}:
+                deferred.append("Affected checks and delivery assumptions need validation; unaffected accepted evidence remains available.")
+            if any(row["configuration"]["values"].get("status_sync", {}).get("mode") != "disabled" for row in active):
+                deferred.append("Synchronization needs its existing exact-revision authority reconciled before further writes. Saving does not expand permissions.")
         return {"status": "configuration_preview", "plan_id": identifier, "revision": current["revision"],
                 "changes": {k: {"before": current["values"].get(k), "after": plan["configuration"].get(k)} for k in data["changes"]},
-                "effects": {"scope": "Future flights; active snapshots and grants unchanged", "operations": plan["operations"],
-                            "revalidation": "Explicit active-flight adoption requires a separate reconfiguration decision"}}
+                "effects": {"scope": "Persistent settings for this project, applying to current and future work", "operations": plan["operations"],
+                            "deferred": deferred,
+                            "revalidation": "Affected configuration assumptions only; unaffected accepted evidence remains reusable"}}
 
     def apply(self, data):
         self.verify_context()
         plan = self.plans.get(data["plan_id"])
         if plan is None:
             raise ValueError("Unknown or expired preview; preview again")
-        result = cli.configuration_apply(self.engine, self.root, plan)
+        result = cli.configuration_apply(self.engine, self.root, plan, registry=self.registry, adoption=self.project_scope)
         self.plans.clear()
         return result
 
@@ -156,6 +175,34 @@ class Settings:
         field = data.get("field")
         if field not in kinds:
             raise ValueError("This location uses an explicit host path, not project browsing")
+        if data.get("start") is True:
+            # Resolve only within this worker's project. A URL, unknown path or
+            # outside-host path leaves the existing value intact and opens root.
+            current = data.get("current", "")
+            candidate = None
+            if isinstance(current, str) and current and "://" not in current:
+                candidate = Path(current)
+                if candidate.is_absolute():
+                    try:
+                        candidate = candidate.relative_to(self.root)
+                    except ValueError:
+                        candidate = None
+            choices = [candidate, candidate.parent if candidate is not None else None, Path("")]
+            for choice in choices:
+                if choice is None:
+                    continue
+                try:
+                    result = self.browse({"field": field, "path": "" if str(choice) == "." else str(choice)})
+                except (OSError, ValueError):
+                    continue
+                try:
+                    selected = self.browse({"field": field, "path": str(candidate), "select": True}) if candidate is not None else None
+                except (OSError, ValueError):
+                    selected = None
+                if selected:
+                    result["selection"] = selected["selected"]
+                return result
+            raise ValueError("Project folder is unavailable")
         raw = data.get("path", "")
         if (not isinstance(raw, str) or "\x00" in raw or "\\" in raw
                 or Path(raw).is_absolute() or any(part.startswith(".") for part in Path(raw).parts)):
@@ -356,7 +403,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send(403, {"error": "Settings session unavailable"}); return
         path = urlsplit(self.path).path
         route = self.server.route
-        assets = {route: ("settings.html", "text/html; charset=utf-8"), route + "settings.js": ("settings.js", "text/javascript; charset=utf-8"), route + "card.css": ("card.css", "text/css; charset=utf-8"), route + "settings.css": ("settings.css", "text/css; charset=utf-8")}
+        if path == getattr(self.server, "status_route", None):
+            # A project landing between flights is not a fabricated flight or
+            # task snapshot. It shares the actual card's typography/navigation.
+            body = ('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FlightCheck · Project status</title><link rel="stylesheet" href="' + route + 'card.css"></head><body><main class="shell task-card"><header class="masthead"><div class="identity">FlightCheck / Status</div></header><section class="hero"><div><h1>Project status</h1><p class="summary">Project settings are available between flights. Active work adopts saved changes at safe execution boundaries.</p></div></section><nav class="surface-navigation" aria-label="Project navigation"><a class="surface-navigation-link" href="' + route + '">[ SETTINGS ]</a></nav></main></body></html>').encode()
+            self.send(200, body, "text/html; charset=utf-8"); return
+        assets = {route: ("settings.html", "text/html; charset=utf-8"), route + "settings.js": ("settings.js", "text/javascript; charset=utf-8"), route + "card.css": ("card.css", "text/css; charset=utf-8"), route + "settings.css": ("settings.css", "text/css; charset=utf-8"), route + "shared.css": ("shared.css", "text/css; charset=utf-8")}
         if path in assets:
             name, kind = assets[path]; self.send(200, (self.server.assets / name).read_bytes(), kind); return
         if path != route + "api/read" or not self.allowed(True):
@@ -393,6 +445,76 @@ class Handler(BaseHTTPRequestHandler):
         pass  # Tokens, plans, references and private project values stay out of logs.
 
 
+def project_server(service, assets, port=0):
+    """Reuse the existing private Handler for a project without a flight."""
+    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server.settings = service
+    server.assets = Path(assets)
+    server.status_route = "/project/" + service.task + "/"
+    server.route = server.status_route + "settings/"
+    return server
+
+
+def project_launch(engine, root, reference, registry=None):
+    """Start/reuse the existing Settings HTTP surface in project-private state."""
+    import fcntl
+    state = tx.private_dir(tx.directory(root) / "settings")
+    service = Settings(engine, root, registry=registry, reference=reference)
+    binding_path, endpoint_path = state / "session.json", state / "endpoint.json"
+    with (state / "launch.lock").open("a+b") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        binding = json.loads(tx.no_links(binding_path).read_bytes()) if binding_path.exists() else None
+        endpoint = json.loads(tx.no_links(endpoint_path).read_bytes()) if endpoint_path.exists() else None
+        def ready(binding, endpoint):
+            if not binding or not endpoint or binding.get("scope") != "project" or binding.get("root") != str(root):
+                return False
+            if stat.S_IMODE(binding_path.stat().st_mode) & 0o077:
+                raise ValueError("Project settings session must remain private")
+            service = Settings(engine, root, registry=registry, reference=reference)
+            service.task, service.session = binding["task"], binding["session"]
+            service.context.update(task=service.task, session=service.session)
+            headers = {"Authorization": "Bearer " + binding["token"], **{"X-FlightCheck-" + k.title(): v for k,v in service.context.items()}}
+            connection = HTTPConnection("127.0.0.1", endpoint["port"], timeout=2)
+            try:
+                connection.request("GET", endpoint["route"] + "api/read", headers=headers)
+                response = connection.getresponse(); data = json.loads(response.read())
+                if response.status != 200: return False
+                if data.get("service_revision") != SERVICE_REVISION:
+                    return "outdated"
+                return True
+            except (OSError, ValueError, KeyError):
+                return False
+            finally:
+                connection.close()
+        health = ready(binding, endpoint)
+        if health == "outdated":
+            raise ValueError("Close the older authorized project Settings listener before reopening updated code")
+        if not health:
+            service = Settings(engine, root, registry=registry, reference=reference)
+            binding = {"schema": 1, "scope": "project", "root": str(root), "task": service.task,
+                       "session": service.session, "token": service.token, "reference": reference,
+                       "registry": str(cli.configuration_registry(engine, root, registry)), "engine": str(Path(engine.__file__).resolve())}
+            if binding_path.exists():
+                tx.atomic(state / ("session-" + secrets.token_hex(8) + ".json"), binding_path.read_bytes())
+            tx.atomic(binding_path, encoded(binding))
+            endpoint_path.unlink(missing_ok=True)
+            with (state / "listener.log").open("ab") as log:
+                subprocess.Popen([sys.executable, "-B", str(engine.__file__), "settings", str(root),
+                                  "--authorize-local-settings", reference, "--serve-project-binding", str(binding_path)],
+                                 stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)
+            for _ in range(50):
+                if endpoint_path.exists():
+                    endpoint = json.loads(endpoint_path.read_bytes())
+                    if ready(binding, endpoint): break
+                time.sleep(.1)
+            else:
+                raise ValueError("Project Settings listener unavailable; inspect its private listener log")
+        fragment = "&".join(key + "=" + value for key,value in {"cap": binding["token"], "project": service.project,
+                           "task": binding["task"], "session": binding["session"]}.items())
+        return {"status": "project_settings", "host_preview_url": "http://127.0.0.1:" + str(endpoint["port"]) + endpoint["route"] + "#" + fragment,
+                "project": service.project, "endpoint": str(endpoint_path), "browser_rendering": "unobserved"}
+
+
 class CardRequest(Handler):
     """Use the existing task listener and its delivered browser route."""
     def __init__(self, request, service, route, assets):
@@ -424,7 +546,7 @@ def card_request(request, assets):
     cached = getattr(request.server, "settings_binding", None)
     if cached is None or cached[0] != sha(raw):
         engine = cli.load_installer(binding["engine"])
-        service = Settings(engine, Path(binding["root"]), task, binding["session"], binding.get("registry"), reference=binding["reference"])
+        service = Settings(engine, Path(binding["root"]), task, binding["session"], binding.get("registry"), reference=binding["reference"], project_scope=binding.get("scope") == "project")
         service.token = binding["token"]
         request.server.settings_binding = (sha(raw), service)
     return CardRequest(request, request.server.settings_binding[1], request.server.task_route + "settings/", assets)
@@ -492,23 +614,45 @@ def ensure_settings_listener(engine, status, settings, route):
 def main(argv, engine):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("target", nargs="?", default=".")
-    parser.add_argument("--task", required=True)
-    parser.add_argument("--session", required=True)
+    parser.add_argument("--task", help="Optional legacy task-card transport")
+    parser.add_argument("--session", help="Optional legacy task-card session")
     parser.add_argument("--authorize-local-settings", required=True, metavar="OWNER_REFERENCE")
     parser.add_argument("--registry")
-    parser.add_argument("--card-status", type=Path, required=True, help="Existing private status.json for this exact task listener")
+    parser.add_argument("--card-status", type=Path, help="Optional existing private task transport")
+    parser.add_argument("--project-scope", action="store_true", help="Explicit project editing authorization on an existing task transport")
+    parser.add_argument("--serve-project-binding", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--browser-observation", type=Path, help="Existing fresh supported browser observation for this exact connection")
     args = parser.parse_args(argv)
     root = cli.target(engine, args.target)
+    if args.serve_project_binding:
+        path = tx.no_links(args.serve_project_binding)
+        if path.stat().st_uid != os.geteuid() or stat.S_IMODE(path.stat().st_mode) & 0o077:
+            raise ValueError("Private project session required")
+        binding = json.loads(path.read_bytes())
+        if binding["root"] != str(root) or binding.get("scope") != "project":
+            raise ValueError("Project session belongs to another authorization scope")
+        service = Settings(engine, root, binding["task"], binding["session"], binding.get("registry"), reference=binding["reference"], project_scope=True)
+        service.token = binding["token"]
+        base = Path(engine.__file__).resolve().parent
+        assets = base / "status-card" if base.name == ".flightcheck" else base.parent / "status-card"
+        with project_server(service, assets) as server:
+            tx.atomic(path.parent / "endpoint.json", encoded({"pid": os.getpid(), "port": server.server_port, "route": server.route, "project": service.project}))
+            server.serve_forever()
+        return 0
+    if not args.card_status:
+        print(json.dumps(project_launch(engine, root, args.authorize_local_settings, args.registry)))
+        return 0
+    if not args.task or not args.session:
+        raise ValueError("Legacy task transport needs its matching task and session; omit it for project Settings")
     if not args.task.replace("-", "").replace("_", "").isalnum():
         raise ValueError("Invalid task identifier")
-    settings = Settings(engine, root, args.task, args.session, args.registry, reference=args.authorize_local_settings)
+    settings = Settings(engine, root, args.task, args.session, args.registry, reference=args.authorize_local_settings, project_scope=args.project_scope)
     status = tx.no_links(args.card_status.expanduser().absolute())
     tx.private_dir(status.parent, create=False)
     snapshot = json.loads(status.read_bytes())
     if snapshot.get("task") != args.task:
         raise ValueError("Settings must use the exact task card")
-    binding = {"schema": 1, "task": args.task, "root": str(root), "session": args.session,
+    binding = {"schema": 1, "scope": "project" if args.project_scope else "task", "task": args.task, "root": str(root), "session": args.session,
                "registry": args.registry, "reference": args.authorize_local_settings,
                "engine": str(Path(engine.__file__).resolve()), "token": settings.token}
     tx.atomic(status.parent / "settings-session.json", encoded(binding))

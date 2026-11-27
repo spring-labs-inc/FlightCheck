@@ -10,7 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from capture_check import (digest, evidence_directory, fingerprint, latest_run, matches_pass,
+from capture_check import (digest, evidence_directory, fingerprint, latest_run, matches_pass, same_pass_checkout,
                            write_json, verify_checkout, checkout_identity, same_checkout)
 from proof import acceptance_status, contract_status, freeze, obligations_status, record_review, verdict_status
 from recovery import plan as recovery_plan
@@ -117,8 +117,8 @@ def gate_status(root, gate, candidate, final, checkout_context=None):
             return dict(result, status="unverified", reason="receipt owner does not match the gate assignment")
         if receipt["status"] != "finished":
             return dict(result, status="pending", reason=receipt["status"])
-        if (not same_checkout(receipt.get("checkout_context"), checkout_context)
-                or not same_checkout(receipt.get("checkout_context_after"), checkout_context)):
+        if (not same_pass_checkout(receipt.get("checkout_context"), checkout_context, request.get("configuration_dependencies"))
+                or not same_pass_checkout(receipt.get("checkout_context_after"), checkout_context, request.get("configuration_dependencies"))):
             return dict(result, status="stale", reason="receipt checkout execution identity changed")
         if receipt["exit_code"] != 0:
             output = receipt["output"]

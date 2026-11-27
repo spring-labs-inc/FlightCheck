@@ -16,5 +16,5 @@
       "private_values": "Only within the explicit local Settings session"
     }
   ],
-  "notes": "Canonical synchronization identity remains status_sync; no competing board identity. Browse selects project-relative files/folders through the existing private Settings session, without uploads or outside-project access. Optional-unavailable reasons are inline state, not external links. Bottom [ Settings ]/[ STATUS ] navigation is internal to the task. No actual private destinations are published."
+  "notes": "Canonical synchronization identity remains status_sync; no competing board identity. Browse selects project-relative files/folders through the existing private Settings session, without uploads or outside-project access. Optional-unavailable reasons are inline state, not external links. Bottom [ SETTINGS ]/[ STATUS ] navigation is internal to the task. No actual private destinations are published."
 }
