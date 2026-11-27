@@ -1,21 +1,36 @@
 "use strict";
 const fragment = new URLSearchParams(location.hash.slice(1));
-const capability = fragment.get("cap");
-const context = {project: fragment.get("project"), task: fragment.get("task"), session: fragment.get("session")};
+const navigationKey = "flightcheck-settings:" + location.pathname;
+const taskFromPath = decodeURIComponent(location.pathname.split("/").filter(Boolean).at(-2) || "");
+let retained;
+try {retained = JSON.parse(sessionStorage.getItem(navigationKey));} catch (_) {}
+if (retained?.expires < Date.now() || retained?.context?.task !== taskFromPath) {retained = undefined; try {sessionStorage.removeItem(navigationKey);} catch (_) {}}
+const navigationExpires = fragment.get("cap") ? Date.now() + 30 * 60 * 1000 : retained?.expires;
+let capability = fragment.get("cap") || retained?.capability;
+const context = fragment.get("cap") ? {project: fragment.get("project"), task: fragment.get("task"), session: fragment.get("session")} : retained?.context || {};
 history.replaceState(null, "", location.pathname);
+function forgetContext() {try {sessionStorage.removeItem(navigationKey);} catch (_) {}}
+function rememberContext() {
+  // Same-origin, exact-task, current-tab navigation only. Never a public link,
+  // cookie or persistent localStorage grant. The server revalidates every use.
+  try {sessionStorage.setItem(navigationKey, JSON.stringify({capability, context, expires: navigationExpires}));} catch (_) {}
+}
 const byId = id => document.getElementById(id);
 const clone = value => JSON.parse(JSON.stringify(value));
+const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+const equal = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+let friendlyStatuses = {};
 let current, plan, activePlan, readers = [], labels = {};
 const states = {todo: "To do", ready: "Ready", in_progress: "In progress", review: "In review", done: "Done"};
 function node(tag, text) {const value = document.createElement(tag); if (text !== undefined) value.textContent = text; return value;}
-function message(text, error = false) {const value = byId("message"); value.textContent = text; value.setAttribute("role", error ? "alert" : "status");}
+function message(text, error = false) {const value = byId("message"); value.textContent = text; value.className = error ? "settings-message problem" : "settings-message"; value.setAttribute("role", error ? "alert" : "status");}
 async function api(action, body) {
   const headers = {Authorization: "Bearer " + capability};
   for (const [key, value] of Object.entries(context)) headers["X-FlightCheck-" + key[0].toUpperCase() + key.slice(1)] = value;
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const response = await fetch("api/" + action, {method: body === undefined ? "GET" : "POST", headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: "omit", cache: "no-store"});
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || data.reason || "Settings request failed; reload and preview again");
+  if (!response.ok) {if (response.status === 403) forgetContext(); throw new Error(data.error || data.reason || "Settings request failed; reload and preview again");}
   return data;
 }
 function destination(parent, label, value) {
@@ -73,39 +88,38 @@ function commandArgs(text) {
   if (!result.length || result.some(arg => !arg)) throw new Error("Each check needs a command with nonempty arguments");
   return result;
 }
-function renderResources(parent) {
-  const resources = current.values.resources || {}, values = [];
-  const locations = node("div"); locations.className = "settings-grid"; parent.append(locations);
-  const names = [["issue_tracker", "Issue tracker"], ["project_board", "Project board location"], ["style_guide", "Style guide"], ["documentation", "Documentation"], ["runbook", "Runbooks"], ["logs", "Log location"]];
-  for (const name of Object.keys(resources)) if (!names.some(([key]) => key === name)) names.push([name, name.replace(/_/g, " ")]);
-  for (const [key, label] of names) {
-    const location = node("div"); locations.append(location);
-    const existing = resources[key], input = field(location, "resource-" + key, label, typeof existing === "string" ? existing : existing?.url || "");
-    const unavailable = field(location, "resource-state-" + key, "Availability", existing?.unavailable ? "unavailable" : "available", "text", [["available", "Location"], ["unavailable", "Unavailable — record reason"]]);
-    const reason = field(location, "resource-reason-" + key, "Unavailable reason", existing?.unavailable || ""); reason._settingsRow.hidden = !existing?.unavailable;
-    // Keep field groups discoverable without JSON; optional resources can stay blank.
-    unavailable.addEventListener("change", () => {reason._settingsRow.hidden = unavailable.value !== "unavailable"; input.disabled = unavailable.value === "unavailable";});
-    input.disabled = Boolean(existing?.unavailable);
-    values.push({key, existing, input, unavailable, reason});
-    if (typeof existing === "string" && key !== "project_board") destination(location, label + " details", existing);
-    if (key === "project_board" && existing?.url) destination(location, label + " details", existing.url);
+function resourceControl(parent, key, label) {
+  const existing = current.values.resources?.[key];
+  const value = typeof existing === "string" ? existing : existing?.url || "";
+  const input = field(parent, "resource-" + key, label, value); input.placeholder = "Not configured";
+  let clearUnavailable = false;
+  const status = node("span"); status.className = "settings-hint"; input._settingsRow.append(status);
+  const details = node("details"); details.append(node("summary", "Details"));
+  if (existing?.unavailable) {
+    details.append(node("p", existing.unavailable));
+    const clear = node("button", "Clear unavailable record"); clear.type = "button";
+    clear.addEventListener("click", () => {clearUnavailable = true; update(); invalidate();}); details.append(clear);
   }
-  readers.push(result => {
-    const changes = {};
-    for (const {key, existing, input, unavailable, reason} of values) {
-      let value;
-      if (unavailable.value === "unavailable") {
-        if (!reason.value.trim()) throw new Error("Add the unavailable reason for " + labels[input.dataset.key]);
-        value = {unavailable: reason.value.trim()};
-      } else {
-        const text = input.value.trim(); if (!text && existing === undefined) continue;
-        if (!text) throw new Error("Provide a location or mark " + labels[input.dataset.key] + " unavailable");
-        value = key === "project_board" && typeof existing === "object" && existing.url ? {...existing, url: text} : text;
-      }
-      if (JSON.stringify(value) !== JSON.stringify(existing)) changes[key] = value;
-    }
-    if (Object.keys(changes).length) result.resources = changes;
-  });
+  if (value) destination(details, label + " destination", value);
+  if (existing?.unavailable || value) input._settingsRow.append(details);
+  function update() {
+    status.textContent = input.value.trim() ? "" : existing?.unavailable && !clearUnavailable ? "Unavailable · see Details" : "Not configured";
+    status.className = "settings-hint" + (!input.value.trim() && existing?.unavailable && !clearUnavailable ? " problem-text" : "");
+  }
+  input.addEventListener("input", update); update();
+  return {input, existing, value: () => {
+    const text = input.value.trim();
+    if (!text && existing?.unavailable && !clearUnavailable) return existing;
+    if (!text) return undefined;
+    return typeof existing === "object" && existing.url && text === existing.url ? existing : text;
+  }};
+}
+function renderResources(parent) {
+  const locations = node("div"); locations.className = "settings-grid"; parent.append(locations);
+  const names = [["issue_tracker", "Tracker"], ["style_guide", "Style guide"], ["documentation", "Documentation"], ["runbook", "Runbooks"], ["logs", "Logs"]];
+  for (const name of Object.keys(current.values.resources || {})) if (name !== "project_board" && !names.some(([key]) => key === name)) names.push([name, name.replace(/_/g, " ")]);
+  const controls = names.map(([key, label]) => ({key, ...resourceControl(locations, key, label)}));
+  readers.push(result => {const changes = {}; for (const control of controls) {const value = control.value(); if (JSON.stringify(value) !== JSON.stringify(control.existing)) changes[control.key] = value ?? null;} if (Object.keys(changes).length) result.resources = changes;});
 }
 function renderChecks(parent) {
   parent.append(node("h3", "Check commands"));
@@ -124,73 +138,111 @@ function renderChecks(parent) {
   parent.append(node("p", "Commands are recorded, never run by Settings. Quote arguments containing spaces; shell expansions are not evaluated."));
   readers.push(result => {const checks = rows.filter(row => !row.removed).map(({name, command, phase, original}) => ({...original, name: name.value.trim(), command: command.value === commandText(original.command) ? original.command : commandArgs(command.value), phase: phase.value})); if (JSON.stringify(checks) !== JSON.stringify(current.values.checks)) result.checks = checks;});
 }
-function renderSync(parent) {
-  parent.append(node("h3", "Project synchronization"));
-  const policy = current.values.status_sync, policies = [policy];
-  for (const flight of current.flights || []) {const candidate = flight.configuration.values.status_sync; if (candidate?.project_id && !policies.some(p => p.provider === candidate.provider && p.project_id === candidate.project_id && p.field_id === candidate.field_id)) policies.push(candidate);}
-  const enabled = checkbox(parent, "sync-enabled", "Synchronize project status", policy.mode !== "disabled");
-  const board = field(parent, "sync-board", "Project board", policy.project_id ? "0" : "", "text", [["", "Choose a configured board"], ...policies.flatMap((p, index) => p.project_id ? [[String(index), current.values.resources?.project_board?.url && index === 0 ? current.values.resources.project_board.url : "Recorded board " + (index + 1)]] : [])]);
-  const mode = field(parent, "sync-mode", "If synchronization is unavailable", policy.mode === "required" ? "required" : "advisory", "text", [["advisory", "Report and continue"], ["required", "Block the lifecycle transition"]]);
-  const mappings = node("div"); mappings.className = "settings-grid"; parent.append(mappings); const controls = {};
-  for (const [state, label] of Object.entries(states)) controls[state] = field(mappings, "sync-" + state, label, "", "text", []);
-  function mappingsFor(selected) {
-    const options = [["", "Choose a status"], ...Object.entries(selected.options || {}).map(([key, value]) => [value, states[key]])];
-    for (const state of Object.keys(states)) select(controls[state], options, selected.options?.[state]);
-  }
-  function enable() {board.disabled = mode.disabled = !enabled.checked; for (const control of Object.values(controls)) control.disabled = !enabled.checked;}
-  board.addEventListener("change", () => {mappingsFor(policies[Number(board.value)] || {options: {}}); invalidate();}); enabled.addEventListener("change", enable);
-  mappingsFor(policy); enable();
-  parent.append(node("p", "Uses existing board membership and Status options. Saving settings does not grant tracker access or change an active flight’s status authority."));
-  const details = node("details"); details.append(node("summary", "Board connection details")); parent.append(details);
-  const provider = field(details, "sync-provider", "Provider", policy.provider || "github-projects-v2", "text", [["github-projects-v2", "GitHub Projects v2"]]);
-  const project = field(details, "sync-project-id", "Project ID", policy.project_id || "");
-  const statusField = field(details, "sync-field-id", "Status field ID", policy.field_id || "");
+function renderSync(parent, advanced) {
+  const policy = current.values.status_sync;
+  const resource = resourceControl(parent, "project_board", "Board");
+  help(resource.input, "Configure this board once. Synchronization uses the same connection.");
+  const title = node("p"); title.id = "board-name"; parent.append(title);
+  const status = node("p"); status.id = "board-status"; status.className = "settings-hint"; parent.append(status);
+  const discover = node("button", "Read board details"); discover.type = "button"; discover.id = "discover-board"; parent.append(discover);
+  const enabled = checkbox(parent, "sync-enabled", "Synchronize status", policy.mode !== "disabled");
+  const mappings = node("div"); mappings.id = "sync-mappings"; mappings.className = "settings-grid"; parent.append(mappings);
+  const advancedGroup = node("section"); advancedGroup.append(node("h3", "Synchronization")); advanced.append(advancedGroup);
+  const mode = field(advancedGroup, "sync-mode", "When synchronization fails", policy.mode === "required" ? "required" : "advisory", "text", [["advisory", "Report and continue"], ["required", "Block the transition"]]);
+  help(mode, "Required policy blocks the scoped lifecycle transition when synchronization cannot be verified.");
+  const manual = node("details"); manual.id = "board-manual"; manual.append(node("summary", "Manual board connection · fallback")); advancedGroup.append(manual);
+  manual.append(node("p", "Use existing connection IDs only when board details cannot be read. GitHub Projects v2 is supported. Existing membership is required; Settings never adds it."));
+  const project = field(manual, "sync-project-id", "Project ID", policy.project_id || "");
+  const statusField = field(manual, "sync-field-id", "Status field ID", policy.field_id || "");
   const optionFields = {};
-  for (const [state, label] of Object.entries(states)) optionFields[state] = field(details, "sync-option-" + state, label + " option ID", policy.options[state] || "");
-  details.append(node("p", "Use exact IDs from your existing board. These values are recorded locally; no provider inspection or membership change runs here."));
-  const configure = node("button", "Use this board connection"); configure.type = "button"; configure.id = "configure-board";
-  configure.addEventListener("click", () => {
-    const candidate = {...policy, provider: provider.value, project_id: project.value.trim(), field_id: statusField.value.trim(), options: Object.fromEntries(Object.entries(optionFields).map(([key, control]) => [key, control.value.trim()]))};
-    if (!candidate.project_id || !candidate.field_id || Object.values(candidate.options).some(value => !value)) {message("Complete the board connection and all status option IDs", true); return;}
-    const index = policies.push(candidate) - 1; const option = node("option", "New board connection"); option.value = String(index); board.append(option); board.value = String(index); mappingsFor(candidate); invalidate(); message("Board connection ready for review; it has not been saved.");
-  }); details.append(configure);
+  for (const [state, label] of Object.entries(states)) optionFields[state] = field(manual, "sync-option-" + state, label + " status ID", policy.options[state] || "");
+  const controls = {}; let metadata = current.board_details, selected = clone(policy), lastMode = policy.mode === "required" ? "required" : "advisory";
+  function renderMappings() {
+    mappings.replaceChildren();
+    if (metadata) {
+      title.textContent = metadata.title + " · " + metadata.field.name;
+      friendlyStatuses = Object.fromEntries(metadata.field.options.map(option => [option.id, option.name]));
+    }
+    if (metadata) for (const [state, label] of Object.entries(states)) {
+      const options = metadata.field.options.map(option => [option.id, option.name]);
+      // An absent mapping remains an explicit choice; never infer from names.
+      const saved = selected.options[state] || "", missing = saved && !options.some(([id]) => id === saved);
+      controls[state] = field(mappings, "sync-" + state, label, saved, "text", [["", "Choose a status"], ...(missing ? [[saved, "Previously configured status · unavailable"]] : []), ...options]);
+      if (missing) {help(controls[state], "The observed field no longer contains this saved status. Choose an available status."); controls[state].setAttribute("aria-invalid", "true");}
+    } else mappings.append(node("p", "Read board details for named status choices. Saved mappings are preserved; manual setup is available in Advanced."));
+    relevance();
+  }
+  function relevance() {
+    mappings.hidden = !enabled.checked; mode._settingsRow.hidden = !enabled.checked;
+    manual.hidden = Boolean(metadata); advancedGroup.hidden = !enabled.checked && Boolean(metadata);
+    discover.disabled = !resource.input.value.trim();
+  }
+  enabled.addEventListener("change", relevance);
+  resource.input.addEventListener("input", () => {
+    metadata = undefined; title.textContent = ""; status.textContent = "";
+    // A changed URL cannot inherit another board's IDs. Preserve saved policy
+    // while synchronization is off; enabling requires the newly resolved board.
+    selected = clone(policy); renderMappings(); invalidate();
+  });
+  discover.addEventListener("click", async () => {
+    try {
+      const data = await api("board-discover", {url: resource.input.value.trim(), authorize_read: true});
+      if (data.field.options.length < 5) throw new Error("This field has fewer than five statuses; distinct lifecycle mappings cannot be configured");
+      metadata = data; title.textContent = data.title + " · " + data.field.name;
+      status.textContent = "Board details read. Review mappings before saving."; status.className = "settings-hint";
+      const same = selected.project_id === data.project_id && selected.field_id === data.field.id;
+      selected = {...policy, provider: data.provider, project_id: data.project_id, field_id: data.field.id, options: same ? {...selected.options} : {}};
+      renderMappings(); invalidate();
+    } catch (error) {metadata = undefined; status.textContent = error.message; status.className = "settings-hint problem-text"; renderMappings();}
+  });
+  renderMappings();
   readers.push(result => {
-    let selected = board.value === "" ? policy : policies[Number(board.value)];
-    if (enabled.checked && board.value === "") throw new Error("Choose or configure a project board before enabling synchronization");
-    const value = {...selected, mode: enabled.checked ? mode.value : "disabled", options: {...selected.options}};
-    if (enabled.checked) for (const state of Object.keys(states)) value.options[state] = controls[state].value;
-    if (JSON.stringify(value) !== JSON.stringify(policy)) result.status_sync = value;
-    // A bound destination always follows the one canonical provider/project.
-    const resource = result.resources?.project_board || current.values.resources?.project_board;
-    if (typeof resource === "string" && result.resources?.project_board && value.project_id) result.resources.project_board = {url: resource, provider: value.provider, project_id: value.project_id};
-    if (resource?.url && (resource.provider !== value.provider || resource.project_id !== value.project_id)) result.resources = {...result.resources, project_board: {...resource, provider: value.provider, project_id: value.project_id}};
+    const pointer = resource.value(), url = typeof pointer === "string" ? pointer : pointer?.url;
+    let value = clone(policy);
+    const manualValues = {project_id: project.value.trim() || null, field_id: statusField.value.trim() || null, options: Object.fromEntries(Object.entries(optionFields).map(([key, control]) => [key, control.value.trim()]))};
+    const manualChanged = manualValues.project_id !== policy.project_id || manualValues.field_id !== policy.field_id || Object.keys(states).some(key => manualValues.options[key] !== (policy.options[key] || ""));
+    if (metadata && enabled.checked && Object.values(controls).some(control => !metadata.field.options.some(option => option.id === control.value))) throw new Error("Choose existing statuses from the observed board field");
+    if (metadata) value = {...selected, options: enabled.checked ? Object.fromEntries(Object.entries(controls).map(([key, control]) => [key, control.value])) : {...selected.options}};
+    else if (manualChanged) value = {...policy, provider: "github-projects-v2", ...manualValues};
+    if (enabled.checked && (!url || !value.project_id || !value.field_id || Object.keys(states).some(key => !value.options[key]))) throw new Error("Read board details or complete Advanced connection setup before enabling synchronization");
+    const previousURL = typeof resource.existing === "string" ? resource.existing : resource.existing?.url;
+    const bound = Boolean(resource.existing?.url && resource.existing.url === url && resource.existing.provider === policy.provider && resource.existing.project_id === policy.project_id);
+    if (enabled.checked && !bound && !metadata && !manualChanged) throw new Error("Read details or explicitly confirm the connection for this board before enabling synchronization");
+    if (enabled.checked) {lastMode = mode.value; value.mode = lastMode;} else value.mode = "disabled";
+    if (!equal(value, policy)) result.status_sync = value;
+    let destination = pointer;
+    if (url && value.project_id && (metadata || url === previousURL || manualChanged)) destination = {url, provider: value.provider, project_id: value.project_id};
+    if (JSON.stringify(destination) !== JSON.stringify(resource.existing)) result.resources = {...result.resources, project_board: destination ?? null};
   });
 }
 function render(data) {
-  current = data; readers = []; labels = {}; plan = undefined; activePlan = undefined;
+  current = data; readers = []; labels = {}; friendlyStatuses = {}; plan = undefined; activePlan = undefined;
   byId("save").disabled = true; byId("adopt").disabled = true; byId("review").hidden = true; byId("preview").hidden = false;
   byId("recovery").hidden = data.status !== "recovery_required";
   if (data.status !== "configuration") {message(data.reason, data.status === "recovery_required"); byId("locked").hidden = data.status === "recovery_required"; byId("settings").hidden = true; return;}
   byId("locked").hidden = true; byId("settings").hidden = false; byId("groups").hidden = false; byId("groups").replaceChildren(); byId("advanced-fields").replaceChildren();
+  const advanced = byId("advanced-fields");
   const project = section("Project"); renderResources(project);
+  renderSync(section("Project board"), advanced);
   const workflow = section("Workflow"); const activation = checkbox(workflow, "activation", "Use FlightCheck by default for coding work", data.values.activation === "default-for-coding"); help(activation, "Leave off to opt in for each task.");
   readers.push(result => {const value = activation.checked ? "default-for-coding" : "opt-in"; if (value !== data.values.activation) result.activation = value;});
-  renderChecks(workflow); simple(workflow, "preview", "UI preview instructions", "textarea"); renderSync(workflow);
+  renderChecks(workflow); simple(workflow, "preview", "UI preview instructions", "textarea");
   const checkout = section("Checkout & Cleanup"), policy = data.values.checkout_policy;
   const mode = field(checkout, "checkout-mode", "Checkout choice", policy.mode, "text", [["native-choice", "Native choice (default)"], ["worktree-required", "Require a separate worktree"]]);
   const fallback = checkbox(checkout, "checkout-fallback", "Allow Git fallback when native checkout creation is unavailable", policy.git_fallback);
   const prefix = field(checkout, "checkout-prefix", "Branch prefix", policy.branch_prefix || "");
-  const protectedBranches = field(checkout, "protected_branches", "Protected / shared branches", data.values.protected_branches.join(", ")); help(protectedBranches, "Comma-separated names. The actual default branch is always protected.");
-  readers.push(result => {const value = {...policy, mode: mode.value, git_fallback: fallback.checked}; if (prefix.value.trim()) value.branch_prefix = prefix.value.trim(); else if (policy.branch_prefix) throw new Error("Branch prefix cannot be empty"); if (JSON.stringify(value) !== JSON.stringify(policy)) result.checkout_policy = value; const branches = [...new Set(protectedBranches.value.split(",").map(s => s.trim()).filter(Boolean).concat(data.values.default_branch))].sort(); if (JSON.stringify(branches) !== JSON.stringify(data.values.protected_branches)) result.protected_branches = branches;});
+  const protectedBranches = field(checkout, "protected_branches", "Additional protected branches", data.values.protected_branches.filter(branch => branch !== data.values.default_branch).join(", ")); help(protectedBranches, "Default branch " + data.values.default_branch + " is always protected. Add other shared branches, separated by commas.");
+  readers.push(result => {const value = {...policy, mode: mode.value, git_fallback: fallback.checked}; if (prefix.value.trim()) value.branch_prefix = prefix.value.trim(); else if (policy.branch_prefix) value.branch_prefix = null; if (JSON.stringify(value) !== JSON.stringify(policy)) result.checkout_policy = value; const branches = [...new Set(protectedBranches.value.split(",").map(s => s.trim()).filter(Boolean).concat(data.values.default_branch))].sort(); if (JSON.stringify(branches) !== JSON.stringify(data.values.protected_branches)) result.protected_branches = branches;});
   checkout.append(node("h3", "Future cleanup authority"));
   const cleanup = {};
   for (const [key, label] of [["local_branches", "Verified merged local branches"], ["remote_branches", "Verified merged actual remote branches"], ["temporary_worktrees", "Verified merged temporary worktrees"]]) cleanup[key] = checkbox(checkout, "cleanup-" + key, label, data.values.cleanup_policy[key]);
-  checkout.append(node("p", "Exact artifacts and authority are captured at launch. Protected, active, dirty, unknown-private and unintegrated work must always be preserved. Ownership verification and safe checkout protections are required."));
+  checkout.append(node("p", "Each flight captures exact cleanup grants. Mandatory preservation and checkout protections always apply."));
   readers.push(result => {const value = {...data.values.cleanup_policy}; for (const [key, control] of Object.entries(cleanup)) value[key] = control.checked; if (JSON.stringify(value) !== JSON.stringify(data.values.cleanup_policy)) result.cleanup_policy = value;});
-  const delivery = section("Evidence & Delivery"); simple(delivery, "evidence_dir", "Private evidence location"); simple(delivery, "nit_tracker", "Nit tracker location");
+  const delivery = section("Evidence & Delivery"); simple(delivery, "evidence_dir", "Private evidence location"); help(byId("field-evidence_dir"), "Proof from checks and reviews; operational log lookup is in Project."); simple(delivery, "nit_tracker", "Minor follow-ups"); help(byId("field-nit_tracker"), "Nonblocking review follow-ups; project work belongs in the tracker.");
   simple(delivery, "review_client", "Review client", "text", [["", "Choose a client"], ["Codex", "Codex"], ["Claude", "Claude"]]);
   simple(delivery, "delivery", "Delivery policy", "text", [["Reviewed pull request; merge after required approval", "Pull request and approved merge"], ["Prepare review only; no provider writes", "Prepare review only"]]);
-  const advanced = byId("advanced-fields"); simple(advanced, "reviewer_access", "Reviewer access requirements", "textarea"); simple(advanced, "policy_reference", "Project policy location");
+  simple(advanced, "reviewer_access", "Reviewer access", "textarea"); simple(advanced, "policy_reference", "Flight policy");
+  advanced.append(node("p", "Flight policy governs development and delivery; the style guide covers coding conventions. Runtime requirements describe needed tools; the pinned executable is shown under Details."));
   const runtimes = field(advanced, "required_runtimes", "Required runtimes", (data.values.required_runtimes || []).join("\n"), "textarea"); help(runtimes, "One existing runtime requirement per line. Settings does not install or execute runtimes.");
   readers.push(result => {const value = runtimes.value.split("\n").map(row => row.trim()).filter(Boolean); if (JSON.stringify(value) !== JSON.stringify(data.values.required_runtimes || [])) result.required_runtimes = value;});
   const retained = node("details"); retained.append(node("summary", "Additional artifacts to preserve")); advanced.append(retained);
@@ -202,7 +254,7 @@ function render(data) {
   for (const row of data.values.cleanup_policy.retained_artifacts) retain(row);
   const addRetention = node("button", "Add preservation preference"); addRetention.type = "button"; addRetention.addEventListener("click", () => {retain(); invalidate();}); retained.append(addRetention);
   readers.push(result => {const rows = retentionRows.map(({identity, reason}) => ({identity: identity.value.trim(), reason: reason.value.trim()})).filter(row => row.identity || row.reason); if (rows.some(row => !row.identity || !row.reason)) throw new Error("Each preservation preference needs an identity and reason"); if (JSON.stringify(rows) !== JSON.stringify(data.values.cleanup_policy.retained_artifacts)) result.cleanup_policy = {...data.values.cleanup_policy, ...result.cleanup_policy, retained_artifacts: rows};});
-  byId("repository").textContent = "Checkout: " + data.repository.checkout + " · Git identity: " + data.repository.git_common_dir;
+  byId("repository").textContent = "Default branch: " + data.values.default_branch + ". Checkout: " + data.repository.checkout + " · Git identity: " + data.repository.git_common_dir;
   byId("revision").textContent = data.revision; byId("capabilities").textContent = "Pinned Python: " + data.values.python + ". Runtime: " + data.runtime.status + ". " + data.capabilities.native_checkout + ". " + data.capabilities.mandatory;
   byId("provenance").replaceChildren();
   for (const [key, meta] of Object.entries(data.values._flightcheck?.fields || {})) {const detail = node("p", key + ": " + meta.source + " · " + meta.scope + " · " + (meta.confirmed ? "confirmed" : "suggestion") + " · validation: " + meta.last_validation.status + " (" + meta.last_validation.validator + ")"); byId("provenance").append(detail);}
@@ -213,7 +265,7 @@ function render(data) {
   }
   byId("flights").replaceChildren();
   for (const flight of data.flights || []) {const detail = node("details"); detail.append(node("summary", flight.flight + (flight.configuration.revision === data.revision ? " · matches saved settings" : " · uses earlier settings"))); detail.append(node("pre", JSON.stringify(flight, null, 2))); byId("flights").append(detail);}
-  message("Review your changes before saving.");
+  rememberContext(); message("Review changes before saving.");
 }
 async function reload() {render(await api("read"));}
 function changes() {const result = {}; for (const reader of readers) reader(result); if (!Object.keys(result).length) throw new Error("Change a value before reviewing"); return result;}
@@ -223,11 +275,22 @@ function human(value, key) {
   if (typeof value === "boolean") return value ? "Enabled" : "Off";
   if (Array.isArray(value)) return value.map(item => typeof item === "object" && item.command ? item.name + ": " + commandText(item.command) + " (" + item.phase + ")" : human(item, key)).join("; ") || "None";
   if (typeof value === "object") return Object.entries(value).filter(([name]) => !name.endsWith("reference")).map(([name, item]) => (labels[name] || states[name] || name.replace(/_/g, " ")) + ": " + human(item, name)).join("; ") || "None";
-  return states[value] || ({"default-for-coding": "On for coding work", "opt-in": "Opt in per task", "native-choice": "Native choice", "worktree-required": "Require a separate worktree", "disabled": "Off", "advisory": "Report and continue", "required": "Block if unavailable"})[value] || String(value);
+  return friendlyStatuses[value] || states[value] || ({"default-for-coding": "On for coding work", "opt-in": "Opt in per task", "native-choice": "Native choice", "worktree-required": "Require a separate worktree", "disabled": "Off", "advisory": "Report and continue", "required": "Block if unavailable"})[value] || String(value);
 }
 function showPreview(result) {
   const effects = byId("effects"); effects.replaceChildren(); const list = node("ul");
-  for (const [key, change] of Object.entries(result.changes)) {const item = node("li"); item.append(node("b", (labels[key] || key.replace(/_/g, " ")) + ": ")); item.append(node("span", human(change.before, key) + " → " + human(change.after, key))); list.append(item);}
+  function difference(before, after, path) {
+    if (equal(before, after) || path.at(-1).endsWith("reference")) return;
+    const key = path.at(-1);
+    if (["schema", "provider", "project_id", "field_id", "membership"].includes(key) && path[0] === "status_sync") return;
+    if (before && after && typeof before === "object" && typeof after === "object" && !Array.isArray(before) && !Array.isArray(after)) {
+      for (const name of new Set([...Object.keys(before), ...Object.keys(after)])) difference(before[name], after[name], [...path, name]); return;
+    }
+    const item = node("li"), caption = labels["resource-" + key] || labels[key] || states[key] || key.replace(/_/g, " ");
+    const display = value => path.includes("options") && value ? friendlyStatuses[value] || "Saved status mapping" : human(value, key);
+    item.append(node("b", caption + ": "), node("span", display(before) + " → " + display(after))); list.append(item);
+  }
+  for (const [key, change] of Object.entries(result.changes)) difference(change.before, change.after, [key]);
   effects.append(list); effects.append(node("p", "Saving records this configuration decision. Active flight decisions and grants stay captured."));
   const details = node("details"); details.append(node("summary", "Details: affected files and validation")); details.append(node("pre", JSON.stringify(result.effects, null, 2))); effects.append(details);
   byId("groups").hidden = true; byId("review").hidden = false; byId("preview").hidden = true; byId("save").disabled = false; effects.focus();
@@ -246,5 +309,6 @@ action("audit", async () => {
 });
 action("reconfigure", async () => {const result = await api("reconfigure-preview", {flight: context.task}); activePlan = result.plan_id; byId("active-effects").textContent = result.next + ". Existing grants are retained."; byId("adopt").disabled = false; byId("active-effects").focus();});
 action("adopt", async () => {await api("reconfigure-apply", {plan_id: activePlan}); await reload(); message("Active configuration adopted. Affected revalidation remains required before execution.");});
-if (capability && Object.values(context).every(Boolean)) reload().catch(error => message(error.message, true));
+action("forget-settings", async () => {forgetContext(); capability = undefined; byId("settings").hidden = true; byId("locked").hidden = false; message("Settings navigation session cleared. Use the authorized launcher to edit again.");});
+if (capability && context.task === taskFromPath && [context.project, context.task, context.session].every(Boolean)) reload().catch(error => message(error.message, true));
 else message("Read-only card view. Start an explicitly authorized local Settings session to edit private configuration.");

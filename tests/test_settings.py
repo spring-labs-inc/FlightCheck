@@ -328,7 +328,7 @@ class SettingsTests(unittest.TestCase):
         self.assertIn("hidden", byid["recovery"][1])
         self.assertNotIn("open", byid["advanced"][1])
         task_link = next(attrs for tag, attrs in surface.tags if tag == "a" and attrs.get("href") == "../")
-        self.assertEqual(task_link["target"], "_blank"); self.assertEqual(task_link["rel"], "noopener noreferrer")
+        self.assertNotIn("target", task_link); self.assertEqual(task_link["id"], "task-status-link")
         js = (PRODUCT / "status-card/settings.js").read_text(); css = (PRODUCT / "status-card/card.css").read_text()
         node = shutil.which("node")
         self.assertIsNotNone(node, "Existing Node runtime is required for the focused script syntax check")

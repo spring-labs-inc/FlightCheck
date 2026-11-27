@@ -11,8 +11,10 @@ import json
 import os
 from pathlib import Path
 import secrets
+import re
 import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 from types import SimpleNamespace
@@ -87,7 +89,11 @@ class Settings:
         if getattr(model, "SETTINGS_SCHEMA", None) != 1:
             return {"status": "incompatible", **current, "context": self.context,
                     "reason": "This pinned configuration adapter predates Settings. Preview and explicitly apply the bounded configuration-adapter update before editing; workflow and runtime pins remain preserved."}
-        return {"status": "configuration", **current, "context": self.context,
+        details = getattr(self, "_board_details", None)
+        board = current["values"].get("resources", {}).get("project_board")
+        if not (details and isinstance(board, dict) and board.get("url", "").rstrip("/") == details["url"].rstrip("/") and details["project_id"] == current["values"]["status_sync"]["project_id"] and details["field"]["id"] == current["values"]["status_sync"]["field_id"]):
+            details = None
+        return {"status": "configuration", **current, "context": self.context, "board_details": details,
                 "repository": {"checkout": str(self.root), "git_common_dir": self.repository},
                 "runtime": cli.runtime_structure(current["values"], pin["runtime"]) if pin else {"status": "unconfigured"},
                 "flights": [{"flight": r["flight"], "configuration": r["configuration"], "reconfiguration": r.get("reconfiguration"),
@@ -128,6 +134,61 @@ class Settings:
         result = cli.configuration_apply(self.engine, self.root, plan)
         self.plans.clear()
         return result
+
+    def board_provider(self):
+        """Reuse the verified installed provider's existing read-only transport."""
+        state, _ = cli.configuration_integrity(self.engine, self.root)
+        path = self.root / ".flightcheck/scripts/status_sync_github.py"
+        expected = state["files"].get(".flightcheck/scripts/status_sync_github.py", {}).get("sha256")
+        if path.is_symlink() or not expected or sha(path.read_bytes()) != expected:
+            raise ValueError("Verified board provider is unavailable; use Advanced connection setup")
+        provider = cli.load_installer(path)
+        return provider.GitHubProjects("", self.read()["values"]["status_sync"])
+
+    def board_discover(self, data):
+        self.verify_context()
+        if data.get("authorize_read") is not True:
+            raise ValueError("Board details require an explicit read authorization")
+        url = data.get("url")
+        if not isinstance(url, str) or not re.fullmatch(r"https://github\.com/(orgs|users)/[A-Za-z0-9_.-]+/projects/[1-9][0-9]*/?", url):
+            raise ValueError("Use the exact existing GitHub project URL or Advanced connection setup")
+        kind, owner, _, number = urlsplit(url).path.strip("/").split("/")
+        board = self.read()["values"].get("resources", {}).get("project_board")
+        policy = self.read()["values"]["status_sync"]
+        fields = "id title url closed fields(first:100){pageInfo{hasNextPage} nodes{... on ProjectV2SingleSelectField{id name options{id name}}}}"
+        if isinstance(board, dict) and board.get("url", "").rstrip("/") == url.rstrip("/") and board.get("project_id") == policy["project_id"]:
+            query = "query($project:ID!){project:node(id:$project){... on ProjectV2{" + fields + "}}}"
+            variables = {"project": policy["project_id"]}
+        else:
+            owner_type = "organization" if kind == "orgs" else "user"
+            query = "query($owner:String!,$number:Int!){owner:" + owner_type + "(login:$owner){project:projectV2(number:$number){" + fields + "}}}"
+            variables = {"owner": owner, "number": int(number)}
+        result = self.board_provider().query(query, variables)
+        project = result.get("project") or (result.get("owner") or {}).get("project")
+        if (not isinstance(project, dict) or not project.get("id") or not project.get("title")
+                or project.get("url", "").rstrip("/") != url.rstrip("/") or project.get("closed") is not False):
+            raise ValueError("Existing board identity or availability could not be verified")
+        if "project" in variables and project["id"] != variables["project"]:
+            raise ValueError("Board identity changed; reconcile its connection")
+        connection = project.get("fields", {})
+        if connection.get("pageInfo", {}).get("hasNextPage") is not False or not isinstance(connection.get("nodes"), list):
+            raise ValueError("Board field observation is incomplete; use Advanced connection setup")
+        fields = [f for f in connection["nodes"] if isinstance(f, dict) and f.get("options") is not None]
+        same_board = project["id"] == policy["project_id"]
+        chosen = [f for f in fields if same_board and f.get("id") == policy["field_id"]]
+        if not chosen:
+            chosen = [f for f in fields if f.get("name", "").casefold() == "status"]
+        if len(chosen) != 1:
+            raise ValueError("Status field is missing or ambiguous; use Advanced connection setup")
+        field = chosen[0]
+        if (not field.get("id") or not field.get("name") or not isinstance(field.get("options"), list)
+                or not field["options"] or any(not isinstance(o, dict) or not o.get("id") or not o.get("name") for o in field["options"])
+                or len({o["id"] for o in field["options"]}) != len(field["options"])):
+            raise ValueError("Status options are incomplete; use Advanced connection setup")
+        self._board_details = {"observed_at": time.time(), "provider": "github-projects-v2", "project_id": project["id"], "title": project["title"],
+                "url": project["url"], "field": {"id": field["id"], "name": field["name"],
+                                               "options": [{"id": o["id"], "name": o["name"]} for o in field["options"]]}}
+        return copy.deepcopy(self._board_details)
 
     def recover(self):
         self.verify_context()
@@ -249,6 +310,7 @@ class Handler(BaseHTTPRequestHandler):
             action = urlsplit(self.path).path[len(route + "api/"):]
             s = self.server.settings
             actions = {"preview": lambda: s.preview(data), "apply": lambda: s.apply(data), "recover": s.recover,
+                       "board-discover": lambda: s.board_discover(data),
                        "audit": lambda: s.audit(remote=data.get("remote", False)), "reconfigure-preview": lambda: s.reconfigure_preview(data), "reconfigure-apply": lambda: s.reconfigure_apply(data)}
             if action not in actions:
                 raise ValueError("Unsupported Settings action")

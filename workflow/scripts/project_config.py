@@ -289,6 +289,12 @@ def propose(root, current, changes, expected_revision, reference, runtime_observ
     for key, change in changes.items():
         if key in ("resources", "cleanup_policy", "checkout_policy") and isinstance(change, dict):
             value[key] = {**copy.deepcopy(value.get(key, {})), **copy.deepcopy(change)}
+            if key == "checkout_policy" and value[key].get("branch_prefix", "") is None:
+                value[key].pop("branch_prefix")
+            if key == "resources":
+                # Null in the common update operation removes an optional
+                # pointer. Missing configuration is not an unavailable reason.
+                value[key] = {name: pointer for name, pointer in value[key].items() if pointer is not None}
         else:
             value[key] = copy.deepcopy(change)
         value.setdefault(META, {"schema": 1, "fields": {}})["fields"].pop(key, None)
@@ -301,5 +307,6 @@ def propose(root, current, changes, expected_revision, reference, runtime_observ
     if runtime_observation is not None:
         result[META]["fields"]["observed_python"].update(source="explicit-update", confirmed=True, confirmation_reference=reference)
     for key in changes.get("resources", {}):
-        result[META]["fields"]["resources." + key].update(source="explicit-update", confirmed=True, confirmation_reference=reference)
+        if key in result["resources"]:
+            result[META]["fields"]["resources." + key].update(source="explicit-update", confirmed=True, confirmation_reference=reference)
     return result

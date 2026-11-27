@@ -33,20 +33,38 @@ revokes it. Loopback Host validation alone does not authorize a write.
 
 ## Fields and authority
 
-Settings presents separate location fields, an activation checkbox, classified
-check-command rows, checkout choices and separate cleanup checkboxes. Project
-synchronization uses a board selector and status-mapping dropdowns backed by the
-same `status_sync` policy as setup and CLI. Existing recorded boards are offered
-without a provider request. To configure another board, expand Board connection
-details and supply its exact existing project, field and option IDs. This records
-configuration; it does not inspect the provider or create membership or authority.
+Settings uses ordinary location fields, an activation checkbox, classified check
+rows, checkout choices and separate cleanup checkboxes. Empty optional resources
+are **Not configured**. Known unavailable resources retain their explicit reason
+under Details; clearing that record is deliberate. An optional resource update
+of `null` removes its pointer through the common updater, including CLI updates.
+It does not fabricate an unavailable reason or probe access automatically.
 
-Choose Review changes to see a concise description, then Save changes or Back to
-editing. Cancel changes reloads the saved values. The local authorization remains
-explicit at launch; Settings records each preview/save decision internally without
-requiring another reference textbox. Technical identity, provenance and validation
-are under Advanced → Details. Recovery appears only for an interrupted update.
-Task status opens in a separate tab, keeping the private editing session open.
+The Project board section owns the board location, synchronization switch and
+status mapping. **Read board details** authorizes a bounded read of that exact
+existing GitHub project through the existing provider transport and credentials.
+It shows observed board/status names without saving, granting access or changing
+membership. Ambiguous or incomplete fields are reported inline. Saved IDs are
+reused; manual connection IDs appear once under Advanced when names cannot be
+read. A changed, unbound board URL cannot enable synchronization with another
+board's old IDs, including after saving while synchronization is off. Mappings
+hide when off, preserving the configured connection and option values. The
+advisory/required failure policy is a separate meaningful Advanced choice.
+
+Choose Review changes, then Save changes or Back to editing. Cancel changes
+reloads saved values. Settings records deliberate decisions internally under the
+existing launch authorization. Technical provenance and validation remain under
+Advanced → Details; recovery appears only for an interrupted transaction.
+
+Task Status returns to the card in this tab, whose header has a visible Settings
+link back to the same project/task. After a successful authorized read, the exact
+capability/context is retained only in same-origin, exact-task `sessionStorage`
+for this tab for up to 30 minutes. It is never in a public link, cookie or
+persistent `localStorage`. The server verifies every request; wrong task/project/
+session or revoked authorization remains blocked. Authorization failures clear
+this navigation record. Closing the tab ends its browser context, and Details
+provides an explicit Clear Settings navigation session action. An ordinary card
+in a fresh tab does not acquire editing permission; use the authorized launcher.
 
 | Group | Common fields | Boundaries |
 | --- | --- | --- |
