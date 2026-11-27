@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import stat
 import re
 import sys
 import threading
@@ -134,6 +135,75 @@ class Settings:
         result = cli.configuration_apply(self.engine, self.root, plan)
         self.plans.clear()
         return result
+
+    def browse(self, data):
+        """List/select project names through this exact private Settings session.
+
+        No file contents, uploads, shell commands or client-local paths are used.
+        Directory descriptors keep every traversal anchored to the project even
+        when a concurrently changed path is replaced with a symlink.
+        """
+        self.verify_context()
+        current = self.read()
+        if current.get("status") != "configuration":
+            raise ValueError("Configure or recover this project before browsing")
+        kinds = {"resources.style_guide": "file", "resources.documentation": "directory",
+                 "resources.runbook": "file", "resources.logs": "any",
+                 "policy_reference": "file", "nit_tracker": "any"}
+        for key in current["values"].get("resources", {}):
+            if key not in ("issue_tracker", "project_board"):
+                kinds.setdefault("resources." + key, "any")
+        field = data.get("field")
+        if field not in kinds:
+            raise ValueError("This location uses an explicit host path, not project browsing")
+        raw = data.get("path", "")
+        if (not isinstance(raw, str) or "\x00" in raw or "\\" in raw
+                or Path(raw).is_absolute() or any(part.startswith(".") for part in Path(raw).parts)):
+            raise ValueError("Choose an ordinary file or folder inside this project")
+        if not hasattr(os, "O_NOFOLLOW") or os.open not in os.supports_dir_fd:
+            raise ValueError("Safe project browsing is unavailable here; enter the path directly")
+        parts = Path(raw).parts
+        evidence = Path(current["values"]["evidence_dir"]).expanduser()
+        if not evidence.is_absolute():
+            evidence = self.root / evidence
+        try:
+            private_parts = evidence.relative_to(self.root).parts
+        except ValueError:
+            private_parts = None
+        if private_parts is not None and parts[:len(private_parts)] == private_parts:
+            raise ValueError("Private evidence is not a project resource; enter its host path directly")
+        selecting = data.get("select") is True
+        directory_parts = parts[:-1] if selecting and parts else parts
+        descriptor = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            for part in directory_parts:
+                next_descriptor = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=descriptor)
+                os.close(descriptor); descriptor = next_descriptor
+            if selecting:
+                info = os.stat(parts[-1], dir_fd=descriptor, follow_symlinks=False) if parts else os.fstat(descriptor)
+                kind = "directory" if stat.S_ISDIR(info.st_mode) else "file" if stat.S_ISREG(info.st_mode) else None
+                if kind is None or kinds[field] not in ("any", kind):
+                    raise ValueError("Choose a " + kinds[field] + " for this location")
+                return {"selected": "/".join(parts) or ".", "kind": kind}
+            entries, scanned, truncated = [], 0, False
+            with os.scandir(descriptor) as stream:
+                for entry in stream:
+                    scanned += 1
+                    if scanned > 1000 or len(entries) >= 200:
+                        truncated = True; break
+                    if entry.name.startswith(".") or entry.is_symlink():
+                        continue
+                    candidate_parts = (*parts, entry.name)
+                    if private_parts is not None and candidate_parts[:len(private_parts)] == private_parts:
+                        continue
+                    kind = "directory" if entry.is_dir(follow_symlinks=False) else "file" if entry.is_file(follow_symlinks=False) else None
+                    if kind:
+                        entries.append({"name": entry.name, "path": "/".join((*parts, entry.name)), "kind": kind})
+            entries.sort(key=lambda entry: (entry["kind"] != "directory", entry["name"].casefold()))
+            return {"directory": "/".join(parts), "parent": "/".join(parts[:-1]) if parts else None,
+                    "entries": entries, "kind": kinds[field], "truncated": truncated}
+        finally:
+            os.close(descriptor)
 
     def board_provider(self):
         """Reuse the verified installed provider's existing read-only transport."""
@@ -310,6 +380,7 @@ class Handler(BaseHTTPRequestHandler):
             action = urlsplit(self.path).path[len(route + "api/"):]
             s = self.server.settings
             actions = {"preview": lambda: s.preview(data), "apply": lambda: s.apply(data), "recover": s.recover,
+                       "browse": lambda: s.browse(data),
                        "board-discover": lambda: s.board_discover(data),
                        "audit": lambda: s.audit(remote=data.get("remote", False)), "reconfigure-preview": lambda: s.reconfigure_preview(data), "reconfigure-apply": lambda: s.reconfigure_apply(data)}
             if action not in actions:

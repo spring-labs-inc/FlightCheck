@@ -31,12 +31,14 @@ const fs = require("fs"), vm = require("vm"), readline = require("readline"), as
     setAttribute(key, value) {this.attrs[key] = String(value);}
     addEventListener(name, action) {(this.handlers[name] ||= []).push(action);}
     focus() {active = this;}
+    showModal() {this.open = true;} close() {this.open = false;}
     async emit(name) {if (name === "click") assert.equal(this.disabled, false); for (const fn of this.handlers[name] || []) await fn({preventDefault() {}});}
   }
   for (const [id, spec] of Object.entries(setup.elements)) {const e = new Element(spec.tag); e.id = id; e.parent = root; e.disabled = "disabled" in spec.attrs; e.hidden = "hidden" in spec.attrs; e.attrs = spec.attrs;}
-  const doc = {getElementById: id => ids.get(id) || null, createElement: tag => new Element(tag), querySelectorAll: () => all.filter(e => {let p = e; while (p && p !== root) p = p.parent; return p === root && e.dataset.key;})};
+  const doc = {getElementById: id => {const e = ids.get(id); let p = e; while (p && p !== root) p = p.parent; return p === root ? e : null;}, createElement: tag => new Element(tag), querySelectorAll: () => all.filter(e => {let p = e; while (p && p !== root) p = p.parent; return p === root && e.dataset.key;})};
   const fragment = new URLSearchParams({cap: setup.token, ...setup.context}).toString();
-  const location = {hash: "#" + fragment, pathname: new URL(setup.base).pathname};
+  const navigations = [];
+  const location = {hash: "#" + fragment, pathname: new URL(setup.base).pathname, assign: target => navigations.push(new URL(target, setup.base).href)};
   const storage = new Map();
   const sandbox = {document: doc, location, URL, URLSearchParams, Set, Date, sessionStorage: {getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key)}, history: {replaceState() {}}, fetch: (path, options) => fetch(new URL(path, setup.base), {...options, headers: {...options.headers, Origin: new URL(setup.base).origin}})};
   vm.runInNewContext(fs.readFileSync(setup.script, "utf8"), sandbox, {filename: setup.script});
@@ -49,6 +51,24 @@ const fs = require("fs"), vm = require("vm"), readline = require("readline"), as
   assert.equal(doc.getElementById("field-activation").type, "checkbox");
   for (const key of ["check-phase-0", "checkout-mode", "review_client", "delivery"]) assert.equal(doc.getElementById("field-" + key).tagName, "SELECT");
   for (const key of ["issue_tracker", "project_board", "style_guide", "documentation", "runbook", "logs"]) assert.equal(doc.getElementById("field-resource-" + key).tagName, "INPUT");
+  assert.equal(doc.getElementById("field-resource-issue_tracker")._settingsValue.children[1].children[0].tagName, "A");
+  for (const key of ["style_guide", "documentation", "runbook", "logs"]) assert.equal(doc.getElementById("browse-resource-" + key).textContent, "Browse");
+  doc.getElementById("field-resource-style_guide").value = "https://example.invalid/old-style";
+  await doc.getElementById("field-resource-style_guide").emit("input");
+  assert.equal(doc.getElementById("browse-resource-style_guide").textContent, "Browse");
+  await doc.getElementById("browse-resource-style_guide").emit("click"); await doc.getElementById("browse-cancel").emit("click");
+  assert.equal(doc.getElementById("field-resource-style_guide").value, "https://example.invalid/old-style");
+  const styleBefore = doc.getElementById("field-resource-style_guide").value;
+  await doc.getElementById("browse-resource-style_guide").emit("click");
+  assert.equal(doc.getElementById("resource-browser").open, true);
+  const docsButton = doc.getElementById("browse-list").children.find(e => e.textContent === "docs/"); assert(docsButton); await docsButton.emit("click");
+  const styleButton = doc.getElementById("browse-list").children.find(e => e.textContent === "style.md"); assert(styleButton); await styleButton.emit("click");
+  assert.equal(doc.getElementById("field-resource-style_guide").value, "docs/style.md"); assert.equal(doc.getElementById("resource-browser").open, false);
+  await doc.getElementById("browse-resource-documentation").emit("click");
+  await doc.getElementById("browse-list").children.find(e => e.textContent === "docs/").emit("click");
+  await doc.getElementById("browse-select").emit("click"); assert.equal(doc.getElementById("field-resource-documentation").value, "docs");
+  const runbookBefore = doc.getElementById("field-resource-runbook").value;
+  await doc.getElementById("browse-resource-runbook").emit("click"); await doc.getElementById("browse-cancel").emit("click"); assert.equal(doc.getElementById("field-resource-runbook").value, runbookBefore);
   doc.getElementById("field-review_client").value = "Claude";
   await doc.getElementById("settings").emit("submit");
   assert.equal(doc.getElementById("save").disabled, false, doc.getElementById("message").textContent);
@@ -57,6 +77,8 @@ const fs = require("fs"), vm = require("vm"), readline = require("readline"), as
   console.log("ready-for-concurrent-edit");
   await lines.next();
   await doc.getElementById("save").emit("click");
+  assert.equal(navigations.length, 0);
+  assert.equal(doc.getElementById("field-review_client").value, "Claude");
   assert.equal(doc.getElementById("message").attrs.role, "alert");
   assert.match(doc.getElementById("message").textContent, /stale/i);
   assert.equal(active.id, "message");
@@ -65,8 +87,8 @@ const fs = require("fs"), vm = require("vm"), readline = require("readline"), as
   assert.equal(doc.getElementById("field-review_client").value, "Concurrent owner choice");
   doc.getElementById("field-review_client").value = "Codex";
   await doc.getElementById("settings").emit("submit");
-  await doc.getElementById("save").emit("click");
-  assert.match(doc.getElementById("message").textContent, /Saved future defaults/);
+  {const before = navigations.length; await doc.getElementById("save").emit("click"); assert.equal(navigations.length, before + 1); assert.equal(navigations.at(-1), new URL("../", setup.base).href); await doc.getElementById("reload").emit("click");}
+
   assert.equal(doc.getElementById("field-review_client").value, "Codex");
   // Exercise the native typed controls through the actual HTTP update path.
   doc.getElementById("field-resource-style_guide").value = "docs/style.md";
@@ -99,8 +121,8 @@ const fs = require("fs"), vm = require("vm"), readline = require("readline"), as
   assert.equal(doc.getElementById("groups").hidden, false);
   assert.equal(doc.getElementById("save").disabled, true);
   await doc.getElementById("settings").emit("submit");
-  await doc.getElementById("save").emit("click");
-  assert.match(doc.getElementById("message").textContent, /Saved future defaults/);
+  {const before = navigations.length; await doc.getElementById("save").emit("click"); assert.equal(navigations.length, before + 1); assert.equal(navigations.at(-1), new URL("../", setup.base).href); await doc.getElementById("reload").emit("click");}
+
   assert.equal(doc.getElementById("field-activation").checked, true);
   assert.equal(doc.getElementById("field-sync-todo").value, "OPTION_ready");
     // Hide mappings without dropping the configured values or required policy.
@@ -109,16 +131,16 @@ const fs = require("fs"), vm = require("vm"), readline = require("readline"), as
   await doc.getElementById("field-sync-enabled").emit("change");
   assert.equal(doc.getElementById("sync-mappings").hidden, true);
   await doc.getElementById("settings").emit("submit");
-  await doc.getElementById("save").emit("click");
+  {const before = navigations.length; await doc.getElementById("save").emit("click"); assert.equal(navigations.length, before + 1); assert.equal(navigations.at(-1), new URL("../", setup.base).href); await doc.getElementById("reload").emit("click");}
   // Changing the board while off must not let a later reload bind the old IDs.
   doc.getElementById("field-resource-project_board").value = "https://github.com/orgs/example/projects/8";
   await doc.getElementById("field-resource-project_board").emit("input");
   await doc.getElementById("settings").emit("submit");
-  await doc.getElementById("save").emit("click");
+  {const before = navigations.length; await doc.getElementById("save").emit("click"); assert.equal(navigations.length, before + 1); assert.equal(navigations.at(-1), new URL("../", setup.base).href); await doc.getElementById("reload").emit("click");}
   // An unrelated later save must not silently bind the new URL to the old IDs.
   doc.getElementById("field-resource-documentation").value = "docs/new-guide.md";
   await doc.getElementById("settings").emit("submit");
-  await doc.getElementById("save").emit("click");
+  {const before = navigations.length; await doc.getElementById("save").emit("click"); assert.equal(navigations.length, before + 1); assert.equal(navigations.at(-1), new URL("../", setup.base).href); await doc.getElementById("reload").emit("click");}
   doc.getElementById("field-sync-enabled").checked = true;
   await doc.getElementById("field-sync-enabled").emit("change");
   await doc.getElementById("settings").emit("submit");
@@ -149,21 +171,25 @@ const fs = require("fs"), vm = require("vm"), assert = require("assert/strict");
    set textContent(value) {this._text = String(value); this.children = [];} get textContent() {return (this._text || "") + this.children.map(e => e.textContent).join("");}
    append(...items) {this.children.push(...items);} replaceChildren(...items) {this.children = items;}
    setAttribute(k, v) {this.attrs[k] = v;} addEventListener(k, fn) {(this.handlers[k] ||= []).push(fn);} focus() {}
+   showModal() {this.open = true;} close() {this.open = false;}
    async emit(k) {for (const fn of this.handlers[k] || []) await fn({preventDefault() {}});}
   }
   for (const [id, spec] of Object.entries(setup.elements)) {const e = new Element(spec.tag); e.id = id; e.attrs = spec.attrs; e.hidden = "hidden" in spec.attrs; e.disabled = "disabled" in spec.attrs;}
-  const sandbox = {URL, URLSearchParams, Date, Set, location: {hash: fragment, pathname}, history: {replaceState() {}}, sessionStorage: {getItem: k => cache.get(k) || null, setItem: (k, v) => cache.set(k, v), removeItem: k => cache.delete(k)}, document: {getElementById: id => ids.get(id), createElement: t => new Element(t)}, fetch: (path, options) => fetch(new URL(path, setup.base), {...options, headers: {...options.headers, Origin: new URL(setup.base).origin}})};
+  const navigations = [];
+  const sandbox = {URL, URLSearchParams, Date, Set, location: {hash: fragment, pathname, assign: target => navigations.push(new URL(target, setup.base).href)}, history: {replaceState() {}}, sessionStorage: {getItem: k => cache.get(k) || null, setItem: (k, v) => cache.set(k, v), removeItem: k => cache.delete(k)}, document: {getElementById: id => ids.get(id), createElement: t => new Element(t)}, fetch: (path, options) => fetch(new URL(path, setup.base), {...options, headers: {...options.headers, Origin: new URL(setup.base).origin}})};
   vm.runInNewContext(source, sandbox);
   for (let n = 0; n < 100 && ids.get("message").textContent === ""; n++) await new Promise(r => setTimeout(r, 10));
   for (let n = 0; n < 100 && fragment && !ids.has("field-review_client"); n++) await new Promise(r => setTimeout(r, 10));
-  return ids;
+  ids.navigations = navigations; return ids;
  }
  const fragment = "#" + new URLSearchParams({cap: setup.token, ...setup.context});
  let ids = await load(fragment); assert(ids.has("field-review_client"));
  assert.equal(storage.size, 1);
  const returnURL = new URL(ids.get("task-status-link").attrs.href, setup.base);
  const task = await fetch(returnURL); assert.equal(task.status, 200);
- const html = await task.text(); assert.match(html, /<header[\s\S]*id="settings-link"[\s\S]*<\/header>/);
+ const html = await task.text(); assert.match(html, /<footer[\s\S]*id="settings-link"[\s\S]*\[ Settings \][\s\S]*<\/footer>/);
+ assert(!/<header[\s\S]*id="settings-link"[\s\S]*<\/header>/.test(html));
+ assert.equal(ids.get("task-status-link").attrs.href, "../");
  assert(!html.includes(setup.token));
  const href = html.match(/id="settings-link" href="([^"]+)"/)[1];
  assert.equal(new URL(href, returnURL).href, setup.base);
@@ -171,7 +197,7 @@ const fs = require("fs"), vm = require("vm"), assert = require("assert/strict");
  for (let n=0;n<100 && !ids.has("field-review_client");n++) await new Promise(r=>setTimeout(r,10));
  assert(ids.has("field-review_client"), ids.get("message").textContent);
  ids.get("field-review_client").value = "Claude"; await ids.get("settings").emit("submit"); assert.equal(ids.get("save").disabled, false, ids.get("message").textContent); await ids.get("save").emit("click");
- assert.match(ids.get("message").textContent, /Saved future defaults/);
+ assert.deepEqual(ids.navigations, [returnURL.href]);
  const publicTab = await load("", new Map()); assert.equal(publicTab.has("field-review_client"), false); assert.match(publicTab.get("message").textContent, /Read-only/);
  const wrongTask = await load("", storage, "/task/another-flight/settings/"); assert.equal(wrongTask.has("field-review_client"), false);
  const key = [...storage.keys()][0], wrong = JSON.parse(storage.get(key)); wrong.context.project = "wrong-project"; storage.set(key, JSON.stringify(wrong));
@@ -201,6 +227,7 @@ class SettingsUIEventsTests(unittest.TestCase):
             from flightcheck_cli.settings import Handler
             surface = Surface(); surface.feed((fixtures.PRODUCT / 'status-card/settings.html').read_text())
             service = self.service(engine, root)
+            docs = root / "docs"; docs.mkdir(); (docs / "style.md").write_text("Synthetic style guide")
             class Provider:
                 def query(self, query, variables):
                     return {'project': {'id': 'SYNTHETIC_PROJECT', 'title': 'Team delivery', 'url': 'https://github.com/orgs/example/projects/7', 'closed': False,

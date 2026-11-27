@@ -34,11 +34,9 @@ async function api(action, body) {
   return data;
 }
 function destination(parent, label, value) {
-  if (typeof value !== "string") return;
-  let url; try {url = new URL(value);} catch (_) {return;}
-  if (url.protocol !== "https:" || url.username || url.password) return;
-  const details = node("details"); details.append(node("summary", label)); details.append(node("p", url.href));
-  const arrow = node("a", "Open destination ↗"); arrow.href = url.href; arrow.target = "_blank"; arrow.rel = "noopener noreferrer"; arrow.setAttribute("aria-label", "Open " + label + " in a new tab"); details.append(arrow); parent.append(details);
+  const url = validDestination(value); if (!url) return;
+  const row = node("p", label + " "), arrow = node("a", "↗"); arrow.href = url;
+  arrow.target = "_blank"; arrow.rel = "noopener noreferrer"; arrow.setAttribute("aria-label", "Open " + label); row.append(arrow); parent.append(row);
 }
 function section(title) {const value = node("section"); value.className = "panel settings-section"; value.append(node("h2", title)); byId("groups").append(value); return value;}
 function select(control, choices, selected) {
@@ -55,7 +53,7 @@ function field(parent, key, label, value, type = "text", choices) {
   else if (type === "checkbox") {control.type = "checkbox"; control.checked = Boolean(value);}
   else {if (type !== "textarea") control.type = type; control.value = value ?? "";}
   labels[key] = label;
-  if (type === "checkbox") {row.className += " settings-toggle"; row.append(control, caption);} else row.append(caption, control);
+  if (type === "checkbox") {row.className += " settings-toggle"; row.append(control, caption);} else {const value = node("div"); value.className = "settings-value"; value.append(control); control._settingsValue = value; row.append(caption, value);}
   const hint = node("span"); hint.id = "hint-" + key; hint.className = "settings-hint"; row.append(hint);
   control.setAttribute("aria-describedby", hint.id);
   control._settingsRow = row; parent.append(row); return control;
@@ -88,25 +86,73 @@ function commandArgs(text) {
   if (!result.length || result.some(arg => !arg)) throw new Error("Each check needs a command with nonempty arguments");
   return result;
 }
+function validDestination(value) {
+  try {const url = new URL(value); return ["https:", "http:"].includes(url.protocol) && !url.username && !url.password ? url.href : null;} catch (_) {return null;}
+}
+let picker;
+function closePicker() {byId("resource-browser").close(); const target = picker?.input; picker = undefined; target?.focus();}
+async function showFolder(path) {
+  const activePicker = picker;
+  const data = await api("browse", {field: activePicker.field, path});
+  if (picker !== activePicker) return;
+  picker.directory = data.directory; picker.parent = data.parent;
+  byId("browse-directory").textContent = data.directory || "Project folder";
+  byId("browse-message").textContent = data.truncated ? "Showing a limited list. Enter the path directly if needed." : "";
+  byId("browse-up").disabled = data.parent === null;
+  byId("browse-select").hidden = data.kind === "file";
+  const list = byId("browse-list"); list.replaceChildren();
+  for (const entry of data.entries) {
+    if (entry.kind === "file" && data.kind === "directory") continue;
+    const button = node("button", entry.name + (entry.kind === "directory" ? "/" : "")); button.type = "button";
+    button.addEventListener("click", async () => {try {if (entry.kind === "directory") await showFolder(entry.path); else await choosePath(entry.path);} catch (error) {byId("browse-message").textContent = error.message;}}); list.append(button);
+  }
+  if (!list.children.length) list.append(node("p", "No matching files or folders."));
+}
+async function choosePath(path) {
+  const activePicker = picker;
+  const data = await api("browse", {field: activePicker.field, path, select: true});
+  if (picker !== activePicker) return;
+  const input = activePicker.input; input.value = data.selected; input._refreshLocation?.(); input._resourceUpdate?.(); invalidate(); closePicker();
+}
+function locationActions(input, field, kind, alwaysBrowse = false) {
+  const actions = node("span"); actions.className = "location-actions"; input._settingsValue.append(actions);
+  function refresh() {
+    actions.replaceChildren(); const url = validDestination(input.value.trim());
+    if (!alwaysBrowse && (url || !kind)) {
+      const open = node("a", "↗"); open.setAttribute("aria-label", "Open " + labels[input.dataset.key]); open.title = "Open destination"; open.target = "_blank"; open.rel = "noopener noreferrer";
+      if (url) open.href = url; else {open.setAttribute("aria-disabled", "true"); open.title = "Enter a credential-free HTTP or HTTPS URL";}
+      actions.append(open);
+    } else {
+      const browse = node("button", "Browse"); browse.type = "button"; browse.id = "browse-" + input.dataset.key;
+      browse.setAttribute("aria-label", "Browse for " + labels[input.dataset.key]);
+      browse.addEventListener("click", async () => {
+        picker = {input, field}; byId("resource-browser-title").textContent = "Choose " + labels[input.dataset.key]; byId("resource-browser").showModal(); byId("browse-list").replaceChildren(); byId("browse-message").textContent = "Opening project folder…";
+        try {await showFolder(""); byId("browse-cancel").focus();} catch (error) {byId("browse-message").textContent = error.message;}
+      }); actions.append(browse);
+    }
+  }
+  input._refreshLocation = refresh; input.addEventListener("input", refresh); refresh();
+}
 function resourceControl(parent, key, label) {
   const existing = current.values.resources?.[key];
   const value = typeof existing === "string" ? existing : existing?.url || "";
   const input = field(parent, "resource-" + key, label, value); input.placeholder = "Not configured";
+  const kind = ({style_guide: "file", documentation: "directory", runbook: "file", logs: "any"})[key] || (["issue_tracker", "project_board"].includes(key) ? null : "any");
+  locationActions(input, "resources." + key, kind, ["style_guide", "documentation", "runbook", "logs"].includes(key));
   let clearUnavailable = false;
   const status = node("span"); status.className = "settings-hint"; input._settingsRow.append(status);
-  const details = node("details"); details.append(node("summary", "Details"));
+  let clear;
   if (existing?.unavailable) {
-    details.append(node("p", existing.unavailable));
-    const clear = node("button", "Clear unavailable record"); clear.type = "button";
-    clear.addEventListener("click", () => {clearUnavailable = true; update(); invalidate();}); details.append(clear);
+    clear = node("button", "Clear saved problem"); clear.type = "button"; clear.className = "clear-problem";
+    clear.addEventListener("click", () => {clearUnavailable = true; update(); invalidate();}); input._settingsRow.append(clear);
   }
-  if (value) destination(details, label + " destination", value);
-  if (existing?.unavailable || value) input._settingsRow.append(details);
   function update() {
-    status.textContent = input.value.trim() ? "" : existing?.unavailable && !clearUnavailable ? "Unavailable · see Details" : "Not configured";
-    status.className = "settings-hint" + (!input.value.trim() && existing?.unavailable && !clearUnavailable ? " problem-text" : "");
+    const problem = !input.value.trim() && existing?.unavailable && !clearUnavailable;
+    status.textContent = problem ? "Previously unavailable: " + existing.unavailable + ". Clear saved problem removes this note on Save; the location remains not configured." : clearUnavailable && !input.value.trim() ? "Not configured · saved problem will be cleared on Save." : "";
+    status.className = "settings-hint" + (problem ? " problem-text" : "");
+    if (clear) clear.hidden = !problem;
   }
-  input.addEventListener("input", update); update();
+  input._resourceUpdate = update; input.addEventListener("input", update); update();
   return {input, existing, value: () => {
     const text = input.value.trim();
     if (!text && existing?.unavailable && !clearUnavailable) return existing;
@@ -246,10 +292,10 @@ function render(data) {
   for (const [key, label] of [["local_branches", "Verified merged local branches"], ["remote_branches", "Verified merged actual remote branches"], ["temporary_worktrees", "Verified merged temporary worktrees"]]) cleanup[key] = checkbox(checkout, "cleanup-" + key, label, data.values.cleanup_policy[key]);
   checkout.append(node("p", "Each flight captures exact cleanup grants. Mandatory preservation and checkout protections always apply."));
   readers.push(result => {const value = {...data.values.cleanup_policy}; for (const [key, control] of Object.entries(cleanup)) value[key] = control.checked; if (JSON.stringify(value) !== JSON.stringify(data.values.cleanup_policy)) result.cleanup_policy = value;});
-  const delivery = section("Evidence & Delivery"); simple(delivery, "evidence_dir", "Private evidence location"); help(byId("field-evidence_dir"), "Proof from checks and reviews; operational log lookup is in Project."); simple(delivery, "nit_tracker", "Minor follow-ups"); help(byId("field-nit_tracker"), "Nonblocking review follow-ups; project work belongs in the tracker.");
+  const delivery = section("Evidence & Delivery"); simple(delivery, "evidence_dir", "Private evidence location"); help(byId("field-evidence_dir"), "Private host path for check/review proof; enter its existing path directly. Project browsing is for project resources."); simple(delivery, "nit_tracker", "Minor follow-ups"); locationActions(byId("field-nit_tracker"), "nit_tracker", "any"); help(byId("field-nit_tracker"), "Nonblocking review follow-ups; project work belongs in the tracker.");
   simple(delivery, "review_client", "Review client", "text", [["", "Choose a client"], ["Codex", "Codex"], ["Claude", "Claude"]]);
   simple(delivery, "delivery", "Delivery policy", "text", [["Reviewed pull request; merge after required approval", "Pull request and approved merge"], ["Prepare review only; no provider writes", "Prepare review only"]]);
-  simple(advanced, "reviewer_access", "Reviewer access", "textarea"); simple(advanced, "policy_reference", "Flight policy");
+  simple(advanced, "reviewer_access", "Reviewer access", "textarea"); simple(advanced, "policy_reference", "Flight policy"); locationActions(byId("field-policy_reference"), "policy_reference", "file");
   advanced.append(node("p", "Flight policy governs development and delivery; the style guide covers coding conventions. Runtime requirements describe needed tools; the pinned executable is shown under Details."));
   const runtimes = field(advanced, "required_runtimes", "Required runtimes", (data.values.required_runtimes || []).join("\n"), "textarea"); help(runtimes, "One existing runtime requirement per line. Settings does not install or execute runtimes.");
   readers.push(result => {const value = runtimes.value.split("\n").map(row => row.trim()).filter(Boolean); if (JSON.stringify(value) !== JSON.stringify(data.values.required_runtimes || [])) result.required_runtimes = value;});
@@ -311,8 +357,12 @@ function action(id, fn) {byId(id).addEventListener("click", async () => {try {aw
 byId("settings").addEventListener("submit", async event => {event.preventDefault(); try {const result = await api("preview", {changes: changes(), expected_revision: current.revision}); plan = result.plan_id; showPreview(result); message("Changes ready to save.");} catch (error) {invalidate(); message(error.message, true); byId("message").focus();}});
 byId("settings").addEventListener("input", invalidate);
 byId("settings").addEventListener("change", invalidate);
-action("save", async () => {await api("apply", {plan_id: plan}); await reload(); message("Saved future defaults. Active flight decisions and grants were preserved.");});
+action("save", async () => {await api("apply", {plan_id: plan}); location.assign("../");});
 action("cancel", async () => {byId("review").hidden = true; byId("groups").hidden = false; byId("preview").hidden = false; invalidate(); byId("preview").focus();});
+action("browse-up", async () => {try {await showFolder(picker.parent);} catch (error) {byId("browse-message").textContent = error.message;}});
+action("browse-select", async () => {try {await choosePath(picker.directory);} catch (error) {byId("browse-message").textContent = error.message;}});
+action("browse-cancel", closePicker);
+byId("resource-browser").addEventListener("cancel", event => {event.preventDefault(); closePicker();});
 action("reload", reload); action("recover", async () => {await api("recover", {}); await reload();});
 action("audit", async () => {
   const report = await api("audit", {remote: byId("audit-remote").checked}); byId("audit-report").textContent = JSON.stringify(report, null, 2); byId("audit-destinations").replaceChildren();

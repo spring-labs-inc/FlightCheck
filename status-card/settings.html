@@ -2,7 +2,7 @@
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>FlightCheck · Settings</title><link rel="stylesheet" href="card.css"><link rel="stylesheet" href="settings.css"><script src="settings.js" defer></script></head>
 <body><main class="shell task-card settings-card">
-<header class="masthead"><div class="identity"><span class="mark" aria-hidden="true">FC</span><span>FlightCheck <span class="muted">/ Settings</span></span></div><a id="task-status-link" href="../" aria-label="Return to task status">← Task Status</a></header>
+<header class="masthead"><div class="identity"><span class="mark" aria-hidden="true">FC</span><span>FlightCheck <span class="muted">/ Settings</span></span></div></header>
 <section class="hero"><div><p class="eyebrow">Settings</p><h1>Project settings</h1><p class="summary">Changes apply to future flights. Use Advanced to reconfigure an active flight separately.</p></div></section>
 <p id="message" class="settings-message" role="status" tabindex="-1">Opening Settings…</p>
 <p id="locked">Editing requires an explicitly authorized local session for this project and task. Launch <code>setup/install.py settings</code> or <code>flightcheck settings</code> with the task, session, private card status and owner reference. Ordinary card viewing grants no write access.</p>
@@ -18,4 +18,6 @@
 </details>
 </form>
 <section id="recovery" class="panel" hidden><h2>Interrupted update</h2><p>Restore the last complete configuration before editing again.</p><button id="recover" type="button">Recover interrupted update</button></section>
+<dialog id="resource-browser" aria-labelledby="resource-browser-title"><h2 id="resource-browser-title">Browse project</h2><p class="settings-hint">Project files and folders only. Selecting changes the draft; Save applies it.</p><p id="browse-directory"></p><p id="browse-message" role="status"></p><div id="browse-list"></div><div class="settings-actions"><button id="browse-up" type="button">Up</button><button id="browse-select" type="button">Select this folder</button><button id="browse-cancel" type="button">Cancel</button></div></dialog>
+<nav class="settings-footer" aria-label="Task navigation"><a id="task-status-link" href="../" aria-label="Return to task status">[ STATUS ]</a></nav>
 </main></body></html>

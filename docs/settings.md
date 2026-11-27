@@ -59,8 +59,8 @@ reloads saved values. Settings records deliberate decisions internally under the
 existing launch authorization. Technical provenance and validation remain under
 Advanced → Details; recovery appears only for an interrupted transaction.
 
-Task Status returns to the card in this tab, whose header has a visible Settings
-link back to the same project/task. After a successful authorized read, the exact
+The bottom [ STATUS ] link returns to the card in this tab. Its bottom
+[ Settings ] link returns to the same project/task. After a successful authorized read, the exact
 capability/context is retained only in same-origin, exact-task `sessionStorage`
 for this tab for up to 30 minutes. It is never in a public link, cookie or
 persistent `localStorage`. The server verifies every request; wrong task/project/
@@ -151,10 +151,31 @@ using the existing read-only operation and current permissions. It performs no f
 checkout switch or native-client mutation. Reports grant no cleanup authority;
 any later execution is a separate authorized operation with current revalidation.
 
-Displayed external destinations expand details and use a separate arrow to open
-a new tab. Editable URL fields remain inputs. Resource and audit destinations
+Settings URL inputs use an adjacent arrow to open the destination in a new tab;
+audit destinations use a compact labeled arrow. Resource and audit destinations
 belong in #83's card-wide external-link inventory; this work does not implement
 the richer resource-discovery interview or native client settings management.
 
 The [destination inventory](settings-external-links.json) identifies Settings and
 audit field families for #83 without publishing actual private destinations.
+
+### Location controls and navigation
+
+A location uses one textbox with an adjacent URL arrow or Browse button. Tracker
+and board arrows open credential-free HTTP(S) destinations in a separate tab.
+Browse selects files or folders in the configured project on the checkout host;
+it does not upload files or mistake browser-machine selections for remote paths.
+Style guides and runbooks select files, documentation selects a folder, and logs
+can select either. The chooser lists names and types only, omits hidden/private
+entries and symlinks, and refuses traversal outside the project. Select changes
+only the draft; Cancel leaves it unchanged. External host paths, including private
+evidence storage, remain direct-entry fields; project browsing never relocates
+private evidence into a checkout.
+
+Saved unavailability is shown beside the field. **Clear saved problem** removes
+that note only when the change is saved; choosing a replacement location also
+replaces it. Merely leaving the input blank preserves an existing problem record.
+
+The bottom **[ Settings ]** and **[ STATUS ]** links preserve the authorized
+current-tab context. Successful **Save changes** returns to Task Status; stale or
+failed saves remain in Settings with the draft and error available.

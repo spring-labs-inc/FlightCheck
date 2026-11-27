@@ -29,3 +29,15 @@
 .settings-message { color: var(--muted); margin: .6rem 0; }
 .settings-message.problem { padding: .75rem; border-left: 3px solid #b24b22; background: #fff3e9; color: #752e15; }
 .problem-text { color: #a43d18; }
+
+.settings-value { display: flex; align-items: center; gap: .45rem; }
+.settings-value > input, .settings-value > select, .settings-value > textarea { flex: 1; min-width: 0; }
+.location-actions { flex: none; display: flex; align-items: center; }
+.location-actions a { padding: .4rem .65rem; border: 1px solid var(--frame); border-radius: .4rem; text-decoration: none; }
+.location-actions a[aria-disabled="true"] { opacity: .4; cursor: default; }
+.clear-problem { margin-top: .35rem; }
+.settings-footer { text-align: center; margin-top: 1.5rem; }
+#resource-browser { color: var(--ink); background: var(--raised); border: 1px solid var(--frame); border-radius: .5rem; width: min(36rem, 90vw); }
+#resource-browser::backdrop { background: #0007; }
+#browse-list { max-height: 45vh; overflow-y: auto; display: grid; gap: .35rem; }
+#browse-list button { text-align: left; }
