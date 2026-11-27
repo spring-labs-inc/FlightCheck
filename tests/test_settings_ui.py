@@ -113,6 +113,10 @@ const fs = require("fs"), vm = require("vm"), readline = require("readline"), as
   await doc.getElementById("field-resource-project_board").emit("input");
   await doc.getElementById("settings").emit("submit");
   await doc.getElementById("save").emit("click");
+  // An unrelated later save must not silently bind the new URL to the old IDs.
+  doc.getElementById("field-resource-documentation").value = "docs/new-guide.md";
+  await doc.getElementById("settings").emit("submit");
+  await doc.getElementById("save").emit("click");
   doc.getElementById("field-sync-enabled").checked = true;
   await doc.getElementById("field-sync-enabled").emit("change");
   await doc.getElementById("settings").emit("submit");

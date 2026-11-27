@@ -211,7 +211,7 @@ function renderSync(parent, advanced) {
     if (enabled.checked) {lastMode = mode.value; value.mode = lastMode;} else value.mode = "disabled";
     if (!equal(value, policy)) result.status_sync = value;
     let destination = pointer;
-    if (url && value.project_id && (metadata || url === previousURL || manualChanged)) destination = {url, provider: value.provider, project_id: value.project_id};
+    if (url && value.project_id && (metadata || bound || manualChanged)) destination = {url, provider: value.provider, project_id: value.project_id};
     if (JSON.stringify(destination) !== JSON.stringify(resource.existing)) result.resources = {...result.resources, project_board: destination ?? null};
   });
 }
