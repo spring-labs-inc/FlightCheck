@@ -158,9 +158,16 @@ def same_pass_checkout(before, after, dependencies=None):
         if decision.get("from_revision") != current:
             continue
         changed = set(decision.get("changed_fields", []))
+        # New adoption facts identify exact changed setting paths. Historical
+        # entries retain their root-level conservative meaning; never infer or
+        # rewrite precision for an old receipt/history entry.
+        paths = decision.get("changed_paths", list(changed))
+        if (not isinstance(paths, list) or any(not isinstance(path, str) or not path for path in paths)
+                or {path.split(".")[0] for path in paths} != changed):
+            return False
         if "status_sync" in decision.get("required_revalidation", []) and any(dep.split(".")[0] == "status_sync" for dep in dependencies):
             return False
-        if changed - known or changed & risky or any(key == dep or key.startswith(dep + ".") or dep.startswith(key + ".") for key in changed for dep in dependencies):
+        if changed - known or changed & risky or any(key == dep or key.startswith(dep + ".") or dep.startswith(key + ".") for key in paths for dep in dependencies):
             return False
         current = decision.get("to_revision")
         if current == after.get("configuration_revision"):

@@ -156,3 +156,46 @@ class SettingsCheckBoundaryTests(CheckoutCases, unittest.TestCase):
             wrong = self.run_capture(self.named([sys.executable, '-B', '-c', 'pass'], 'alpha'))
             self.assertNotEqual(wrong.returncode, 0); self.assertIn('changed', wrong.stdout + wrong.stderr)
             self.assertEqual(path.read_bytes(), before)
+
+    def test_resource_sibling_reuses_exact_receipt_while_changed_and_wide_revalidate(self):
+        names = ('style', 'documentation', 'resources')
+        with self.installed_flight(lambda area: [{'name': name, 'command': self.command('resource-' + name), 'phase': 'cheap'} for name in names]) as (owner, _):
+            self.save(owner, {'resources': {'style_guide': 'docs/style.md', 'documentation': 'docs/original'}})
+            paths = {'style': 'resources.style_guide', 'documentation': 'resources.documentation', 'resources': 'resources'}
+            definitions = owner.read()['values']['checks']
+            args = {}
+            for definition in definitions:
+                name = definition['name']; invocation = self.named(definition['command'], name)
+                invocation[invocation.index('--configuration-dependencies') + 1] = json.dumps([paths[name]])
+                args[name] = invocation
+                result = self.run_capture(invocation); self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            originals = {name: self.receipt(name) for name in names}
+            bytes_before = {name: path.read_bytes() for name, (path, _) in originals.items()}
+            task = self.task([self.gate(name) for name in names]); self.handoff('preflight', task)
+            self.save(owner, {'resources': {'documentation': 'docs/revised'}})
+            style = self.run_capture(args['style'])
+            self.assertEqual(style.returncode, 0, style.stdout + style.stderr)
+            self.assertIn('Check reused:', style.stdout, 'Unchanged style-guide setting must preserve its exact receipt')
+            self.assertEqual(self.receipt('style')[0], originals['style'][0])
+            self.assertEqual((self.area / 'resource-style').read_text().splitlines(), ['run'])
+            observed = {row['id']: row for row in self.handoff('checks', task)['checks']}
+            self.assertEqual(observed['style']['status'], 'passed')
+            self.assertEqual(Path(observed['style']['receipt']), originals['style'][0])
+            for name in ('documentation', 'resources'):
+                self.assertIn(observed[name]['status'], ('stale', 'unverified'))
+                current = self.run_capture(args[name]); self.assertEqual(current.returncode, 0, current.stdout + current.stderr)
+                self.assertNotIn('Check reused:', current.stdout)
+                path, receipt = self.receipt(name); self.assertNotEqual(path, originals[name][0])
+                self.assertEqual(receipt['inputs_before'], originals[name][1]['inputs_before'])
+                self.assertEqual(receipt['inputs_before'], receipt['inputs_after'])
+                self.assertEqual((self.area / ('resource-' + name)).read_text().splitlines(), ['run', 'run'])
+            for name, (path, _) in originals.items(): self.assertEqual(path.read_bytes(), bytes_before[name])
+            unknown = copy.deepcopy(args['style'])
+            unknown[unknown.index('--configuration-dependencies') + 1] = json.dumps(['resources.style_guide.unknown'])
+            denied = self.run_capture(unknown); self.assertNotEqual(denied.returncode, 0)
+            self.assertIn('Unknown configuration dependency', denied.stdout + denied.stderr)
+            invalid_task = self.task([copy.deepcopy(self.gate('style'))])
+            invalid_task['gates'][0]['request']['configuration_dependencies'] = ['resources.style_guide.unknown']
+            invalid = self.handoff('checks', invalid_task)['checks'][0]
+            self.assertEqual(invalid['status'], 'unverified')
+            self.assertEqual(self.receipt('style')[0], originals['style'][0]); self.assertEqual(originals['style'][0].read_bytes(), bytes_before['style'])

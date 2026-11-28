@@ -213,6 +213,9 @@ audit, status and review admission never adopt; external commands are not univer
 intercepted. Existing grants, captured snapshots, synchronization retry/history and
 physical workers remain intact. Frozen delivery/disposition leases, unknown native
 reservations and other-host work are honestly deferred.
+An eligible verified paused flight also retains the Save intent. Its captured
+settings stay unchanged until normal resume and the first safe execution boundary;
+Save does not resume or relocate it.
 
 Pass reuse stays strict about source, request, full input fingerprint, grants,
 physical checkout/session, runtime and policy. A frozen
@@ -220,7 +223,11 @@ physical checkout/session, runtime and policy. A frozen
 paths, including configured custom resources. Complete paths are validated: an
 unknown child or child of a scalar cannot declare independence. Omitted/unknown declarations are conservative. Only valid same-
 execution adoption history with unaffected dependencies permits reuse; mid-check
-identity remains strict. After check commands or classifications change, affected
+identity remains strict. Exact child dependencies distinguish siblings: a
+documentation-only edit preserves unchanged style-guide-only proof, while a
+resources-wide dependency remains affected. Historical adoption entries without
+precise paths retain their conservative root-level meaning.
+After check commands or classifications change, affected
 frozen requests are blocked until the controller reconciles the exact command
 and phase against the common model. The recorder's `--configuration-check NAME`
 binds that selected check; handoff also verifies its current classification.

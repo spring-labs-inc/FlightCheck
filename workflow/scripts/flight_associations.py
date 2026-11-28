@@ -282,6 +282,19 @@ def reconfigure(record, configuration, reference):
     old = value["configuration"]
     changed = sorted(key for key in old["values"].keys() | new["values"].keys() if key != "_flightcheck"
                      if old["values"].get(key) != new["values"].get(key))
+    paths = []
+    def differences(before, after, path):
+        if isinstance(before, dict) and isinstance(after, dict):
+            for key in sorted(before.keys() | after.keys()):
+                child = path + "." + key
+                if key not in before or key not in after:
+                    paths.append(child)
+                elif before[key] != after[key]:
+                    differences(before[key], after[key], child)
+        else:
+            paths.append(path)
+    for key in changed:
+        differences(old["values"].get(key), new["values"].get(key), key)
     affected = []
     if set(changed) & {"checkout_policy", "default_branch", "protected_branches", "branch_prefix", "git_fallback"}:
         affected.append("checkout")
@@ -299,6 +312,7 @@ def reconfigure(record, configuration, reference):
     value["configuration"] = new
     value["reconfiguration"] = {"reference": reference, "from_revision": old["revision"],
                                 "to_revision": new["revision"], "changed_fields": changed,
+                                "changed_paths": paths,
                                 "required_revalidation": affected}
     return value
 
@@ -356,7 +370,7 @@ class Registry:
         queued, deferred = [], []
         records = self.read()["records"]
         for original in records:
-            if original["lifecycle"]["state"] not in ("active", "review") or (flight and original["flight"] != flight):
+            if original["lifecycle"]["state"] not in ("active", "paused", "review") or (flight and original["flight"] != flight):
                 continue
             if repository_identity(root, original["repository"]["id"]) != original["repository"]:
                 continue

@@ -16,6 +16,7 @@ from unittest.mock import patch
 
 from checkout_guard_cases import CheckoutCases, PRODUCT
 import test_settings as fixtures
+import test_settings_check_boundaries as boundary_fixtures
 
 
 class ProjectSettingsTests(CheckoutCases, unittest.TestCase):
@@ -23,6 +24,68 @@ class ProjectSettingsTests(CheckoutCases, unittest.TestCase):
     config_module = fixtures.SettingsTests.config_module
     config_git = fixtures.SettingsTests.config_git
     config_cli = fixtures.SettingsTests.config_cli
+    installed_flight = boundary_fixtures.SettingsCheckBoundaryTests.installed_flight
+    save = boundary_fixtures.SettingsCheckBoundaryTests.save
+    command = boundary_fixtures.SettingsCheckBoundaryTests.command
+    source_fingerprint = boundary_fixtures.SettingsCheckBoundaryTests.source_fingerprint
+    named = boundary_fixtures.SettingsCheckBoundaryTests.named
+    run_capture = boundary_fixtures.SettingsCheckBoundaryTests.run_capture
+    receipt = boundary_fixtures.SettingsCheckBoundaryTests.receipt
+    gate = boundary_fixtures.SettingsCheckBoundaryTests.gate
+    task = boundary_fixtures.SettingsCheckBoundaryTests.task
+    handoff = boundary_fixtures.SettingsCheckBoundaryTests.handoff
+
+    def test_paused_save_resumes_through_normal_boundary_and_reconciles_checks(self):
+        with self.installed_flight(lambda area: [{'name': 'alpha', 'command': self.command('paused-old'), 'phase': 'cheap'}]) as (owner, _):
+            definition = owner.read()['values']['checks'][0]
+            old_args = self.named(definition['command'], 'alpha')
+            first = self.run_capture(old_args)
+            self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+            old_path, old_receipt = self.receipt('alpha'); old_bytes = old_path.read_bytes()
+            task = self.task([self.gate('alpha')]); self.handoff('preflight', task)
+            paused = self.registry.get('fixture'); paused['lifecycle']['state'] = 'paused'
+            self.registry.save(paused, expected_revision=self.registry.read()['revision'])
+            original = self.registry.get('fixture')
+            replacement = self.command('paused-new')
+            saved = self.save(owner, {'checks': [{'name': 'alpha', 'command': replacement, 'phase': 'authoritative'}]})
+            during = self.registry.get('fixture')
+            for key in ('configuration', 'checkout_guard', 'grants', 'checkout', 'children', 'lifecycle'):
+                self.assertEqual(during[key], original[key], 'Save must preserve paused ' + key)
+            self.assertEqual(during.get('configuration_history'), original.get('configuration_history'))
+            self.assertEqual(old_path.read_bytes(), old_bytes)
+            with patch.dict(os.environ, CODEX_THREAD_ID='session-1'):
+                self.guard.reconcile(self.registry, 'fixture', self.root, 'Owner normally resumes paused work', session='session-1', policy=self.policy)
+            resumed = self.registry.get('fixture')
+            self.assertEqual(resumed['lifecycle']['state'], 'active')
+            self.assertEqual(resumed['configuration'], original['configuration'], 'Reconciliation preserves capture until its safe execution boundary')
+            denied = self.run_capture(old_args)
+            self.assertNotEqual(denied.returncode, 0, 'Resumed old command/classification must not execute: ' + denied.stdout + denied.stderr)
+            self.assertIn('changed', denied.stdout + denied.stderr)
+            self.assertIn('fixture', saved['adoption']['queued'])
+            adopted = self.registry.get('fixture')
+            self.assertEqual(adopted['configuration']['revision'], saved['revision'])
+            self.assertEqual(adopted['checkout_guard']['configuration_revision'], saved['revision'])
+            self.assertEqual(adopted['grants'], original['grants'])
+            self.assertEqual(adopted['checkout'], original['checkout'])
+            self.assertEqual(adopted['children'], original['children'])
+            self.assertEqual(adopted['configuration_history'][-1], original['configuration'])
+            self.assertEqual(adopted['checkout_guard']['history'][:len(original['checkout_guard']['history'])], original['checkout_guard']['history'])
+            self.assertEqual(old_path.read_bytes(), old_bytes)
+            self.assertEqual((self.area / 'paused-old').read_text().splitlines(), ['run'])
+            stale = self.handoff('checks', task)['checks'][0]
+            self.assertEqual(stale['status'], 'unverified')
+            fresh = self.run_capture(self.named(replacement, 'alpha'))
+            self.assertEqual(fresh.returncode, 0, fresh.stdout + fresh.stderr)
+            new_path, receipt = self.receipt('alpha')
+            self.assertNotEqual(new_path, old_path)
+            self.assertEqual(receipt['request']['configuration_check']['phase'], 'authoritative')
+            self.assertEqual(receipt['inputs_before'], old_receipt['inputs_before'])
+            self.assertEqual((self.area / 'paused-new').read_text().splitlines(), ['run'])
+            task['gates'] = [self.gate('alpha')]
+            self.handoff('preflight', task, amend=True)
+            current = self.handoff('checks', task)['checks'][0]
+            self.assertEqual(current['status'], 'passed'); self.assertEqual(Path(current['receipt']), new_path)
+            self.assertEqual(old_path.read_bytes(), old_bytes)
 
     def queue(self, revision, reference):
         base = self.area / "project-transactions"; base.mkdir(mode=0o700, exist_ok=True)
