@@ -199,3 +199,47 @@ class SettingsCheckBoundaryTests(CheckoutCases, unittest.TestCase):
             invalid = self.handoff('checks', invalid_task)['checks'][0]
             self.assertEqual(invalid['status'], 'unverified')
             self.assertEqual(self.receipt('style')[0], originals['style'][0]); self.assertEqual(originals['style'][0].read_bytes(), bytes_before['style'])
+
+    def test_literal_dotted_resource_keeps_segment_identity_and_true_changes_revalidate(self):
+        with self.installed_flight(lambda area: [{'name': name, 'command': self.command('dotted-' + name), 'phase': 'cheap'} for name in ('style', 'resources')]) as (owner, _):
+            self.save(owner, {'resources': {'style_guide': 'docs/style.md', 'style_guide.notes': 'docs/notes-original.md'}})
+            args = {}
+            for definition in owner.read()['values']['checks']:
+                name = definition['name']; invocation = self.named(definition['command'], name)
+                invocation[invocation.index('--configuration-dependencies') + 1] = json.dumps(['resources.style_guide' if name == 'style' else 'resources'])
+                args[name] = invocation
+                result = self.run_capture(invocation); self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            originals = {name: self.receipt(name) for name in args}
+            old_bytes = {name: path.read_bytes() for name, (path, _) in originals.items()}
+            task = self.task([self.gate(name) for name in args]); self.handoff('preflight', task)
+            self.save(owner, {'resources': {'style_guide.notes': 'docs/notes-revised.md'}})
+            unchanged = self.run_capture(args['style'])
+            self.assertEqual(unchanged.returncode, 0, unchanged.stdout + unchanged.stderr)
+            self.assertIn('Check reused:', unchanged.stdout, 'A literal dotted sibling must not be treated as a style-guide descendant')
+            self.assertEqual(self.receipt('style')[0], originals['style'][0]); self.assertEqual(originals['style'][0].read_bytes(), old_bytes['style'])
+            self.assertEqual((self.area / 'dotted-style').read_text().splitlines(), ['run'])
+            self.assertEqual(owner.read()['values']['resources']['style_guide.notes'], 'docs/notes-revised.md')
+            observed = {row['id']: row for row in self.handoff('checks', task)['checks']}
+            self.assertEqual(observed['style']['status'], 'passed'); self.assertEqual(Path(observed['style']['receipt']), originals['style'][0])
+            self.assertIn(observed['resources']['status'], ('stale', 'unverified'))
+            wide = self.run_capture(args['resources']); self.assertEqual(wide.returncode, 0, wide.stdout + wide.stderr)
+            self.assertNotIn('Check reused:', wide.stdout); self.assertNotEqual(self.receipt('resources')[0], originals['resources'][0])
+            self.assertEqual(self.receipt('resources')[1]['inputs_before'], originals['resources'][1]['inputs_before'])
+            capture = self.module('capture_check'); current = self.guard.verify(self.root, self.registry, 'fixture', policy=self.policy)
+            legacy = copy.deepcopy(current)
+            for decision in legacy['settings_adoptions']: decision.pop('changed_segments', None)
+            self.assertFalse(capture.same_pass_checkout(originals['style'][1]['checkout_context'], legacy, ['resources.style_guide']))
+            malformed = copy.deepcopy(current); malformed['settings_adoptions'][-1]['changed_segments'] = [['resources', '']]
+            self.assertFalse(capture.same_pass_checkout(originals['style'][1]['checkout_context'], malformed, ['resources.style_guide']))
+            unknown = copy.deepcopy(args['style']); unknown[unknown.index('--configuration-dependencies') + 1] = json.dumps(['resources.style_guide.notes'])
+            denied = self.run_capture(unknown); self.assertNotEqual(denied.returncode, 0)
+            self.assertEqual((self.area / 'dotted-style').read_text().splitlines(), ['run'])
+            self.save(owner, {'resources': {'style_guide': 'docs/style-revised.md'}})
+            changed = self.run_capture(args['style']); self.assertEqual(changed.returncode, 0, changed.stdout + changed.stderr)
+            self.assertNotIn('Check reused:', changed.stdout)
+            new_path, receipt = self.receipt('style'); self.assertNotEqual(new_path, originals['style'][0])
+            self.assertEqual(receipt['inputs_before'], originals['style'][1]['inputs_before'])
+            self.assertEqual((self.area / 'dotted-style').read_text().splitlines(), ['run', 'run'])
+            final = {row['id']: row for row in self.handoff('checks', task)['checks']}
+            self.assertEqual(final['style']['status'], 'passed'); self.assertEqual(Path(final['style']['receipt']), new_path)
+            for name, (path, _) in originals.items(): self.assertEqual(path.read_bytes(), old_bytes[name])

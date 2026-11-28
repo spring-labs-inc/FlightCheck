@@ -282,19 +282,22 @@ def reconfigure(record, configuration, reference):
     old = value["configuration"]
     changed = sorted(key for key in old["values"].keys() | new["values"].keys() if key != "_flightcheck"
                      if old["values"].get(key) != new["values"].get(key))
-    paths = []
+    paths, segments = [], []
+    def changed_path(path):
+        segments.append(list(path))
+        paths.append(".".join(path))
     def differences(before, after, path):
         if isinstance(before, dict) and isinstance(after, dict):
             for key in sorted(before.keys() | after.keys()):
-                child = path + "." + key
+                child = (*path, key)
                 if key not in before or key not in after:
-                    paths.append(child)
+                    changed_path(child)
                 elif before[key] != after[key]:
                     differences(before[key], after[key], child)
         else:
-            paths.append(path)
+            changed_path(path)
     for key in changed:
-        differences(old["values"].get(key), new["values"].get(key), key)
+        differences(old["values"].get(key), new["values"].get(key), (key,))
     affected = []
     if set(changed) & {"checkout_policy", "default_branch", "protected_branches", "branch_prefix", "git_fallback"}:
         affected.append("checkout")
@@ -313,6 +316,7 @@ def reconfigure(record, configuration, reference):
     value["reconfiguration"] = {"reference": reference, "from_revision": old["revision"],
                                 "to_revision": new["revision"], "changed_fields": changed,
                                 "changed_paths": paths,
+                                "changed_segments": segments,
                                 "required_revalidation": affected}
     return value
 

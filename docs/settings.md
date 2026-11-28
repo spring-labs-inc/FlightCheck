@@ -226,7 +226,10 @@ execution adoption history with unaffected dependencies permits reuse; mid-check
 identity remains strict. Exact child dependencies distinguish siblings: a
 documentation-only edit preserves unchanged style-guide-only proof, while a
 resources-wide dependency remains affected. Historical adoption entries without
-precise paths retain their conservative root-level meaning.
+precise key-segment identity retain their conservative root-level meaning.
+New adoption facts preserve key segments, so a literal custom name such as
+`style_guide.notes` is separate from `style_guide`. Precise declarations use the
+existing advertised paths; dotted custom keys require a broader dependency.
 After check commands or classifications change, affected
 frozen requests are blocked until the controller reconciles the exact command
 and phase against the common model. The recorder's `--configuration-check NAME`
