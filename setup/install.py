@@ -118,18 +118,30 @@ def inspect_project(root):
         interpreter = Path(sys.executable)
     candidates = ("AGENTS.md", "CLAUDE.md", ".claude/settings.json", ".codex/config.toml",
                   "pyproject.toml", "pytest.ini", ".pre-commit-config.yaml", "package.json", "Makefile")
-    return {"target": str(root), "python": str(interpreter), "default_branch": branch,
+    result = {"target": str(root), "python": str(interpreter), "default_branch": branch,
             "existing_configuration": [name for name in candidates if (root / name).exists()],
             "defaults": {"activation": "opt-in", "delivery": "No provider writes without owner approval"},
-            "required_configuration": ["evidence_dir", "nit_tracker", "checks", "policy_reference"],
+            "required_configuration": ["evidence_dir", "checks", "policy_reference"],
             "note": "Read existing project policy; detected files are hints, not permission to replace policy or run checks."}
+    saved = safe_path(root, CONFIG)
+    if saved.exists():
+        result["configuration"] = {"status": "configuration", **project_model(root).snapshot(root)}
+    else:
+        result["configuration"] = {"status": "unconfigured"}
+    return result
 
 
-def project_model():
+def project_model(root=None):
     """Load the same model from source or a verified project-local install."""
     base = Path(__file__).resolve().parent
     installed = base / "scripts/project_config.py"
     path = installed if installed.is_file() else base.parent / "workflow/scripts/project_config.py"
+    if root is not None and safe_path(root, ".flightcheck/scripts/project_config.py").is_file():
+        path = safe_path(root, ".flightcheck/scripts/project_config.py")
+        state = read_state(root)
+        expected = state["files"][".flightcheck/scripts/project_config.py"]["sha256"]
+        if sha(path.read_bytes()) != expected:
+            raise SetupError("Modified installed configuration model; refusing execution")
     if installed.is_file():
         state = json.loads((base / "installation.json").read_text())
         expected = state["files"][".flightcheck/scripts/project_config.py"]["sha256"]
@@ -145,7 +157,7 @@ def configuration(root, supplied):
     try:
         saved = safe_path(root, CONFIG)
         trusted = saved.exists() and json.loads(saved.read_bytes()) == supplied
-        return project_model().normalize(root, supplied, inspect_project(root), origin="setup", trusted_metadata=trusted)
+        return project_model(root).normalize(root, supplied, inspect_project(root), origin="setup", trusted_metadata=trusted)
     except ValueError as error:
         raise SetupError(str(error)) from error
 
@@ -232,6 +244,7 @@ def desired_files(source, manifest, agent, config, root=None):
               + "The command returns JSON with footer and guidance, publishes outside the checkout and verifies the task page and current candidate. Keep the prepared task URL stable on resume. Auto execution detection uses SSH/container hints; override --execution when needed. Remote mode withholds the clickable footer and returns nonzero until a browser-facing route is supplied. Run the installed .flightcheck/status-card/connect.py on the browser machine with --ssh WORKER_ALIAS --checkout /absolute/remote/project --task TASK_ID --remote-python /configured/remote/python --remote-state-dir /same/remote/private/state. It restores the worker service and verifies the forwarded task/candidate before offering a link. For client-managed forwarding, record its observed route with --user-url. Never bind beyond loopback. TUI users can open this live card in a regular web browser while continuing in the terminal. For remote sessions, arrange approved localhost forwarding; do not claim the browser rendered just because the checkout host returned HTTP 200.\n\n"
               + "Initialize --details with all nine stages (one current), check_plan and current pending check rows. Include known issue/PR links, or links_unavailable reasons when they do not exist. An empty check_plan requires checks_unavailable. Missing sections make prepare/check fail with actionable completeness diagnostics; HTTP availability alone does not mean a ready flight. See the installed controller status instructions for the full JSON example. Record only real receipts and actual verdicts for the current candidate. Before every controller reply (start, update, approval, blocker, repair, resume and end), run prepare and then reply.py check with --task, --phase and --reply-file pointing to the exact private draft. Put the returned footer last, with any actual current verdict above it. Proactively tell TUI users to open the card in their regular browser. Native reviewer replies stay raw JSON; never run controller lifecycle commands or hooks in reviewer contexts.\n\n"
               + "Run Python scripts by path with -B, not -I. Verify new client definitions in a fresh session; inspect effective tools, required evidence access and active hooks. File installation does not prove a reviewer boundary.\n")
+    status += "\n" + project_model().minor_tracker_instructions(config)
     result[".flightcheck/docs/status.md"] = ("file", status.encode())
     result[CONFIG] = ("file", encoded(config))
     existing_ignore = safe_path(root, ".flightcheck/.gitignore").read_bytes() if root is not None and safe_path(root, ".flightcheck/.gitignore").exists() else b""
@@ -472,7 +485,8 @@ def verify(root, manifest):
     required |= ({"CLAUDE.md"} if agent in ("claude", "both") else set())
     if set(state["files"]) != required:
         raise SetupError("Installed manifest omits or adds unexpected required components")
-    if state["source"]["manifest_sha256"] != sha(MANIFEST.read_bytes()):
+    expected_manifest = state.get("configuration_adapter", {}).get("manifest_sha256", state["source"]["manifest_sha256"])
+    if expected_manifest != sha(MANIFEST.read_bytes()):
         raise SetupError("Installer manifest differs from the installed source revision")
     for name, record in state["files"].items():
         data = safe_path(root, name).read_bytes()
@@ -548,13 +562,24 @@ def main():
         return {"lifecycle": lifecycle_main, "audit": audit_main, "status-sync": status_sync_main}[sys.argv[1]](sys.argv[2:])
     if len(sys.argv) > 1 and sys.argv[1] == "checkout":
         return checkout_main(sys.argv[2:])
-    if len(sys.argv) > 1 and sys.argv[1] == "config":
+    if len(sys.argv) > 1 and sys.argv[1] in ("config", "settings"):
         source = Path(__file__).resolve().parents[1] / "src"
         if not (source / "flightcheck_cli/cli.py").is_file():
-            print(json.dumps({"status": "incomplete", "error": "Use the source checkout setup/install.py config command or an updated CLI; installed workflow remains pinned"}))
-            return 1
+            source = Path(__file__).resolve().parent / "cli"
+            try:
+                state = read_state(Path(__file__).resolve().parent.parent)
+                for name in ("__init__.py", "cli.py", "transaction.py", "source.py", "settings.py"):
+                    relative = ".flightcheck/cli/flightcheck_cli/" + name
+                    if sha(safe_path(Path(__file__).resolve().parent.parent, relative).read_bytes()) != state["files"][relative]["sha256"]:
+                        raise SetupError("Modified installed common updater: " + name)
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                print(json.dumps({"status": "incomplete", "error": str(error)}))
+                return 1
         sys.path.insert(0, str(source))
         from flightcheck_cli.cli import configuration_main
+        if sys.argv[1] == "settings":
+            from flightcheck_cli.settings import main as settings_main
+            return settings_main(sys.argv[2:], engine=sys.modules[__name__])
         return configuration_main(sys.argv[2:], engine=sys.modules[__name__])
     if sys.argv[1:] == ["--runtime-worker"]:
         signal.signal(signal.SIGTERM, interrupt_probe)

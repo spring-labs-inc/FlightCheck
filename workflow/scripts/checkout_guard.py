@@ -7,6 +7,8 @@ results. Provider reads and checkout observations are bounded and read-only.
 
 import argparse
 import copy
+from contextlib import contextmanager
+import fcntl
 import hashlib
 import json
 import os
@@ -20,7 +22,7 @@ from urllib.parse import urlparse
 
 import launch_detection
 from flight_associations import AssociationError, Registry, encoded, repository_identity, validate_record, reservation_conflicts
-from project_config import META, normalize, protected
+from project_config import META, normalize, protected, dependency_paths
 
 
 class CheckoutError(ValueError):
@@ -486,6 +488,7 @@ def _report(registry, revision, record, state, phase, policy):
                 "client": guard["client_observation"], "generation": guard["generation"],
                 "policy": policy, "execution_open": record["lifecycle"]["state"] in ("active", "review")}
     binding_digest = _digest(identity)
+    execution = {key: value for key, value in identity.items() if key != "configuration"}
     return {"schema": 1, "status": "verified", "flight": record["flight"],
             "registry": str(registry.directory), "registry_revision": revision,
             "checkout_binding": binding, "phase": phase, "repository": copy.deepcopy(record["repository"]),
@@ -493,11 +496,154 @@ def _report(registry, revision, record, state, phase, policy):
             "configuration_revision": record["configuration"]["revision"], "base": copy.deepcopy(guard["base"]),
             "policy": policy, "binding_digest": binding_digest,
             "head_binding": _digest({"binding_digest": binding_digest, "commit": state["commit"]}),
+            "execution_digest": _digest(execution),
+            "settings_adoptions": copy.deepcopy(record.get("settings_adoptions", [])),
+            "configuration_dependency_paths": dependency_paths(record["configuration"]["values"]),
             "unfinished_identity": state["unfinished_identity"], "generation": guard["generation"],
             "limits": ["Point-in-time verification; native selection/recovery is observed, never performed",
                        "No universal interception of external Git, native-client or provider commands",
                        "No cleanup, retention, snapshot or provider-write authority",
                        "Unfinished identity covers HEAD, tracked diffs and nonignored untracked bytes/modes; ignored files are outside that proof"]}
+
+
+def configured_check(context, name, command):
+    """Validate one requested private definition without exporting its catalog.
+
+    The generic checkout report contains no check argv. Only the selected
+    request's own name/classification cross this boundary; its exact command
+    is compared inside the existing verified Registry snapshot.
+    """
+    if not isinstance(context, dict) or context.get("status") != "verified":
+        raise CheckoutError("Configured checks require a verified checkout")
+    if not isinstance(name, str) or not name or not isinstance(command, list) or any(not isinstance(arg, str) or not arg for arg in command):
+        raise CheckoutError("Configured check needs its exact recorded name and command")
+    binding = context["checkout_binding"]
+    record = _registry(binding["registry"]).get(binding["flight"])
+    if not record or record["configuration"]["revision"] != context["configuration_revision"]:
+        raise CheckoutError("Configuration changed; reconcile the selected check")
+    matches = [row for row in record["configuration"]["values"].get("checks", []) if row.get("name") == name]
+    if len(matches) != 1:
+        raise CheckoutError("Configured check is absent or ambiguous; reconcile the frozen request")
+    if command != matches[0]["command"]:
+        raise CheckoutError("Configured check command changed; reconcile the frozen request")
+    return {key: matches[0][key] for key in ("name", "phase")}
+
+
+@contextmanager
+def settings_publication(intent):
+    """Share the existing common transaction lock; never observe half a Save."""
+    root = Path(intent["root"])
+    state = Path(intent["transaction"])
+    from flight_associations import no_links
+    no_links(state)
+    if (state.name != hashlib.sha256(str(root).encode()).hexdigest()[:24]
+            or state.stat().st_uid != os.geteuid() or stat.S_IMODE(state.stat().st_mode) & 0o077):
+        raise CheckoutError("Project settings transaction locator changed")
+    descriptor = os.open(state / "lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            yield False
+            return
+        path = no_links(state / "transaction.json")
+        journal = json.loads(path.read_bytes()) if path.exists() else None
+        if journal and journal.get("status") not in ("committed", "rolled_back"):
+            yield False
+        else:
+            yield True
+    finally:
+        os.close(descriptor)
+
+
+def consume_project_settings(checkout, registry, flight):
+    """Mutable controller boundary; verify/audit/status readers never call this."""
+    registry = _registry(registry)
+    observed = verify(checkout, registry, flight)
+    previous = registry.read()
+    record = copy.deepcopy(next(row for row in previous["records"] if row["flight"] == flight))
+    pending = record.get("pending_configuration")
+    if not pending:
+        return observed
+    cleanup = record.get("cleanup", {})
+    if cleanup.get("frozen_binding") or cleanup.get("frozen_delivery"):
+        return dict(observed, configuration_adoption="deferred: existing delivery lease")
+    if pending.get("host") != socket.gethostname():
+        return dict(observed, configuration_adoption="deferred: another host")
+    source = Path(pending["root"])
+    try:
+        if repository_identity(source, record["repository"]["id"]) != record["repository"]:
+            raise CheckoutError("Settings project identity changed")
+        with settings_publication(pending) as ready:
+            if not ready:
+                return dict(observed, configuration_adoption="deferred: configuration Save/recovery is in progress")
+            from project_config import snapshot
+            configured = snapshot(source)
+            candidates = [pending, *[row["intent"] for row in reversed(record.get("configuration_intents", []))]]
+            intent = next((row for row in candidates if row["root"] == str(source)
+                           and row["host"] == socket.gethostname() and row["revision"] == configured["revision"]), None)
+            if intent is None or configured["revision"] == record["configuration"]["revision"]:
+                return dict(observed, configuration_adoption="deferred: canonical publication not ready")
+            from flight_associations import reconfigure
+            revised = reconfigure(record, configured, intent["reference"])
+            for item in [record["checkout"], *record["children"]]:
+                actual = observe(item["path"])
+                policy = _policy(item["path"], record["repository"]["id"], None)
+                _validate_checkout(actual, item, revised, record["checkout_guard"]["base"], policy, "implementation")
+            if snapshot(source)["revision"] != configured["revision"]:
+                return dict(observed, configuration_adoption="deferred: settings changed at boundary")
+            guard = revised["checkout_guard"]
+            guard["configuration_revision"] = configured["revision"]
+            guard["history"].append({"action": "settings-adopt", "reference": intent["reference"],
+                                     "from_revision": record["configuration"]["revision"], "to_revision": configured["revision"]})
+            revised.setdefault("settings_adoptions", []).append(copy.deepcopy(revised["reconfiguration"]))
+            if pending == intent:
+                revised.pop("pending_configuration", None)
+            revised.setdefault("configuration_intents", []).append({"intent": copy.deepcopy(intent), "outcome": "adopted"})
+            saved = registry.save(revised, expected_revision=previous["revision"])
+            actual = observe(checkout)
+            return _report(registry, saved["revision"], saved["record"], actual, "implementation", _policy(checkout, record["repository"]["id"], None))
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
+        return dict(observed, configuration_adoption="deferred: " + str(error))
+
+
+@contextmanager
+def settings_execution(checkout, task=None, *, adopt=False):
+    """Small recorder lease: current children finish before settings adoption.
+
+    The foreground child inherits this descriptor. There is no daemon or claim
+    to intercept arbitrary native/external commands. Read-only admissions hold
+    the lease but cannot consume a project-edit decision.
+    """
+    context = guard_context(checkout, task=task, phase="check")
+    if context.get("status") != "verified":
+        yield None
+        return
+    binding = context["checkout_binding"]; registry = _registry(binding["registry"])
+    registry._private(create=False)
+    path = registry.directory / ("settings-execution-" + _digest(binding["flight"])[:24] + ".lock")
+    descriptor = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        if adopt:
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                pass
+            else:
+                consume_project_settings(checkout, registry, binding["flight"])
+        fcntl.flock(descriptor, fcntl.LOCK_SH)
+        try:
+            yield descriptor
+        finally:
+            if adopt:
+                try:
+                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    pass
+                else:
+                    consume_project_settings(checkout, registry, binding["flight"])
+    finally:
+        os.close(descriptor)
 
 
 def adopt(checkout, registry, record, *, base, client_observation, decision=None, policy=None):

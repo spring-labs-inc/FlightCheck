@@ -1,0 +1,20 @@
+{
+  "issue": 80,
+  "consumer_after_settings": 83,
+  "convention": "Settings URL inputs use an adjacent arrow; audit destinations use a compact labeled arrow. Arrows open a new tab with noopener noreferrer. Local project resources use adjacent Browse controls, not nested destination flyouts.",
+  "destinations": [
+    {
+      "surface": "Settings Project resources",
+      "fields": "resources.*, plus project_board.url bound to canonical status_sync identity",
+      "allowed": "credential-free HTTP or HTTPS values",
+      "private_values": "Only within the explicit local Settings session"
+    },
+    {
+      "surface": "Settings read-only audit",
+      "fields": "Credential-free HTTPS strings in the returned audit report, including remote endpoints and provider delivery references",
+      "allowed": "credential-free HTTP or HTTPS values",
+      "private_values": "Only within the explicit local Settings session"
+    }
+  ],
+  "notes": "Canonical synchronization identity remains status_sync; no competing board identity. Browse selects project-relative files/folders through the existing private Settings session, without uploads or outside-project access. Optional-unavailable reasons are inline state, not external links. Bottom [ SETTINGS ]/[ STATUS ] navigation is internal to the task. No actual private destinations are published."
+}

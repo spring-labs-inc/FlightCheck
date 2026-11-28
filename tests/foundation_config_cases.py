@@ -156,7 +156,7 @@ class ConfigurationCases:
                 with patch.object(installed, "runtime_probe", return_value={"fixture": "not invoked"}):
                     self.assertEqual(installed.verify(root, installed.load_manifest())["status"], "ready_for_client_probe")
                 with self.assertRaisesRegex(ValueError, "Unsupported configuration reconciliation"):
-                    cli.configuration_plan(engine, root, {"delivery": "merge everything"}, winning["revision"], "owner")
+                    cli.configuration_plan(engine, root, {"provider_write_authority": "merge everything"}, winning["revision"], "owner")
                 self.config_git(root, "add", "--force", model.CONFIG)
                 with self.assertRaisesRegex(ValueError, "is tracked"):
                     cli.configuration_plan(engine, root, {"protected_branches": ["release-next"]}, winning["revision"], "owner")

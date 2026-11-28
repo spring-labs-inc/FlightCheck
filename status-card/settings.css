@@ -1,0 +1,57 @@
+.shell.task-card.settings-card { font-size: var(--task-copy-size); }
+.settings-card .hero { padding-bottom: 1rem; grid-template-columns: minmax(0, 1fr); }
+.settings-section { margin-bottom: .65rem; }
+.settings-section h2 { margin-top: 0; }
+.settings-field { margin: .65rem 0; }
+.settings-field label { display: block; font-weight: 620; margin-bottom: .25rem; font-size: var(--task-label-size); }
+.settings-field input, .settings-field select, .settings-field textarea { width: 100%; max-width: 100%; box-sizing: border-box; padding: .35rem .45rem; border: 1px solid #788591; border-radius: .4rem; font: inherit; color: inherit; background: var(--raised); }
+.settings-field textarea { min-height: 4rem; resize: vertical; }
+.settings-hint { display: block; font-size: var(--task-help-size); color: var(--muted); margin-top: .2rem; }
+.settings-toggle { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem; }
+.settings-toggle input[type="checkbox"] { width: auto; }
+.settings-toggle label { display: inline; margin: 0; }
+.settings-toggle .settings-hint { flex-basis: 100%; }
+.settings-actions { display: flex; flex-wrap: wrap; gap: .6rem; margin: 1rem 0; }
+.settings-card button { cursor: pointer; padding: .35rem .6rem; font: inherit; border: 1px solid var(--frame); border-radius: .4rem; background: var(--raised); color: var(--ink); }
+.settings-card #preview, .settings-card #save { background: #164f64; color: #fff; border-color: #164f64; }
+.settings-card button:disabled { cursor: default; opacity: .5; }
+.settings-card :focus-visible { outline: 3px solid #087eaa; outline-offset: 3px; }
+.settings-card pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 24rem; overflow: auto; font-size: var(--task-help-size); }
+.settings-card details { margin: .8rem 0; }
+.settings-card summary { cursor: pointer; font-weight: 620; }
+.settings-card details[open] > summary { margin-bottom: .8rem; }
+.settings-card #effects li { margin: .7rem 0; overflow-wrap: anywhere; }
+.settings-card [hidden] { display: none !important; }
+.check-row { display: grid; grid-template-columns: 1fr 2fr 1fr auto; gap: .6rem; align-items: center; padding-bottom: .5rem; }
+.settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 1rem; }
+@media (max-width: 700px) { .check-row, .settings-grid { grid-template-columns: 1fr; } .settings-card { padding: 1rem; } .check-row button { justify-self: start; } }
+
+.settings-message { color: var(--muted); margin: .6rem 0; }
+.settings-message.problem { padding: .75rem; border-left: 3px solid #b24b22; background: #fff3e9; color: #752e15; }
+.problem-text { color: #a43d18; }
+
+.settings-value { display: flex; align-items: center; gap: .45rem; }
+.settings-value > input, .settings-value > select, .settings-value > textarea { flex: 1; min-width: 0; }
+.location-actions { flex: none; display: flex; align-items: center; }
+.location-actions a { padding: .4rem .65rem; border: 1px solid var(--frame); border-radius: .4rem; text-decoration: none; }
+.location-actions a[aria-disabled="true"] { opacity: .4; cursor: default; }
+.clear-problem { margin-top: .35rem; }
+
+#resource-browser { color: var(--ink); background: var(--raised); border: 1px solid var(--frame); border-radius: .5rem; width: min(36rem, 90vw); }
+#resource-browser::backdrop { background: #0007; }
+#browse-list { height: min(22rem, 45vh); overflow: auto; border: 1px solid var(--frame); border-radius: .3rem; padding: .3rem; background: var(--panel); }
+.settings-card input, .settings-card select, .settings-card textarea, .settings-card button { font-size: var(--task-copy-size); }
+.settings-card p { line-height: 1.4; }
+.browse-navigation { display: flex; align-items: center; gap: .4rem; }
+.browse-breadcrumb { display: flex; gap: .15rem; flex-wrap: wrap; align-items: center; min-width: 0; }
+.browse-breadcrumb button, .browse-navigation > button { padding: .2rem .35rem; }
+.browse-row { display: flex; align-items: center; border-radius: .2rem; min-height: 1.8rem; }
+.browse-children { margin-left: 1rem; }
+.settings-card .browse-name, .settings-card .browse-disclosure { border: 0; background: transparent; padding: .2rem .3rem; text-align: left; }
+.settings-card .browse-name { flex: 1; }
+.settings-card .browse-disclosure { width: 1.5rem; flex: none; }
+.browse-item[aria-selected="true"] > .browse-row { background: #164f64; color: #fff; }
+.browse-actions { display: flex; align-items: center; gap: .4rem; margin-top: .6rem; }
+.browse-actions > span { flex: 1; }
+.settings-card .primary { background: #164f64; color: #fff; border-color: #164f64; }
+#browse-selection { color: var(--muted); font-size: var(--task-help-size); margin: .4rem 0; }

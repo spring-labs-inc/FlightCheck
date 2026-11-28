@@ -189,7 +189,7 @@ class TerminalInstallerTests(unittest.TestCase):
         self.assertEqual(self.files(), self.before)
         # Exercise the real wizard/entry point with controlled terminal answers;
         # no mutating project check or native model session is launched.
-        answers = [BASE_PYTHON, "", str(self.root / "evidence"), "", "", "", BASE_PYTHON + " -c pass", "", "y"]
+        answers = [BASE_PYTHON, "", str(self.root / "evidence"), "", "", BASE_PYTHON + " -c pass", "", "y"]
         code = """from unittest.mock import patch
 import sys
 from flightcheck_cli.cli import main
@@ -202,6 +202,7 @@ with patch('sys.stdin.isatty',return_value=True), patch('builtins.input',side_ef
         self.assertEqual(project["activation"], "opt-in")
         self.assertEqual(project["delivery"], "No provider writes without owner approval")
         self.assertIn("no automatic grants", project["reviewer_access"])
+        self.assertIsNone(project["nit_tracker"], "Minor follow-ups inherit the main tracker by default")
         self.assertFalse((self.project / ".agents").exists(), "Explicit Claude selection must not install Codex")
 
     def test_plan_drift_links_and_conflicts(self):

@@ -86,11 +86,12 @@ def standalone_context(worktree, task=None, phase="check"):
     return context
 
 
+configured_check = None
 if importlib.util.find_spec("checkout_guard") is None:
     guard_context = standalone_context
 else:
     # A present helper with broken dependencies is an error, never legacy use.
-    from checkout_guard import guard_context
+    from checkout_guard import guard_context, settings_execution, configured_check
 
 
 def checkout_identity(context):
@@ -102,6 +103,83 @@ def checkout_identity(context):
 
 def same_checkout(before, after):
     return checkout_identity(before) == checkout_identity(after)
+
+
+def valid_configuration_dependencies(dependencies, context):
+    if dependencies is None:
+        return True
+    roots = {"resources", "activation", "activation_reference", "nit_tracker", "policy_reference", "cleanup_policy", "checkout_policy", "protected_branches", "default_branch", "preview", "evidence_dir", "reviewer_access", "review_client", "delivery", "checks", "python", "observed_python", "required_runtimes", "status_sync"}
+    allowed = set((context or {}).get("configuration_dependency_paths", roots))
+    return isinstance(dependencies, list) and all(isinstance(key, str) and key in allowed for key in dependencies)
+
+
+def configuration_request(context, request, phase=None):
+    """Validate affected frozen requests; never rewrite their command or phase."""
+    dependencies = request.get("configuration_dependencies")
+    if not valid_configuration_dependencies(dependencies, context):
+        raise ValueError("Unknown configuration dependency path; reconcile the frozen request")
+    selected = request.get("configuration_check")
+    if selected is not None:
+        if not isinstance(selected, dict):
+            raise ValueError("Configured check needs its frozen name and classification")
+        if configured_check is None:
+            raise ValueError("Checkout verifier unavailable for configured checks")
+        actual = configured_check(context, selected.get("name"), request.get("command"))
+        if selected != actual or phase is not None and phase != actual["phase"]:
+            raise ValueError("Configured check changed; reconcile the frozen command and classification")
+    elif (dependencies is None or any(key == "checks" or key.startswith("checks.") for key in dependencies)):
+        if any("checks" in decision.get("changed_fields", []) for decision in (context or {}).get("settings_adoptions", [])):
+            raise ValueError("Check definitions changed; reconcile this affected request with --configuration-check")
+
+
+def request_dependencies(request):
+    # Exact selected name/command/classification is checked separately against
+    # the current private definition. Do not invent a whole-catalog dependency.
+    # Explicit declarations (including checks) and unknowns stay conservative.
+    return request.get("configuration_dependencies")
+
+
+def same_pass_checkout(before, after, dependencies=None):
+    """Narrow settings-only reuse; never used to excuse a mid-check change."""
+    if not valid_configuration_dependencies(dependencies, after):
+        return False
+    if same_checkout(before, after):
+        return True
+    if (dependencies is None or not before or not after or not before.get("execution_digest")
+            or before.get("execution_digest") != after.get("execution_digest")):
+        return False
+    current = before.get("configuration_revision")
+    known = {"resources", "activation", "activation_reference", "nit_tracker", "policy_reference",
+             "cleanup_policy", "checkout_policy", "protected_branches", "default_branch", "preview",
+             "evidence_dir", "reviewer_access", "review_client", "delivery", "checks", "python", "observed_python", "required_runtimes", "status_sync"}
+    # Runtime/status/delivery inputs remain conservative even for declarations.
+    risky = {"python", "observed_python", "required_runtimes", "status_sync", "delivery"}
+    for decision in after.get("settings_adoptions", []):
+        if decision.get("from_revision") != current:
+            continue
+        changed = set(decision.get("changed_fields", []))
+        # Exact key segments distinguish a literal dotted resource name from
+        # descendants. Valid advertised dependency paths omit dotted key
+        # components, so their existing dot spelling can be split unambiguously.
+        # Never infer precision from historical flattened change paths.
+        if "changed_segments" not in decision:
+            paths = [(key,) for key in changed]
+        else:
+            paths = decision["changed_segments"]
+            if (not isinstance(paths, list) or any(not isinstance(path, list) or not path
+                    or any(not isinstance(key, str) or not key for key in path) for path in paths)
+                    or {path[0] for path in paths} != changed):
+                return False
+            paths = [tuple(path) for path in paths]
+        if "status_sync" in decision.get("required_revalidation", []) and any(dep.split(".")[0] == "status_sync" for dep in dependencies):
+            return False
+        declared = [tuple(dep.split(".")) for dep in dependencies]
+        if changed - known or changed & risky or any(path[:len(dep)] == dep or dep[:len(path)] == path for path in paths for dep in declared):
+            return False
+        current = decision.get("to_revision")
+        if current == after.get("configuration_revision"):
+            return True
+    return False
 
 
 def verify_checkout(worktree, task=None, before=None, phase="check"):
@@ -224,8 +302,8 @@ def latest_run(parent, latest):
 
 
 def matches_pass(run, packet, request, current, checkout_context=None):
-    if (not same_checkout(packet.get("checkout_context"), checkout_context)
-            or not same_checkout(packet.get("checkout_context_after"), checkout_context)):
+    if (not same_pass_checkout(packet.get("checkout_context"), checkout_context, request_dependencies(request))
+            or not same_pass_checkout(packet.get("checkout_context_after"), checkout_context, request_dependencies(request))):
         return False
     if (current is None or packet["request"] != request or packet["status"] != "finished"
             or packet["exit_code"] != 0 or packet["inputs_before"] != current
@@ -266,11 +344,11 @@ def previous_pass(parent, latest, request, current, checkout_context=None):
         return None
 
 
-def run_command(command, output, env=None, activity=None):
+def run_command(command, output, env=None, activity=None, lease=None):
     """Forward terminal interrupts to the check's own process group."""
     with subprocess.Popen(
         command, stdout=output, stderr=subprocess.STDOUT, start_new_session=True,
-        stdin=subprocess.DEVNULL, env=env,
+        stdin=subprocess.DEVNULL, env=env, pass_fds=(() if lease is None else (lease,)),
     ) as child:
         def forward(signum, _frame):
             try:
@@ -309,7 +387,7 @@ def replay(log):
             os.dup2(sink.fileno(), sys.stdout.fileno())
 
 
-def capture(args, command, worktree, parent, latest, request, before, checkout_context=None, checkout_task=None):
+def capture(args, command, worktree, parent, latest, request, before, checkout_context=None, checkout_task=None, lease=None):
     # Input probes are executable too. Verify again after the probe and before
     # creating an attempt that could launch a native command.
     checkout_context = verify_checkout(worktree, checkout_task, checkout_context)
@@ -348,7 +426,7 @@ def capture(args, command, worktree, parent, latest, request, before, checkout_c
 
     with log.open("xb") as output:
         try:
-            code = run_command(command, output, environment, activity)
+            code = run_command(command, output, environment, activity, lease)
         except OSError as error:
             packet.update(status="unavailable", finished_at=time.time(), error=str(error))
             packet["output"]["status"] = "unavailable"
@@ -419,6 +497,9 @@ def main():
     parser.add_argument("--summary", choices=("pytest",), help="Interpret tool-specific totals")
     parser.add_argument("--gate", help="Stable identifier for a reusable check")
     parser.add_argument("--owner", choices=("worker", "controller"), help="Role responsible for this check run")
+    parser.add_argument("--adopt-project-settings", action="store_true", help="Controller-owned execution boundary; never a read-only review admission")
+    parser.add_argument("--configuration-check", help="Exact common-model check name after trusted command/classification reconciliation")
+    parser.add_argument("--configuration-dependencies", type=json.loads, help="Frozen known configuration dependencies for settings-only pass reuse; absent is conservative")
     parser.add_argument("--fingerprint-command", type=fingerprint_argv, help="JSON argv for the gate input probe")
     parser.add_argument("--artifact", action="append", default=[], help="Report file to retain, repeatable")
     parser.add_argument("--isolated-reports", action="store_true",
@@ -435,6 +516,15 @@ def main():
     command = args.command[1:]
 
     worktree = Path.cwd()
+    checkout_task = ({"checkout_binding": args.checkout_binding} if args.checkout_binding is not None else None)
+    if args.configuration_dependencies is not None and (not isinstance(args.configuration_dependencies, list) or any(not isinstance(key, str) or not key for key in args.configuration_dependencies)):
+        parser.error("configuration dependencies must be a JSON array of known field names")
+    boundary = settings_execution(worktree, checkout_task, adopt=args.owner == "worker" or args.adopt_project_settings) if importlib.util.find_spec("checkout_guard") is not None else nullcontext(None)
+    with boundary as lease:
+        return selected_capture(args, command, worktree, checkout_task, lease, parser)
+
+
+def selected_capture(args, command, worktree, checkout_task, lease, parser):
     try:
         checkout_task = ({"checkout_binding": args.checkout_binding}
                          if args.checkout_binding is not None else None)
@@ -464,8 +554,18 @@ def main():
         "fingerprint_command": args.fingerprint_command,
         "artifacts": args.artifact,
     }
+    if args.configuration_dependencies is not None:
+        request["configuration_dependencies"] = args.configuration_dependencies
     if args.isolated_reports:
         request["isolated_reports"] = True
+    try:
+        if args.configuration_check:
+            if configured_check is None:
+                raise ValueError("Checkout verifier unavailable for configured checks")
+            request["configuration_check"] = configured_check(checkout_context, args.configuration_check, command)
+        configuration_request(checkout_context, request)
+    except ValueError as error:
+        parser.error(str(error))
     with lock as lock_file:
         if lock_file:
             fcntl.flock(lock_file, fcntl.LOCK_EX)
@@ -493,7 +593,7 @@ def main():
                 return 0
         try:
             return capture(args, command, worktree, parent, latest, request, before,
-                           checkout_context, checkout_task)
+                           checkout_context, checkout_task, lease)
         except (OSError, ValueError) as error:
             parser.error(str(error))
 
