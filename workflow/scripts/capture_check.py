@@ -86,11 +86,12 @@ def standalone_context(worktree, task=None, phase="check"):
     return context
 
 
+configured_check = None
 if importlib.util.find_spec("checkout_guard") is None:
     guard_context = standalone_context
 else:
     # A present helper with broken dependencies is an error, never legacy use.
-    from checkout_guard import guard_context, settings_execution
+    from checkout_guard import guard_context, settings_execution, configured_check
 
 
 def checkout_identity(context):
@@ -121,9 +122,10 @@ def configuration_request(context, request, phase=None):
     if selected is not None:
         if not isinstance(selected, dict):
             raise ValueError("Configured check needs its frozen name and classification")
-        choices = [row for row in (context or {}).get("configuration_checks", []) if row.get("name") == selected.get("name")]
-        if (len(choices) != 1 or selected != {key: choices[0][key] for key in ("name", "phase")}
-                or request.get("command") != choices[0]["command"] or phase is not None and phase != choices[0]["phase"]):
+        if configured_check is None:
+            raise ValueError("Checkout verifier unavailable for configured checks")
+        actual = configured_check(context, selected.get("name"), request.get("command"))
+        if selected != actual or phase is not None and phase != actual["phase"]:
             raise ValueError("Configured check changed; reconcile the frozen command and classification")
     elif (dependencies is None or any(key == "checks" or key.startswith("checks.") for key in dependencies)):
         if any("checks" in decision.get("changed_fields", []) for decision in (context or {}).get("settings_adoptions", [])):
@@ -131,12 +133,10 @@ def configuration_request(context, request, phase=None):
 
 
 def request_dependencies(request):
-    dependencies = request.get("configuration_dependencies")
-    # A configured check always depends on its actual definition. An absent
-    # declaration remains conservative for every other setting as before.
-    if dependencies is not None and request.get("configuration_check"):
-        return sorted(set(dependencies) | {"checks"})
-    return dependencies
+    # Exact selected name/command/classification is checked separately against
+    # the current private definition. Do not invent a whole-catalog dependency.
+    # Explicit declarations (including checks) and unknowns stay conservative.
+    return request.get("configuration_dependencies")
 
 
 def same_pass_checkout(before, after, dependencies=None):
@@ -544,12 +544,11 @@ def selected_capture(args, command, worktree, checkout_task, lease, parser):
         request["configuration_dependencies"] = args.configuration_dependencies
     if args.isolated_reports:
         request["isolated_reports"] = True
-    if args.configuration_check:
-        choices = [row for row in checkout_context.get("configuration_checks", []) if row.get("name") == args.configuration_check]
-        if len(choices) != 1:
-            parser.error("Configured check is absent or ambiguous; reconcile the frozen request")
-        request["configuration_check"] = {key: choices[0][key] for key in ("name", "phase")}
     try:
+        if args.configuration_check:
+            if configured_check is None:
+                raise ValueError("Checkout verifier unavailable for configured checks")
+            request["configuration_check"] = configured_check(checkout_context, args.configuration_check, command)
         configuration_request(checkout_context, request)
     except ValueError as error:
         parser.error(str(error))

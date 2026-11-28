@@ -384,10 +384,11 @@ def preflight(task, root, amendment=None):
     command = [sys.executable, "-c", "print('FlightCheck evidence round trip')"]
     fingerprint_command = [sys.executable, "-c", "print('FlightCheck preflight v1')"]
     request = {"command": command, "scope": "Evidence handoff preflight", "summary": None,
-               "fingerprint_command": fingerprint_command, "artifacts": []}
+               "fingerprint_command": fingerprint_command, "artifacts": [], "configuration_dependencies": []}
     invocation = [sys.executable, "-B", str(Path(__file__).with_name("capture_check.py")),
                   "--evidence-dir", str(probe), "--candidate", task["candidate"],
                   "--scope", request["scope"], "--gate", "preflight", "--owner", "controller",
+                  "--configuration-dependencies", "[]",
                   "--fingerprint-command", json.dumps(fingerprint_command), "--refresh"]
     if checkout_identity(task["_checkout_context"]) is not None:
         invocation += ["--checkout-binding", json.dumps(task["_checkout_context"]["checkout_binding"])]

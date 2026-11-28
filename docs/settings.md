@@ -224,7 +224,15 @@ identity remains strict. After check commands or classifications change, affecte
 frozen requests are blocked until the controller reconciles the exact command
 and phase against the common model. The recorder's `--configuration-check NAME`
 binds that selected check; handoff also verifies its current classification.
-Settings never rewrites a frozen gate. Explicitly independent unaffected requests
+Settings never rewrites a frozen gate. A named check's current command and
+classification are validated exactly without treating an edit to a different
+check as an implicit dependency. Explicit catalog dependencies and unknown
+assumptions remain conservative. The fixed internal preflight round trip declares
+its own independence; it does not execute a project check. New generic checkout
+contexts and handoff packets do not copy unrelated check argv: lookup stays
+inside the private Registry and returns only the requested name/classification.
+Historical receipts keep their original private bytes and authority; they are not
+rewritten or retagged. Explicitly independent unaffected requests
 may retain their original receipt and complete fingerprint. Accepted evidence is reused through normal incremental
 review without retagging old receipts or historical results.
 

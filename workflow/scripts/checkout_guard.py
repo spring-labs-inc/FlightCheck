@@ -499,12 +499,34 @@ def _report(registry, revision, record, state, phase, policy):
             "execution_digest": _digest(execution),
             "settings_adoptions": copy.deepcopy(record.get("settings_adoptions", [])),
             "configuration_dependency_paths": dependency_paths(record["configuration"]["values"]),
-            "configuration_checks": copy.deepcopy(record["configuration"]["values"].get("checks", [])),
             "unfinished_identity": state["unfinished_identity"], "generation": guard["generation"],
             "limits": ["Point-in-time verification; native selection/recovery is observed, never performed",
                        "No universal interception of external Git, native-client or provider commands",
                        "No cleanup, retention, snapshot or provider-write authority",
                        "Unfinished identity covers HEAD, tracked diffs and nonignored untracked bytes/modes; ignored files are outside that proof"]}
+
+
+def configured_check(context, name, command):
+    """Validate one requested private definition without exporting its catalog.
+
+    The generic checkout report contains no check argv. Only the selected
+    request's own name/classification cross this boundary; its exact command
+    is compared inside the existing verified Registry snapshot.
+    """
+    if not isinstance(context, dict) or context.get("status") != "verified":
+        raise CheckoutError("Configured checks require a verified checkout")
+    if not isinstance(name, str) or not name or not isinstance(command, list) or any(not isinstance(arg, str) or not arg for arg in command):
+        raise CheckoutError("Configured check needs its exact recorded name and command")
+    binding = context["checkout_binding"]
+    record = _registry(binding["registry"]).get(binding["flight"])
+    if not record or record["configuration"]["revision"] != context["configuration_revision"]:
+        raise CheckoutError("Configuration changed; reconcile the selected check")
+    matches = [row for row in record["configuration"]["values"].get("checks", []) if row.get("name") == name]
+    if len(matches) != 1:
+        raise CheckoutError("Configured check is absent or ambiguous; reconcile the frozen request")
+    if command != matches[0]["command"]:
+        raise CheckoutError("Configured check command changed; reconcile the frozen request")
+    return {key: matches[0][key] for key in ("name", "phase")}
 
 
 @contextmanager
