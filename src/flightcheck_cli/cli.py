@@ -282,9 +282,9 @@ def configuration_integrity(module, root, preimages=None):
 
 def configuration_model(module, root):
     """Use the verified installed model, including prior supported installations."""
-    configuration_integrity(module, root)
+    state, _ = configuration_integrity(module, root)
     path = module.safe_path(root, ".flightcheck/scripts/project_config.py")
-    if not path.is_file():
+    if ".flightcheck/scripts/project_config.py" not in state["files"] or not path.is_file():
         raise ValueError("Installed configuration model is unavailable; reconcile explicitly")
     return load_installer(path)
 
@@ -293,8 +293,18 @@ def configuration_adapter_plan(module, root, expected_revision, reference):
     """Explicit, enumerated compatibility update; no workflow/runtime upgrade."""
     validated = {}
     state, pin = configuration_integrity(module, root, preimages=validated)
-    current = configuration_model(module, root).snapshot(root)
-    if current["revision"] != expected_revision:
+    helper = ".flightcheck/scripts/project_config.py"
+    # Pre-model installations need one explicit adapter migration. The pinned
+    # manifest/state must genuinely omit the helper; never execute an extra,
+    # undeclared file or treat a missing/tampered declared helper as legacy.
+    bootstrap = helper not in state["files"] and not state.get("configuration_adapter")
+    if bootstrap:
+        if module.safe_path(root, helper).exists():
+            raise ValueError("Unrecognized installed configuration model; preserve it and reconcile explicitly")
+        revision = sha(validated[module.CONFIG][0])
+    else:
+        revision = configuration_model(module, root).snapshot(root)["revision"]
+    if revision != expected_revision:
         raise ValueError("Stale configuration revision; preview adapter update again")
     module.project_model().text(reference, "explicit adapter-update owner reference")
     source = Path(module.__file__).resolve().parent.parent
@@ -319,6 +329,15 @@ def configuration_adapter_plan(module, root, expected_revision, reference):
         add(destination, raw)
         components[destination] = sha(raw)
         revised["files"][destination] = {"kind": "file", "sha256": sha(raw), "source": name, "source_sha256": sha(raw)}
+    if bootstrap:
+        name = ".flightcheck/.gitignore"
+        before, _ = tx.file_state(module, root, name)
+        raw = before or b""
+        if raw and not raw.endswith(b"\n"):
+            raw += b"\n"
+        raw += b"/project.json\n/docs/status.md\n"
+        add(name, raw)
+        revised["files"][name] = {"kind": "file", "sha256": sha(raw)}
     updated_manifest = encoded({**old_manifest, "files": list(merged.values())})
     add(".flightcheck/manifest.json", updated_manifest)
     revised["files"][".flightcheck/manifest.json"]["sha256"] = sha(updated_manifest)

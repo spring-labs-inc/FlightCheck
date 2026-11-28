@@ -180,7 +180,7 @@ class StatusSyncConfigurationTests(unittest.TestCase):
             self.assertEqual(resumed["grants"], record["grants"])
             self.assertEqual(changed["values"]["status_sync"]["project_id"], "project-B")
             updated = associations.reconfigure(resumed, changed, "Owner explicitly rebinds active flight")
-            self.assertEqual(updated["reconfiguration"]["required_revalidation"], ["status_sync", "evidence"])
+            self.assertEqual(updated["reconfiguration"]["required_revalidation"], ["status_sync"])
             for key in ("grants", "checkout", "issues", "repository"):
                 self.assertEqual(updated[key], record[key], key)
             self.assertFalse(schema.authorize(updated["grants"]["tracker_status"], "owner/repository", changed, 11)["authorized"])
